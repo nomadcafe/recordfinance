@@ -11,6 +11,8 @@
 # (exports and iCloud sync files)
 record-finance-*.json
 record-finance.json
+recordfinance-*.json
+recordfinance.json
 xfinance-*.json
 xfinance.json
 
