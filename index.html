@@ -360,6 +360,86 @@
   .snap-empty { padding: 10px; color: var(--muted); font-size: 13px; text-align: center; }
 
   /* Auto-sync indicator dot next to status */
+  /* Welcome / landing view */
+  .welcome-view {
+    max-width: 880px; margin: 24px auto 0;
+    text-align: center;
+    padding: 16px 8px 48px;
+  }
+  .welcome-logo {
+    width: 80px; height: 80px;
+    margin: 12px auto 28px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--accent) 0%, #22d3ee 100%);
+    box-shadow: 0 0 60px var(--accent-glow);
+  }
+  .welcome-title {
+    font-size: 52px; font-weight: 700;
+    margin: 0 0 12px;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--muted-strong) 100%);
+    background-clip: text; -webkit-background-clip: text;
+    color: transparent;
+  }
+  .welcome-tagline {
+    font-size: 18px; color: var(--muted);
+    margin: 0 0 48px; font-weight: 400;
+  }
+  .welcome-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+  .welcome-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 20px;
+    text-align: left;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .welcome-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+  .welcome-card-icon {
+    font-size: 28px; line-height: 1;
+    margin-bottom: 12px;
+  }
+  .welcome-card-title {
+    font-size: 15px; font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .welcome-card-desc {
+    font-size: 13px; color: var(--muted);
+    line-height: 1.5;
+  }
+  .welcome-actions {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    margin-bottom: 36px;
+  }
+  .welcome-actions button.primary {
+    padding: 14px 36px; font-size: 15px; font-weight: 600;
+    background: linear-gradient(135deg, var(--accent) 0%, #22d3ee 100%);
+    color: #0a0e16;
+    box-shadow: 0 4px 20px var(--accent-glow);
+  }
+  .welcome-actions button.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 28px var(--accent-glow);
+  }
+  .welcome-footer {
+    font-size: 12px; color: var(--muted);
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .welcome-footer a { color: var(--muted-strong); text-decoration: none; }
+  .welcome-footer a:hover { color: var(--text); }
+  @media (max-width: 640px) {
+    .welcome-title { font-size: 36px; }
+    .welcome-tagline { font-size: 15px; margin-bottom: 32px; }
+    .welcome-logo { width: 64px; height: 64px; }
+    .welcome-features { gap: 10px; }
+  }
+
   .syncing-dot {
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent); margin-left: 8px; vertical-align: middle;
@@ -907,6 +987,44 @@
   </div>
 
   <div id="mainView">
+  <div class="welcome-view" id="welcomeView" hidden>
+    <div class="welcome-logo"></div>
+    <h2 class="welcome-title" id="welcomeTitle">Record</h2>
+    <p class="welcome-tagline" id="welcomeTagline">Private multi-currency net worth tracker</p>
+
+    <div class="welcome-features">
+      <div class="welcome-card">
+        <div class="welcome-card-icon">💱</div>
+        <div class="welcome-card-title" id="featMcyT">Multi-currency</div>
+        <div class="welcome-card-desc" id="featMcyD">CNY · USD · JPY · EUR · SGD · HKD, auto rates</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">📊</div>
+        <div class="welcome-card-title" id="featNwT">Net worth tracking</div>
+        <div class="welcome-card-desc" id="featNwD">Assets / liabilities / goals / trend / YoY / inflow split</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">🔒</div>
+        <div class="welcome-card-title" id="featPrvT">Fully private</div>
+        <div class="welcome-card-desc" id="featPrvD">No backend, no account — data stays on your device</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">📱</div>
+        <div class="welcome-card-title" id="featOffT">Works offline</div>
+        <div class="welcome-card-desc" id="featOffD">Install as a PWA — record on a plane, no signal needed</div>
+      </div>
+    </div>
+
+    <div class="welcome-actions">
+      <button class="primary" id="welcomeStartBtn">Start tracking</button>
+      <button class="link" id="welcomeLoadBtn">Already have data? Load from sync file</button>
+    </div>
+
+    <div class="welcome-footer">
+      <a href="https://github.com/nomadcafe/recordfinance" target="_blank" rel="noopener" id="welcomeGitHub">Open source · GitHub</a>
+    </div>
+  </div>
+
   <div class="banner" id="backupBanner" hidden>
     <span class="banner-msg" id="backupBannerMsg"></span>
     <div class="banner-actions">
@@ -1121,6 +1239,14 @@
       historySearch: '搜索备注 / 账户名',
       noMatch: '没有匹配的记录。',
       goalNoRecord: '添加一条记录后会显示进度',
+      welcomeTagline: '私密的多币种净资产追踪',
+      featMcyT: '多币种', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD，自动汇率',
+      featNwT: '净资产追踪', featNwD: '资产 / 负债 / 目标 / 走势 / 同期 / 入金拆解',
+      featPrvT: '完全私密', featPrvD: '无后端，无账号，数据只存在你的设备上',
+      featOffT: '离线可用', featOffD: 'PWA 安装到主屏幕，飞机上也能记账',
+      welcomeStart: '开始记录',
+      welcomeLoadExisting: '已有数据？从同步文件加载',
+      welcomeOpenSource: '开源 · GitHub',
       goalSaved: '✓ 目标已保存',
       goalRatesPending: '汇率加载中，稍后显示进度',
       goalBasis: '目标对照', basisNet: '净资产', basisAssets: '总资产',
@@ -1226,6 +1352,14 @@
       historySearch: 'Search note / account',
       noMatch: 'No matching records.',
       goalNoRecord: 'Add a record to see progress',
+      welcomeTagline: 'Private multi-currency net worth tracker',
+      featMcyT: 'Multi-currency', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD, with auto rates',
+      featNwT: 'Net worth tracking', featNwD: 'Assets / liabilities / goals / trend / YoY / inflow split',
+      featPrvT: 'Fully private', featPrvD: 'No backend, no account — data stays on your device',
+      featOffT: 'Works offline', featOffD: 'Install as a PWA — record on a plane, no signal needed',
+      welcomeStart: 'Start tracking',
+      welcomeLoadExisting: 'Already have data? Load from sync file',
+      welcomeOpenSource: 'Open source · GitHub',
       goalSaved: '✓ Goal saved',
       goalRatesPending: 'Loading rates, progress will show shortly',
       goalBasis: 'Track against', basisNet: 'Net worth', basisAssets: 'Total assets',
@@ -1331,6 +1465,14 @@
       historySearch: 'メモ / 口座を検索',
       noMatch: '一致する記録はありません。',
       goalNoRecord: '記録を追加すると進捗が表示されます',
+      welcomeTagline: 'プライベートな多通貨純資産トラッカー',
+      featMcyT: '多通貨', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、自動レート',
+      featNwT: '純資産追跡', featNwD: '資産 / 負債 / 目標 / 推移 / 前年比 / 入金分解',
+      featPrvT: '完全プライベート', featPrvD: 'サーバーなし、アカウント不要 — データは端末のみ',
+      featOffT: 'オフライン対応', featOffD: 'PWA でホーム画面に追加、機内でも記録可能',
+      welcomeStart: '記録を始める',
+      welcomeLoadExisting: 'データを持っている？同期ファイルから読込',
+      welcomeOpenSource: 'オープンソース · GitHub',
       goalSaved: '✓ 目標を保存しました',
       goalRatesPending: 'レート読込中、進捗はまもなく表示',
       goalBasis: '目標対象', basisNet: '純資産', basisAssets: '総資産',
@@ -1461,6 +1603,7 @@
     if (data.sync && (data.sync.token || data.sync.gistId) && !data.sync.fileName) data.sync = null;
     if (!Array.isArray(data.milestonesShown)) data.milestonesShown = [];
     if (typeof data.goalReachedShown !== 'boolean') data.goalReachedShown = false;
+    if (typeof data.welcomeDismissed !== 'boolean') data.welcomeDismissed = false;
     if (!data.rates) data.rates = {};
     if (typeof data.dirtySinceExport !== 'number') data.dirtySinceExport = 0;
     data.accounts.forEach(a => {
@@ -2492,6 +2635,22 @@
   function closePrefs() { prefsModal.hidden = true; }
   document.getElementById('prefsBtn').addEventListener('click', openPrefs);
 
+  // Welcome view
+  document.getElementById('welcomeStartBtn').addEventListener('click', () => {
+    state.welcomeDismissed = true;
+    save();
+    renderAll();
+    // Open prefs panel softly so user discovers the gear / sync icons
+    // Actually skip that — let them explore. They'll see ⚙ ☁ in header.
+  });
+  document.getElementById('welcomeLoadBtn').addEventListener('click', () => {
+    state.welcomeDismissed = true;
+    save();
+    renderAll();
+    // Open sync modal so user can pick existing file
+    openSync();
+  });
+
   // Sync modal (data safety — file sync + local snapshots)
   const syncModal = document.getElementById('syncModal');
   function openSync() {
@@ -3322,6 +3481,20 @@
     setText('syncFsUnsupportedHint2', t('syncFsUnsupportedHint'));
     setText('snapshotsLabel', t('snapshots'));
     setText('snapshotsHint', t('snapshotsHint'));
+    // Welcome view
+    setText('welcomeTitle', t('title'));
+    setText('welcomeTagline', t('welcomeTagline'));
+    setText('featMcyT', t('featMcyT'));
+    setText('featMcyD', t('featMcyD'));
+    setText('featNwT', t('featNwT'));
+    setText('featNwD', t('featNwD'));
+    setText('featPrvT', t('featPrvT'));
+    setText('featPrvD', t('featPrvD'));
+    setText('featOffT', t('featOffT'));
+    setText('featOffD', t('featOffD'));
+    setText('welcomeStartBtn', t('welcomeStart'));
+    setText('welcomeLoadBtn', t('welcomeLoadExisting'));
+    setText('welcomeGitHub', t('welcomeOpenSource'));
     setText('remoteNewerMsg', t('syncRemoteNewer'));
     setText('remoteNewerLoad', t('syncRemoteNewerLoad'));
     setText('remoteNewerDismiss', t('syncRemoteNewerDismiss'));
@@ -3476,6 +3649,15 @@
 
   // ===== Render =====
   function renderAll() {
+    const showWelcome = !state.welcomeDismissed && state.snapshots.length === 0;
+    const welcomeEl = document.getElementById('welcomeView');
+    if (showWelcome) {
+      welcomeEl.hidden = false;
+      document.getElementById('mainView').hidden = true;
+      document.getElementById('drilldownView').hidden = true;
+      return;
+    }
+    welcomeEl.hidden = true;
     if (viewingAccountId) {
       document.getElementById('mainView').hidden = true;
       document.getElementById('drilldownView').hidden = false;
