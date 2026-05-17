@@ -371,44 +371,140 @@
   .snap-empty { padding: 10px; color: var(--muted); font-size: 13px; text-align: center; }
 
   /* Auto-sync indicator dot next to status */
-  /* Welcome / landing view */
+  /* ===== Welcome / landing view ===== */
   .welcome-view {
-    max-width: 900px; margin: 32px auto 0;
-    text-align: center;
-    padding: 20px 8px 56px;
+    max-width: 1000px; margin: 24px auto 0;
+    padding: 8px 8px 56px;
   }
+  .welcome-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 48px;
+    align-items: center;
+    margin-bottom: 56px;
+  }
+  .welcome-hero-text { text-align: left; }
   .welcome-logo {
-    width: 96px; height: 96px;
-    margin: 8px auto 32px;
-    border-radius: 28px;
+    width: 64px; height: 64px;
+    margin: 0 0 28px;
+    border-radius: 20px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     box-shadow:
-      0 0 80px var(--accent-glow),
-      0 16px 40px rgba(34, 211, 238, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      0 0 60px var(--accent-glow),
+      0 12px 32px rgba(34, 211, 238, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
     animation: logoFloat 6s ease-in-out infinite;
   }
   @keyframes logoFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-5px) rotate(-1deg); }
   }
   .welcome-title {
-    font-size: 64px; font-weight: 700;
-    margin: 0 0 16px;
-    letter-spacing: -0.045em;
-    line-height: 1;
-    background: linear-gradient(135deg, var(--text) 0%, var(--muted-strong) 100%);
+    font-size: 56px; font-weight: 700;
+    margin: 0 0 20px;
+    letter-spacing: -0.04em;
+    line-height: 1.02;
+    color: var(--text);
+  }
+  .welcome-title-em {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     background-clip: text; -webkit-background-clip: text;
     color: transparent;
   }
   .welcome-tagline {
-    font-size: 19px; color: var(--muted);
-    margin: 0 0 56px; font-weight: 400;
-    line-height: 1.5;
+    font-size: 17px; color: var(--muted-strong);
+    margin: 0 0 36px; font-weight: 400;
+    line-height: 1.55;
+    max-width: 460px;
   }
+  .welcome-actions {
+    display: flex; align-items: center; gap: 18px;
+    flex-wrap: wrap;
+  }
+  .welcome-actions button.primary {
+    padding: 14px 36px; font-size: 15px; font-weight: 600;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    color: #0a0d1a;
+    border-radius: var(--radius-pill);
+    box-shadow: 0 8px 28px var(--accent-glow), 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+  .welcome-actions button.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 36px var(--accent-glow), 0 4px 10px rgba(0, 0, 0, 0.18);
+  }
+  .welcome-actions button.link {
+    padding: 8px 0; color: var(--muted-strong); font-size: 14px;
+  }
+  .welcome-actions button.link:hover { color: var(--text); background: transparent; }
+
+  /* Product preview card */
+  .welcome-preview-wrap {
+    perspective: 1200px;
+    display: flex; justify-content: center;
+  }
+  .welcome-preview {
+    width: 100%; max-width: 360px;
+    background:
+      radial-gradient(ellipse 320px 160px at 50% -20%, var(--accent-soft), transparent 70%),
+      var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 24px 24px 20px;
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--accent-soft);
+    transform: rotate(1.5deg);
+    transition: transform 0.5s var(--ease);
+  }
+  .welcome-preview:hover { transform: rotate(0deg) translateY(-4px); }
+  .preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .preview-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+  .preview-label { font-size: 13px; color: var(--muted); }
+  .preview-value {
+    font-size: 36px; font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .preview-change {
+    font-size: 13px; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    display: flex; align-items: baseline; gap: 6px;
+    margin-bottom: 14px;
+  }
+  .preview-pct { color: var(--muted); }
+  .preview-arrow { font-size: 11px; }
+  .preview-sparkline {
+    width: 100%; height: 70px;
+    display: block;
+    margin-bottom: 14px;
+  }
+  .preview-chips { display: flex; gap: 6px; }
+  .preview-chip {
+    font-size: 11px; padding: 4px 9px;
+    background: var(--bg-soft);
+    color: var(--muted-strong);
+    border-radius: var(--radius-pill);
+    font-variant-numeric: tabular-nums;
+    border: 1px solid var(--border);
+  }
+  .preview-chip-more { color: var(--muted); }
+
+  /* Trust strip */
+  .welcome-trust {
+    text-align: center;
+    font-size: 13px; color: var(--muted);
+    margin-bottom: 48px;
+    letter-spacing: 0.02em;
+  }
+
+  /* Feature cards (3-up) */
   .welcome-features {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 48px;
   }
@@ -425,60 +521,61 @@
   }
   .welcome-card::before {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(135deg, transparent 60%, var(--accent-soft));
+    background: radial-gradient(ellipse 200px 120px at 80% 0%, var(--accent-soft), transparent 70%);
     opacity: 0;
     transition: opacity 0.25s var(--ease);
     pointer-events: none;
   }
   .welcome-card:hover {
-    border-color: var(--accent);
+    border-color: var(--border-strong);
     transform: translateY(-4px);
-    box-shadow: var(--shadow-md), 0 0 0 1px var(--accent-soft);
+    box-shadow: var(--shadow-md);
   }
   .welcome-card:hover::before { opacity: 1; }
   .welcome-card-icon {
-    font-size: 30px; line-height: 1;
-    margin-bottom: 14px;
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel-elev);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    margin-bottom: 16px;
   }
+  .welcome-card-icon svg { width: 22px; height: 22px; }
   .welcome-card-title {
     font-size: 16px; font-weight: 600;
-    margin-bottom: 6px;
-    letter-spacing: -0.005em;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
   .welcome-card-desc {
     font-size: 13px; color: var(--muted);
     line-height: 1.6;
   }
-  .welcome-actions {
-    display: flex; flex-direction: column; align-items: center; gap: 16px;
-    margin-bottom: 40px;
-  }
-  .welcome-actions button.primary {
-    padding: 16px 44px; font-size: 15px; font-weight: 600;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-    color: #0a0d1a;
-    border-radius: var(--radius-pill);
-    box-shadow: 0 8px 28px var(--accent-glow), 0 2px 6px rgba(0, 0, 0, 0.15);
-  }
-  .welcome-actions button.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 36px var(--accent-glow), 0 4px 10px rgba(0, 0, 0, 0.18);
-  }
+
   .welcome-footer {
-    font-size: 12px; color: var(--muted);
+    text-align: center;
+    font-size: 13px; color: var(--muted);
     padding-top: 28px;
     border-top: 1px solid var(--border);
   }
   .welcome-footer a { color: var(--muted-strong); text-decoration: none; transition: color 0.18s var(--ease); }
   .welcome-footer a:hover { color: var(--text); }
-  @media (max-width: 640px) {
-    .welcome-view { padding: 16px 4px 40px; margin-top: 16px; }
+
+  @media (max-width: 860px) {
+    .welcome-hero { grid-template-columns: 1fr; gap: 32px; }
+    .welcome-features { grid-template-columns: 1fr; }
     .welcome-title { font-size: 42px; }
-    .welcome-tagline { font-size: 15px; margin-bottom: 36px; }
-    .welcome-logo { width: 72px; height: 72px; border-radius: 22px; }
-    .welcome-features { gap: 12px; margin-bottom: 36px; }
-    .welcome-card { padding: 22px 18px; border-radius: 16px; }
-    .welcome-actions button.primary { padding: 14px 36px; font-size: 14px; }
+    .welcome-tagline { font-size: 15px; }
+    .welcome-preview { transform: rotate(0deg); max-width: 100%; }
+  }
+  @media (max-width: 640px) {
+    .welcome-view { padding: 4px 4px 40px; margin-top: 8px; }
+    .welcome-title { font-size: 36px; }
+    .welcome-logo { width: 56px; height: 56px; border-radius: 18px; margin-bottom: 20px; }
+    .welcome-card { padding: 22px 20px; border-radius: 16px; }
+    .welcome-actions button.primary { padding: 13px 32px; font-size: 14px; }
+    .welcome-trust { margin-bottom: 36px; }
   }
 
   .syncing-dot {
@@ -1030,40 +1127,93 @@
   </div>
 
   <div class="welcome-view" id="welcomeView" hidden>
-    <div class="welcome-logo"></div>
-    <h2 class="welcome-title" id="welcomeTitle">Record</h2>
-    <p class="welcome-tagline" id="welcomeTagline">Private multi-currency net worth tracker</p>
+    <section class="welcome-hero">
+      <div class="welcome-hero-text">
+        <div class="welcome-logo"></div>
+        <h2 class="welcome-title">
+          <span id="welcomeHeadline1">Your wealth,</span><br>
+          <span class="welcome-title-em" id="welcomeHeadline2">quietly tracked.</span>
+        </h2>
+        <p class="welcome-tagline" id="welcomeTagline">A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.</p>
+        <div class="welcome-actions">
+          <button class="primary" id="welcomeStartBtn">Start tracking</button>
+          <button class="link" id="welcomeLoadBtn">Already have data? Load from sync file</button>
+        </div>
+      </div>
+      <div class="welcome-preview-wrap" aria-hidden="true">
+        <div class="welcome-preview">
+          <div class="preview-head">
+            <span class="preview-dot"></span>
+            <span class="preview-label" id="welcomePreviewLabel">Net worth</span>
+          </div>
+          <div class="preview-value">¥1,234,567</div>
+          <div class="preview-change">+¥45,200 <span class="preview-pct" id="welcomePreviewChange">YTD</span> <span class="preview-arrow">↗</span></div>
+          <svg class="preview-sparkline" viewBox="0 0 280 70" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#4ade80" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="sparkLine" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#4ade80"/>
+                <stop offset="100%" stop-color="#22d3ee"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,52 Q40,46 80,44 T160,28 T240,14 L280,8 L280,70 L0,70 Z" fill="url(#sparkFill)"/>
+            <path d="M0,52 Q40,46 80,44 T160,28 T240,14 L280,8" stroke="url(#sparkLine)" fill="none" stroke-width="2.2" stroke-linecap="round"/>
+            <circle cx="280" cy="8" r="3.5" fill="#22d3ee"/>
+          </svg>
+          <div class="preview-chips">
+            <span class="preview-chip">CNY</span>
+            <span class="preview-chip">USD</span>
+            <span class="preview-chip">JPY</span>
+            <span class="preview-chip preview-chip-more">+3</span>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <div class="welcome-features">
-      <div class="welcome-card">
-        <div class="welcome-card-icon">💱</div>
-        <div class="welcome-card-title" id="featMcyT">Multi-currency</div>
-        <div class="welcome-card-desc" id="featMcyD">CNY · USD · JPY · EUR · SGD · HKD, auto rates</div>
-      </div>
-      <div class="welcome-card">
-        <div class="welcome-card-icon">📊</div>
-        <div class="welcome-card-title" id="featNwT">Net worth tracking</div>
-        <div class="welcome-card-desc" id="featNwD">Assets / liabilities / goals / trend / YoY / inflow split</div>
-      </div>
-      <div class="welcome-card">
-        <div class="welcome-card-icon">🔒</div>
-        <div class="welcome-card-title" id="featPrvT">Fully private</div>
-        <div class="welcome-card-desc" id="featPrvD">No backend, no account — data stays on your device</div>
-      </div>
-      <div class="welcome-card">
-        <div class="welcome-card-icon">📱</div>
-        <div class="welcome-card-title" id="featOffT">Works offline</div>
-        <div class="welcome-card-desc" id="featOffD">Install as a PWA — record on a plane, no signal needed</div>
-      </div>
-    </div>
+    <div class="welcome-trust" id="welcomeTrust">6 currencies · offline · private · open source</div>
 
-    <div class="welcome-actions">
-      <button class="primary" id="welcomeStartBtn">Start tracking</button>
-      <button class="link" id="welcomeLoadBtn">Already have data? Load from sync file</button>
-    </div>
+    <section class="welcome-features">
+      <div class="welcome-card">
+        <div class="welcome-card-icon">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <circle cx="21" cy="21" r="7"/>
+            <path d="M11 7v8M8 11h6"/>
+            <path d="M18 18l6 6M24 18l-6 6"/>
+          </svg>
+        </div>
+        <div class="welcome-card-title" id="featMcyT">Six currencies, live rates</div>
+        <div class="welcome-card-desc" id="featMcyD">CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 24 L11 17 L17 20 L23 11 L28 14"/>
+            <circle cx="23" cy="11" r="2" fill="currentColor" stroke="none"/>
+            <circle cx="28" cy="14" r="2" fill="currentColor" stroke="none"/>
+            <path d="M4 28 L28 28" stroke-dasharray="2 3"/>
+          </svg>
+        </div>
+        <div class="welcome-card-title" id="featNwT">Net worth, decomposed</div>
+        <div class="welcome-card-desc" id="featNwD">Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 4 L26 8 V16 C26 22 21 26.5 16 28 C11 26.5 6 22 6 16 V8 Z"/>
+            <path d="M12 16.5 L15 19.5 L21 13"/>
+          </svg>
+        </div>
+        <div class="welcome-card-title" id="featPrvT">Yours, fully</div>
+        <div class="welcome-card-desc" id="featPrvD">No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.</div>
+      </div>
+    </section>
 
     <div class="welcome-footer">
-      <a href="https://github.com/nomadcafe/recordfinance" target="_blank" rel="noopener" id="welcomeGitHub">Open source · GitHub</a>
+      <a href="https://github.com/nomadcafe/recordfinance" target="_blank" rel="noopener" id="welcomeGitHub">Open source on GitHub →</a>
     </div>
   </div>
 
@@ -1282,14 +1432,18 @@
       historySearch: '搜索备注 / 账户名',
       noMatch: '没有匹配的记录。',
       goalNoRecord: '添加一条记录后会显示进度',
-      welcomeTagline: '私密的多币种净资产追踪',
-      featMcyT: '多币种', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD，自动汇率',
-      featNwT: '净资产追踪', featNwD: '资产 / 负债 / 目标 / 走势 / 同期 / 入金拆解',
-      featPrvT: '完全私密', featPrvD: '无后端，无账号，数据只存在你的设备上',
-      featOffT: '离线可用', featOffD: 'PWA 安装到主屏幕，飞机上也能记账',
+      welcomeHeadline1: '你的财富，',
+      welcomeHeadline2: '悄悄记下。',
+      welcomeTagline: '多币种净资产追踪器，只活在你的设备上。无账号、无服务器、无追踪。',
+      welcomePreviewLabel: '净资产',
+      welcomePreviewChange: '今年至今',
+      welcomeTrust: '6 种币种 · 离线可用 · 私密 · 开源',
+      featMcyT: '六种币种，实时汇率', featMcyD: 'CNY、USD、JPY、EUR、SGD、HKD，每天自动同步最新外汇。',
+      featNwT: '净资产，看得清', featNwD: '资产 / 负债、月度 / 年度走势、目标、入金 vs 涨跌的清晰拆解。',
+      featPrvT: '数据完全归你', featPrvD: '无后端，无账号。可选同步到 iCloud Drive / Dropbox 中你自己挑的文件。',
       welcomeStart: '开始记录',
       welcomeLoadExisting: '已有数据？从同步文件加载',
-      welcomeOpenSource: '开源 · GitHub',
+      welcomeOpenSource: 'GitHub 开源 →',
       goalSaved: '✓ 目标已保存',
       goalRatesPending: '汇率加载中，稍后显示进度',
       goalBasis: '目标对照', basisNet: '净资产', basisAssets: '总资产',
@@ -1395,14 +1549,18 @@
       historySearch: 'Search note / account',
       noMatch: 'No matching records.',
       goalNoRecord: 'Add a record to see progress',
-      welcomeTagline: 'Private multi-currency net worth tracker',
-      featMcyT: 'Multi-currency', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD, with auto rates',
-      featNwT: 'Net worth tracking', featNwD: 'Assets / liabilities / goals / trend / YoY / inflow split',
-      featPrvT: 'Fully private', featPrvD: 'No backend, no account — data stays on your device',
-      featOffT: 'Works offline', featOffD: 'Install as a PWA — record on a plane, no signal needed',
+      welcomeHeadline1: 'Your wealth,',
+      welcomeHeadline2: 'quietly tracked.',
+      welcomeTagline: 'A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.',
+      welcomePreviewLabel: 'Net worth',
+      welcomePreviewChange: 'YTD',
+      welcomeTrust: '6 currencies · offline · private · open source',
+      featMcyT: 'Six currencies, live rates', featMcyD: 'CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.',
+      featNwT: 'Net worth, decomposed', featNwD: 'Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.',
+      featPrvT: 'Yours, fully', featPrvD: 'No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.',
       welcomeStart: 'Start tracking',
       welcomeLoadExisting: 'Already have data? Load from sync file',
-      welcomeOpenSource: 'Open source · GitHub',
+      welcomeOpenSource: 'Open source on GitHub →',
       goalSaved: '✓ Goal saved',
       goalRatesPending: 'Loading rates, progress will show shortly',
       goalBasis: 'Track against', basisNet: 'Net worth', basisAssets: 'Total assets',
@@ -1508,14 +1666,18 @@
       historySearch: 'メモ / 口座を検索',
       noMatch: '一致する記録はありません。',
       goalNoRecord: '記録を追加すると進捗が表示されます',
-      welcomeTagline: 'プライベートな多通貨純資産トラッカー',
-      featMcyT: '多通貨', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、自動レート',
-      featNwT: '純資産追跡', featNwD: '資産 / 負債 / 目標 / 推移 / 前年比 / 入金分解',
-      featPrvT: '完全プライベート', featPrvD: 'サーバーなし、アカウント不要 — データは端末のみ',
-      featOffT: 'オフライン対応', featOffD: 'PWA でホーム画面に追加、機内でも記録可能',
+      welcomeHeadline1: 'あなたの資産を、',
+      welcomeHeadline2: 'そっと記録。',
+      welcomeTagline: '端末だけで動く、多通貨対応の純資産トラッカー。アカウント不要・サーバー不要・トラッキングなし。',
+      welcomePreviewLabel: '純資産',
+      welcomePreviewChange: '年初来',
+      welcomeTrust: '6 通貨 · オフライン · プライベート · オープンソース',
+      featMcyT: '6 通貨、ライブレート', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、毎日自動でレート取得。',
+      featNwT: '純資産を分解', featNwD: '資産と負債、今月 / 年初来の推移、目標、入金 vs 市場変動の分解。',
+      featPrvT: '完全に自分のもの', featPrvD: 'バックエンドなし、アカウント不要。iCloud Drive 等のファイルへ任意で同期。',
       welcomeStart: '記録を始める',
       welcomeLoadExisting: 'データを持っている？同期ファイルから読込',
-      welcomeOpenSource: 'オープンソース · GitHub',
+      welcomeOpenSource: 'GitHub でオープンソース →',
       goalSaved: '✓ 目標を保存しました',
       goalRatesPending: 'レート読込中、進捗はまもなく表示',
       goalBasis: '目標対象', basisNet: '純資産', basisAssets: '総資産',
@@ -3531,16 +3693,18 @@
     setText('snapshotsLabel', t('snapshots'));
     setText('snapshotsHint', t('snapshotsHint'));
     // Welcome view
-    setText('welcomeTitle', t('title'));
+    setText('welcomeHeadline1', t('welcomeHeadline1'));
+    setText('welcomeHeadline2', t('welcomeHeadline2'));
     setText('welcomeTagline', t('welcomeTagline'));
+    setText('welcomePreviewLabel', t('welcomePreviewLabel'));
+    setText('welcomePreviewChange', t('welcomePreviewChange'));
+    setText('welcomeTrust', t('welcomeTrust'));
     setText('featMcyT', t('featMcyT'));
     setText('featMcyD', t('featMcyD'));
     setText('featNwT', t('featNwT'));
     setText('featNwD', t('featNwD'));
     setText('featPrvT', t('featPrvT'));
     setText('featPrvD', t('featPrvD'));
-    setText('featOffT', t('featOffT'));
-    setText('featOffD', t('featOffD'));
     setText('welcomeStartBtn', t('welcomeStart'));
     setText('welcomeLoadBtn', t('welcomeLoadExisting'));
     setText('welcomeGitHub', t('welcomeOpenSource'));
