@@ -1388,6 +1388,18 @@
     const v = dict[key];
     return typeof v === 'function' ? v(...args) : v;
   }
+
+  // Pick a default language from the browser's preferred list.
+  function detectLanguage() {
+    const list = navigator.languages || [navigator.language || ''];
+    for (const raw of list) {
+      const code = String(raw).toLowerCase();
+      if (code.startsWith('zh')) return 'zh';
+      if (code.startsWith('ja')) return 'ja';
+      if (code.startsWith('en')) return 'en';
+    }
+    return 'en';
+  }
   const PALETTE = ['#4ade80', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#34d399', '#fb923c', '#22d3ee', '#facc15'];
   const CURRENCIES = [
     { code: 'CNY', label: '人民币 CNY', symbol: '¥' },
@@ -1433,7 +1445,7 @@
 
   function migrate(data) {
     if (!data.displayCurrency) data.displayCurrency = 'CNY';
-    if (!data.language) data.language = 'zh';
+    if (!data.language) data.language = detectLanguage();
     if (!data.theme) data.theme = 'dark';
     if (typeof data.privacyBlur !== 'boolean') data.privacyBlur = false;
     if (typeof data.fiscalYearStartMonth !== 'number') data.fiscalYearStartMonth = 1;
@@ -1480,7 +1492,7 @@
       } catch {}
     }
     if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.snapshots)) {
-      data = { accounts: [], snapshots: [], displayCurrency: 'CNY', language: 'zh', theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+      data = { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
     } else {
       data = migrate(data);
     }
