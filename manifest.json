@@ -1,0 +1,19 @@
+{
+  "name": "Record Finance",
+  "short_name": "Record",
+  "description": "Private offline-first multi-currency net worth tracker",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0a0e16",
+  "background_color": "#0a0e16",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

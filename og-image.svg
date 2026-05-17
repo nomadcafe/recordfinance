@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e16"/>
+      <stop offset="100%" stop-color="#131822"/>
+    </linearGradient>
+    <linearGradient id="logo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="rgba(74,222,128,0.18)"/>
+      <stop offset="100%" stop-color="rgba(74,222,128,0)"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Logo block -->
+  <rect x="100" y="160" width="100" height="100" rx="22" fill="url(#logo)"/>
+
+  <!-- Title -->
+  <text x="230" y="240" fill="#e9edf5"
+        font-family="-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+        font-size="92" font-weight="700" letter-spacing="-3">Record</text>
+
+  <!-- Tagline -->
+  <text x="100" y="320" fill="#aab3c8"
+        font-family="-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+        font-size="32" font-weight="500">Private multi-currency net worth tracker</text>
+
+  <!-- Sample chart line (decorative) -->
+  <g transform="translate(100, 380)" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 0 140 L 130 110 L 260 130 L 390 70 L 520 90 L 650 40 L 780 50 L 910 10 L 1000 20"
+          stroke="#4ade80" stroke-width="4" opacity="0.9"/>
+    <path d="M 0 140 L 130 110 L 260 130 L 390 70 L 520 90 L 650 40 L 780 50 L 910 10 L 1000 20 L 1000 200 L 0 200 Z"
+          fill="#4ade80" opacity="0.12"/>
+    <!-- milestone dots -->
+    <circle cx="390" cy="70" r="8" fill="#fbbf24"/>
+    <circle cx="780" cy="50" r="8" fill="#fbbf24"/>
+    <circle cx="910" cy="10" r="8" fill="#fbbf24"/>
+  </g>
+
+  <!-- Currency chips -->
+  <g transform="translate(100, 540)" font-family="-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+     font-size="20" font-weight="600" fill="#8590a8">
+    <text x="0" y="0">¥ CNY</text>
+    <text x="120" y="0">$ USD</text>
+    <text x="240" y="0">JP¥ JPY</text>
+    <text x="380" y="0">€ EUR</text>
+    <text x="500" y="0">S$ SGD</text>
+    <text x="620" y="0">HK$ HKD</text>
+  </g>
+
+  <!-- URL -->
+  <text x="1100" y="585" fill="#4ade80" text-anchor="end"
+        font-family="-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+        font-size="22" font-weight="500">record.finance</text>
+</svg>

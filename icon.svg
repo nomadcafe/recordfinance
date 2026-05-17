@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1419"/>
+  <text x="50%" y="58%" text-anchor="middle" dominant-baseline="middle"
+        fill="#4ade80" font-size="280"
+        font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+        font-weight="700">¥</text>
+</svg>

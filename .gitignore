@@ -1,0 +1,24 @@
+# macOS metadata
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Personal finance data — never commit
+# (exports and iCloud sync files)
+record-finance-*.json
+record-finance.json
+xfinance-*.json
+xfinance.json
+
+# Generic data dumps
+*.backup.json
+backup-*.json
+data/
+local-data/
+
+# Logs
+*.log

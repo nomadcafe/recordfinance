@@ -1,0 +1,3454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<title>Record · Private Multi-Currency Net Worth Tracker</title>
+<meta name="description" content="Track your net worth across CNY, USD, JPY, EUR, SGD, HKD with auto exchange rates. Privacy-first, offline-capable PWA — your data never leaves your device. Free.">
+<meta name="keywords" content="net worth tracker, multi-currency, privacy, offline, PWA, personal finance, asset tracker, wealth tracker, 净资产, 记账, 多币种, 财富追踪, 家計簿, 純資産, foreign currency tracker">
+<meta name="author" content="Record Finance">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="googlebot" content="index, follow">
+
+<link rel="canonical" href="https://record.finance/">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Record · Private Net Worth Tracker">
+<meta property="og:description" content="Multi-currency (CNY/USD/JPY/EUR/SGD/HKD) net worth tracking. Privacy-first, offline-capable. Your data stays on your device.">
+<meta property="og:url" content="https://record.finance/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Record">
+<meta property="og:image" content="https://record.finance/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Record — Private Multi-Currency Net Worth Tracker">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+<meta property="og:locale:alternate" content="ja_JP">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Record · Private Net Worth Tracker">
+<meta name="twitter:description" content="Multi-currency net worth tracking. Privacy-first, offline-capable. Your data stays on your device.">
+<meta name="twitter:image" content="https://record.finance/og-image.jpg">
+
+<!-- hreflang alternates (same URL, content-negotiated via UI) -->
+<link rel="alternate" hreflang="x-default" href="https://record.finance/">
+<link rel="alternate" hreflang="en" href="https://record.finance/">
+<link rel="alternate" hreflang="zh-CN" href="https://record.finance/">
+<link rel="alternate" hreflang="ja" href="https://record.finance/">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0a0e16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Record">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Record",
+  "alternateName": ["Record Finance", "记账", "家計簿"],
+  "url": "https://record.finance/",
+  "description": "Privacy-first multi-currency net worth tracker. Track your assets and liabilities across CNY, USD, JPY, EUR, SGD, HKD with automatic exchange rates. Offline-capable PWA — your data never leaves your device.",
+  "applicationCategory": "FinanceApplication",
+  "applicationSubCategory": "Net Worth Tracker",
+  "operatingSystem": "Web Browser",
+  "browserRequirements": "Requires JavaScript. Modern Chromium-based browser recommended for full file sync support.",
+  "inLanguage": ["en", "zh-CN", "ja"],
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "featureList": [
+    "Multi-currency support (CNY, USD, JPY, EUR, SGD, HKD)",
+    "Automatic exchange rates",
+    "Offline-capable Progressive Web App",
+    "Privacy-first — data stays on device",
+    "Asset and liability tracking",
+    "Net worth goal with ETA",
+    "Category and currency composition breakdown",
+    "Year-over-year comparison",
+    "Local file sync (iCloud / Dropbox / OneDrive)",
+    "PIN lock with session unlock",
+    "Light and dark themes",
+    "i18n: English / 中文 / 日本語"
+  ]
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e16;
+    --bg-soft: #0e131c;
+    --panel: #131822;
+    --panel-elev: #1a2030;
+    --panel-elev-2: #20283a;
+    --border: #232b3d;
+    --border-strong: #2e3850;
+    --text: #e9edf5;
+    --muted: #8590a8;
+    --muted-strong: #aab3c8;
+    --accent: #4ade80;
+    --accent-hover: #5ee892;
+    --accent-soft: rgba(74, 222, 128, 0.12);
+    --accent-glow: rgba(74, 222, 128, 0.22);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.10);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.10);
+    --info: #60a5fa;
+    --grid: #232b3d;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.28);
+    --shadow-hero: 0 0 80px rgba(74, 222, 128, 0.06);
+    color-scheme: dark;
+  }
+  body.light {
+    --bg: #f6f8fb;
+    --bg-soft: #eef1f6;
+    --panel: #ffffff;
+    --panel-elev: #f6f8fb;
+    --panel-elev-2: #edf0f5;
+    --border: #e4e7ee;
+    --border-strong: #d0d5de;
+    --text: #161b25;
+    --muted: #6b7589;
+    --muted-strong: #4a5266;
+    --accent: #16a34a;
+    --accent-hover: #15803d;
+    --accent-soft: rgba(22, 163, 74, 0.10);
+    --accent-glow: rgba(22, 163, 74, 0.18);
+    --danger: #dc2626;
+    --danger-soft: rgba(220, 38, 38, 0.08);
+    --warning: #d97706;
+    --warning-soft: rgba(217, 119, 6, 0.08);
+    --info: #2563eb;
+    --grid: #e4e7ee;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.06);
+    --shadow-hero: 0 0 80px rgba(22, 163, 74, 0.04);
+    color-scheme: light;
+  }
+  body.light {
+    background-image:
+      radial-gradient(ellipse 700px 400px at 12% -10%, rgba(22, 163, 74, 0.06), transparent 60%),
+      radial-gradient(ellipse 700px 400px at 90% -8%, rgba(37, 99, 235, 0.04), transparent 60%);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 700px 400px at 12% -10%, rgba(74, 222, 128, 0.06), transparent 60%),
+      radial-gradient(ellipse 700px 400px at 90% -8%, rgba(96, 165, 250, 0.05), transparent 60%);
+    background-attachment: fixed;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+    padding: 32px 28px;
+    padding-top: max(32px, env(safe-area-inset-top));
+    padding-left: max(28px, env(safe-area-inset-left));
+    padding-right: max(28px, env(safe-area-inset-right));
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    max-width: 1080px;
+    margin-inline: auto;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1 {
+    font-size: 22px; margin: 0; font-weight: 600;
+    letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h1::before {
+    content: ''; width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent) 0%, #22d3ee 100%);
+    border-radius: 8px;
+    box-shadow: 0 0 24px rgba(74, 222, 128, 0.3);
+    flex-shrink: 0;
+  }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; gap: 12px; }
+  .lang-select { padding: 8px 12px; font-size: 13px; min-width: 110px; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    background: transparent; color: var(--muted-strong);
+    border: 1px solid var(--border); border-radius: 8px;
+    width: 36px; height: 36px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 500;
+  }
+  .icon-btn:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; border-color: var(--border-strong); }
+  .icon-btn { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    animation: modalFade 0.15s ease;
+  }
+  body.light .modal-overlay { background: rgba(20, 30, 50, 0.35); }
+  @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    width: 100%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+    box-shadow: var(--shadow-md);
+    animation: modalIn 0.18s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px; gap: 10px;
+  }
+  .modal-header h2 {
+    font-size: 16px; margin: 0; font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .modal-close { font-size: 20px; line-height: 1; }
+  .modal-body { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Privacy blur */
+  body.privacy-blur .stat-value,
+  body.privacy-blur .chip-amount,
+  body.privacy-blur .chip-original,
+  body.privacy-blur .stat-breakdown,
+  body.privacy-blur .change-row,
+  body.privacy-blur .lr-amt,
+  body.privacy-blur .inflow-line,
+  body.privacy-blur td.num,
+  body.privacy-blur .goal-progress-text,
+  body.privacy-blur .goal-bar,
+  body.privacy-blur .lr-bar {
+    filter: blur(10px);
+    transition: filter 0.2s;
+    user-select: none;
+  }
+
+  /* Date shortcut chips */
+  .date-chips { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+  .date-chip {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 3px 8px; font-size: 11px; font-weight: 500;
+  }
+  .date-chip:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; border-color: var(--border-strong); }
+
+  /* Goal panel */
+  .goal-info { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+  .goal-meta { flex: 1; min-width: 200px; }
+  .goal-headline { font-size: 14px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+  .goal-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .goal-bar { flex: 1.5; min-width: 200px; height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; position: relative; }
+  .goal-bar-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, var(--accent) 0%, #22d3ee 100%);
+    transition: width 0.3s ease;
+  }
+  .goal-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  .goal-input-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .goal-input-row input { width: 140px; }
+  .goal-input-row select { width: 90px; }
+
+  /* Milestone toast */
+  .toast {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 100;
+    background: linear-gradient(135deg, var(--accent) 0%, #22d3ee 100%);
+    color: #0a0e16;
+    padding: 14px 22px; border-radius: 12px;
+    font-weight: 600; font-size: 15px;
+    box-shadow: 0 8px 32px var(--accent-glow);
+    animation: toastIn 0.3s ease;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  /* Lock overlay */
+  .lock-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px;
+    padding: 20px;
+  }
+  .lock-overlay h2 { font-size: 22px; margin: 0; font-weight: 600; }
+  .lock-overlay .lock-icon { font-size: 48px; }
+  .lock-overlay input {
+    text-align: center; font-size: 22px;
+    letter-spacing: 0.4em; padding: 14px 20px;
+    width: 240px; font-variant-numeric: tabular-nums;
+  }
+  .lock-overlay .err { color: var(--danger); font-size: 13px; min-height: 18px; }
+
+  /* Per-row inflow */
+  .row-inflow-mini {
+    display: flex; align-items: center; gap: 8px;
+    margin-left: 4px; padding: 6px 12px;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 8px; border-top: 0;
+    border-top-left-radius: 0; border-top-right-radius: 0;
+    font-size: 12px;
+  }
+  .row-inflow-mini label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .row-inflow-mini input { font-size: 13px; padding: 5px 9px; width: 110px; }
+  .balance-row-group { display: flex; flex-direction: column; }
+  .balance-row-group .balance-row select.acc-sel { border-bottom-left-radius: 0; }
+
+  /* History search */
+  .search-input { padding: 8px 12px; font-size: 13px; width: 260px; max-width: 100%; }
+
+  /* Snapshot list */
+  .snap-list {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 240px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px; margin-top: 8px;
+  }
+  .snap-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; border-radius: 6px;
+    font-size: 13px;
+  }
+  .snap-row:hover { background: var(--panel-elev); }
+  .snap-row .ts { font-variant-numeric: tabular-nums; color: var(--muted-strong); }
+  .snap-row button { padding: 4px 10px; font-size: 12px; }
+  .snap-empty { padding: 10px; color: var(--muted); font-size: 13px; text-align: center; }
+
+  /* Auto-sync indicator dot next to status */
+  .syncing-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); margin-left: 8px; vertical-align: middle;
+    animation: syncPulse 1s infinite;
+  }
+  @keyframes syncPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .panel.hero {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel-elev) 100%);
+    box-shadow: var(--shadow-sm), var(--shadow-hero);
+    position: relative;
+    overflow: hidden;
+    padding: 28px;
+  }
+  .panel.hero::before {
+    content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  input, select, textarea {
+    font: inherit;
+    font-family: inherit;
+    background: var(--bg-soft);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input:hover, select:hover { border-color: var(--border-strong); }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input::placeholder { color: #4a5466; }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    background: var(--accent);
+    color: #0a0e16;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.005em;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+  button:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 14px var(--accent-glow); }
+  button:active { transform: translateY(0); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  button.ghost {
+    background: transparent;
+    color: var(--muted-strong);
+    border: 1px solid var(--border);
+    font-weight: 500;
+  }
+  button.ghost:hover { background: var(--panel-elev); color: var(--text); border-color: var(--border-strong); box-shadow: none; }
+
+  button.danger {
+    background: transparent;
+    color: var(--danger);
+    border: none;
+    padding: 6px 10px;
+    font-weight: 500;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  button.danger:hover { background: var(--danger-soft); transform: none; box-shadow: none; }
+
+  button.link {
+    background: transparent;
+    color: var(--muted-strong);
+    border: none;
+    padding: 6px 10px;
+    font-weight: 500;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  button.link:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; }
+
+  .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+
+  /* Summary / hero */
+  .summary { display: flex; flex-wrap: wrap; gap: 28px 40px; align-items: flex-end; }
+  .total .stat-label {
+    font-size: 11px; color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .total .stat-value {
+    font-size: 44px; font-weight: 600; margin-top: 8px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .total .stat-note {
+    font-size: 12px; color: var(--muted); margin-top: 8px;
+  }
+  .stat-breakdown { font-size: 12px; color: var(--muted-strong); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .stat-breakdown .liab { color: var(--danger); }
+
+  .stat-changes {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 12px; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .change-row { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; }
+  .change-row.pos { color: var(--accent); }
+  .change-row.neg { color: var(--danger); }
+  .change-row.neutral { color: var(--muted); }
+  .change-row .change-label {
+    color: var(--muted); font-weight: 600; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    min-width: 38px;
+  }
+  .change-row .pct { opacity: 0.7; font-size: 11px; }
+  .change-row .split { color: var(--muted); font-size: 12px; margin-left: 6px; }
+
+  .liab-tag {
+    display: inline-block; color: var(--danger);
+    font-size: 9px; padding: 2px 6px;
+    background: var(--danger-soft);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Chips */
+  .account-chips { display: flex; flex-wrap: wrap; gap: 10px; flex: 1; }
+  .chip {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 12px 14px; border-radius: 10px;
+    background: var(--panel-elev);
+    border: 1px solid var(--border);
+    min-width: 124px;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .chip:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .chip.clickable { cursor: pointer; }
+  .chip.clickable:hover { border-color: var(--accent); box-shadow: 0 4px 18px var(--accent-glow); }
+  .chip-name {
+    font-size: 10px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .chip-amount {
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .chip-original { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip.liability .chip-amount { color: var(--danger); }
+  .currency-control { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+
+  /* Account list rows */
+  .account-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .account-row input[type="text"] { flex: 1; }
+  .account-row select { width: 120px; }
+  .account-row select.type-sel { width: 92px; flex-shrink: 0; }
+  .account-row select.cat-sel { width: 100px; flex-shrink: 0; }
+  .account-row .chip-dot { flex-shrink: 0; width: 10px; height: 10px; }
+
+  /* Form */
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 180px; }
+  .balance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .input-currency { display: flex; gap: 6px; }
+  .input-currency input { flex: 1; min-width: 0; }
+  .input-currency select { width: 100px; flex-shrink: 0; }
+
+  .balance-rows { display: flex; flex-direction: column; gap: 10px; }
+  .balance-row { display: flex; gap: 8px; align-items: center; }
+  .balance-row .acc-sel { flex: 1.4; min-width: 150px; }
+  .balance-row .amt-input { flex: 2; min-width: 0; }
+  .balance-row .cur-sel { width: 100px; flex-shrink: 0; }
+  .balance-row .row-remove {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 8px 11px; border-radius: 8px;
+    font-size: 16px; font-weight: 400;
+    line-height: 1; flex-shrink: 0;
+  }
+  .balance-row .row-remove:hover {
+    color: var(--danger); border-color: rgba(248, 113, 113, 0.4);
+    background: var(--danger-soft); transform: none; box-shadow: none;
+  }
+  .add-row-btn { margin-top: 10px; padding: 8px 14px; font-size: 13px; }
+  .inflow-line { font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .inflow-line .arrow { color: var(--muted); margin: 0 4px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left; padding: 12px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px; vertical-align: top;
+  }
+  th {
+    color: var(--muted); font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom-color: var(--border-strong);
+    padding-top: 8px; padding-bottom: 12px;
+  }
+  tbody tr { transition: background 0.1s ease; }
+  tbody tr:hover { background: rgba(255, 255, 255, 0.015); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .update-list { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+  .update-list span .acc { color: var(--muted); margin-right: 4px; }
+  .empty { text-align: center; color: var(--muted); padding: 48px 20px; font-size: 14px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+  .toolbar h2 {
+    font-size: 12px; margin: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-strong);
+    display: flex; align-items: center;
+  }
+
+  /* Segment control */
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-soft); padding: 2px; gap: 2px; }
+  .seg button {
+    background: transparent; color: var(--muted);
+    border: none; border-radius: 6px;
+    padding: 6px 12px; font-weight: 500; font-size: 13px;
+  }
+  .seg button:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; }
+  .seg button.active { background: var(--accent); color: #0a0e16; font-weight: 600; }
+  .seg button.active:hover { background: var(--accent); }
+
+  canvas { max-height: 360px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.55; }
+
+  /* Collapsible */
+  details.panel > summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-strong);
+    margin: -24px; padding: 24px;
+  }
+  details.panel[open] > summary { margin-bottom: 0; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::after {
+    content: '›'; color: var(--muted);
+    font-size: 18px; font-weight: 300;
+    transition: transform 0.2s;
+    text-transform: none;
+  }
+  details.panel[open] > summary::after { transform: rotate(90deg); }
+  details.panel > summary .sum-hint {
+    color: var(--muted); font-size: 11px; font-weight: 400;
+    margin-left: 12px; text-transform: none; letter-spacing: 0;
+  }
+
+  /* Banner */
+  .banner {
+    background: var(--warning-soft);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap;
+    font-size: 14px;
+  }
+  .banner .banner-msg { color: var(--warning); }
+  .banner .banner-actions { display: flex; gap: 8px; }
+  .banner button { padding: 8px 14px; font-size: 13px; background: var(--warning); color: #1a1500; }
+  .banner button:hover { background: #fcc94d; }
+  .banner button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+  .banner button.ghost:hover { background: var(--panel-elev); color: var(--text); }
+
+  /* Editing state */
+  .panel.editing {
+    border-color: rgba(251, 191, 36, 0.5);
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18), 0 4px 24px rgba(251, 191, 36, 0.06);
+  }
+  .edit-badge {
+    color: var(--warning); font-size: 11px; font-weight: 600;
+    margin-left: 10px; padding: 3px 8px;
+    background: var(--warning-soft);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Breakdown panel */
+  .breakdown { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+  .breakdown-chart { width: 200px; height: 200px; flex-shrink: 0; }
+  .breakdown-legend { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+  .legend-row { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .legend-row .chip-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .legend-row .lr-cur {
+    color: var(--muted); width: 40px;
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .legend-row .lr-amt { font-variant-numeric: tabular-nums; flex: 1; font-weight: 500; }
+  .legend-row .lr-pct {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted); font-size: 12px;
+    min-width: 52px; text-align: right;
+  }
+  .legend-row .lr-bar {
+    flex: 0 0 100px; height: 5px;
+    background: var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .legend-row .lr-bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Mobile */
+  @media (max-width: 640px) {
+    body {
+      padding: 16px 14px;
+      padding-top: max(16px, env(safe-area-inset-top));
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    h1 { font-size: 18px; }
+    h1::before { width: 22px; height: 22px; border-radius: 6px; }
+    .page-header { margin-bottom: 16px; }
+    .panel { padding: 18px; margin-bottom: 12px; border-radius: 12px; }
+    .panel.hero { padding: 22px; }
+    details.panel > summary { margin: -18px; padding: 18px; }
+    .summary { gap: 18px 28px; }
+    .total .stat-value { font-size: 32px; }
+    .currency-control { flex: 1; min-width: 100%; }
+    .balance-grid { grid-template-columns: 1fr; gap: 10px; }
+    .balance-row { flex-wrap: wrap; gap: 6px; }
+    .balance-row .acc-sel { flex: 1 1 100%; min-width: 0; }
+    .balance-row .amt-input { flex: 1; }
+    .balance-row .cur-sel { width: 92px; }
+    .row .field { min-width: 100%; }
+    .account-row { flex-wrap: wrap; gap: 8px; }
+    .account-row input[type="text"] { flex: 1 1 100%; order: 1; }
+    .account-row .chip-dot { order: 0; }
+    .account-row select { flex: 1; order: 2; width: auto; min-width: 0; }
+    .account-row button.danger { order: 3; }
+    table { font-size: 13px; }
+    th, td { padding: 10px 6px; }
+    .update-list { font-size: 12px; }
+    .breakdown { gap: 18px; }
+    .breakdown-chart { width: 160px; height: 160px; margin-inline: auto; }
+    .breakdown-legend { min-width: 100%; }
+    canvas { max-height: 280px; }
+    .toolbar h2 { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+  <div class="page-header">
+    <h1 id="pageTitle">Record</h1>
+    <div class="header-actions">
+      <button class="icon-btn" id="privacyBtn" title="隐藏金额">👁</button>
+      <button class="icon-btn" id="themeBtn" title="切换主题">◐</button>
+      <button class="icon-btn" id="prefsBtn" title="偏好设置">⚙</button>
+      <select id="langSelect" class="lang-select" aria-label="Language">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </div>
+
+  <noscript>
+    <div style="max-width: 720px; margin: 60px auto; padding: 24px; color: #e9edf5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6;">
+      <h1 style="color: #4ade80;">Record · Net Worth Tracker</h1>
+      <p>Record is a privacy-first multi-currency net worth tracker. Track assets and liabilities across CNY, USD, JPY, EUR, SGD, HKD with automatic exchange rates. Offline-capable PWA.</p>
+      <p><strong>Your data never leaves your device.</strong> No accounts, no servers, no analytics.</p>
+      <p style="color: #f87171;">This app requires JavaScript. Please enable JavaScript and reload the page.</p>
+      <h2>Features</h2>
+      <ul>
+        <li>Multi-currency: CNY, USD, JPY, EUR, SGD, HKD</li>
+        <li>Asset / liability accounts with categories</li>
+        <li>Net worth tracking with MTD / YTD / YoY views</li>
+        <li>Net worth goal with ETA</li>
+        <li>Currency and category breakdown charts</li>
+        <li>Offline-capable PWA (works on planes!)</li>
+        <li>Local file sync via iCloud Drive / Dropbox / OneDrive</li>
+        <li>PIN lock + privacy blur</li>
+        <li>i18n: English / 中文 / 日本語</li>
+      </ul>
+    </div>
+  </noscript>
+
+  <div class="lock-overlay" id="lockOverlay" hidden>
+    <div class="lock-icon">🔒</div>
+    <h2 id="lockTitle">请输入密码</h2>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" id="lockInput" maxlength="8" autocomplete="off">
+    <div class="err" id="lockErr"></div>
+    <button id="lockUnlockBtn" type="button">解锁</button>
+  </div>
+
+  <div id="toastSlot"></div>
+
+  <div class="modal-overlay" id="prefsModal" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="prefsLabel">偏好设置</h2>
+        <button class="icon-btn modal-close" id="prefsCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="fiscalYearStart" id="fiscalYearStartLabel">财年起点（月）</label>
+          <select id="fiscalYearStart"></select>
+          <div class="hint" id="fiscalYearHint">会按这个月计算"本年"。</div>
+        </div>
+        <div class="field">
+          <label id="basisLabel">显示口径</label>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <div class="seg" id="basisSeg">
+              <button type="button" data-basis="net" class="active" id="basisNetBtn">净资产</button>
+              <button type="button" data-basis="assets" id="basisAssetsBtn">总资产</button>
+            </div>
+          </div>
+          <div class="hint" id="basisHint">顶部 / 目标 / 图表都按此口径展示</div>
+        </div>
+        <div class="field">
+          <label id="goalLabel">目标金额</label>
+          <div class="goal-actions">
+            <div class="goal-input-row">
+              <input type="number" step="any" id="goalInput" placeholder="目标金额">
+              <select id="goalCurrencySel"></select>
+            </div>
+            <button id="goalSetBtn" type="button">设置 / 修改</button>
+            <button id="goalClearBtn" type="button" class="ghost" hidden>移除</button>
+          </div>
+        </div>
+        <div class="field">
+          <label id="pinLabel">密码锁</label>
+          <div class="goal-actions">
+            <span id="pinStatus" style="color: var(--muted); font-size: 13px; min-width: 80px;">未设置</span>
+            <button id="pinSetBtn" type="button">设置</button>
+            <button id="pinRemoveBtn" type="button" class="ghost" hidden>关闭</button>
+          </div>
+        </div>
+        <div class="field">
+          <label id="syncLabel">iCloud 同步</label>
+          <div id="syncFsBlock" hidden>
+            <div id="syncStatus" style="font-size: 13px; color: var(--muted); margin: 4px 0 10px;">未链接</div>
+            <div class="goal-actions">
+              <button id="syncPickBtn" type="button">选择同步文件</button>
+              <button id="syncPushBtn" type="button" hidden>保存到文件</button>
+              <button id="syncPullBtn" type="button" class="ghost" hidden>从文件加载</button>
+              <button id="syncUnlinkBtn" type="button" class="ghost" hidden>解除链接</button>
+            </div>
+            <div class="hint" id="syncFileHint">推荐：选择 iCloud Drive 中的一个 record-finance.json。iCloud 会自动同步到所有 Apple 设备。</div>
+          </div>
+          <div id="syncManualBlock" hidden>
+            <div class="hint" id="syncFsUnsupportedHint" style="margin: 4px 0 8px;">本浏览器不支持自动文件同步。</div>
+            <div class="hint" id="syncFsUnsupportedHint2" style="margin-top: 0;">iOS：用页面下方"导出"→ 存到 iCloud Drive；其他设备打开后用"导入"。</div>
+          </div>
+        </div>
+        <div class="field">
+          <label id="snapshotsLabel">本地历史快照</label>
+          <div class="snap-list" id="snapList"></div>
+          <div class="hint" id="snapshotsHint">每次改动自动备份本地，最多保留 20 份。误操作时可恢复。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="drilldownView" hidden>
+    <button class="link" id="drillBack" style="margin-bottom: 12px; padding: 6px 0;">← <span id="drillBackLabel">返回</span></button>
+    <div class="panel hero">
+      <div class="summary">
+        <div class="total">
+          <div class="stat-label" id="drillAccountName">—</div>
+          <div class="stat-value" id="drillBalance">—</div>
+          <div class="stat-breakdown" id="drillOriginal" hidden></div>
+          <div class="stat-changes" id="drillPeriodChanges"></div>
+          <div class="stat-note" id="drillNote"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="toolbar"><h2 id="drillTrendTitle">余额走势</h2></div>
+      <canvas id="drillChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="toolbar"><h2 id="drillHistoryTitle">历史记录</h2></div>
+      <table id="drillHistoryTable">
+        <thead>
+          <tr>
+            <th id="drillThDate">日期</th>
+            <th id="drillThAmount" class="num">余额</th>
+            <th id="drillThConverted" class="num">折算</th>
+            <th id="drillThNote">备注</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="drillEmpty" hidden>没有这个账户的记录</div>
+    </div>
+  </div>
+
+  <div id="mainView">
+  <div class="banner" id="backupBanner" hidden>
+    <span class="banner-msg" id="backupBannerMsg"></span>
+    <div class="banner-actions">
+      <button class="ghost" id="backupBannerDismiss">稍后</button>
+      <button id="backupBannerExport">导出备份</button>
+    </div>
+  </div>
+
+  <div class="banner" id="remoteNewerBanner" hidden>
+    <span class="banner-msg" id="remoteNewerMsg">云端文件比本地更新，要从云端加载吗？</span>
+    <div class="banner-actions">
+      <button class="ghost" id="remoteNewerDismiss">稍后</button>
+      <button id="remoteNewerLoad">加载</button>
+    </div>
+  </div>
+
+  <div class="panel hero">
+    <div class="summary">
+      <div class="total">
+        <div class="stat-label" id="totalLabel">总余额</div>
+        <div class="stat-value" id="totalBalance">—</div>
+        <div class="stat-breakdown" id="statBreakdown" hidden></div>
+        <div class="stat-changes" id="periodChanges"></div>
+        <div class="stat-note" id="totalNote"></div>
+      </div>
+      <div class="account-chips" id="accountChips"></div>
+      <div class="currency-control">
+        <label for="displayCurrency">显示币种</label>
+        <select id="displayCurrency"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="breakdownPanel" hidden>
+    <div class="toolbar">
+      <h2 id="breakdownTitle">构成</h2>
+      <div class="seg" id="breakdownMode" hidden>
+        <button data-mode="currency" class="active" id="bmodeCur">币种</button>
+        <button data-mode="category" id="bmodeCat">类别</button>
+      </div>
+    </div>
+    <div class="breakdown">
+      <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
+      <div class="breakdown-legend" id="breakdownLegend"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="goalPanel" hidden>
+    <div class="toolbar"><h2 id="goalTitle">目标</h2></div>
+    <div class="goal-info">
+      <div class="goal-meta">
+        <div class="goal-headline" id="goalHeadline">—</div>
+        <div class="goal-sub" id="goalSub"></div>
+      </div>
+      <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill" style="width: 0%"></div></div>
+    </div>
+  </div>
+
+  <details class="panel" id="accountsPanel">
+    <summary>
+      <span><span id="accountSettingsLabel">账户设置</span> <span class="sum-hint" id="accountsSumHint"></span></span>
+    </summary>
+    <div style="margin-top: 14px;">
+      <div id="accountList"></div>
+      <div class="account-row" style="margin-top: 8px;">
+        <input type="text" id="newAccountName" placeholder="新账户名（招行 / 股票 / 房贷 …）">
+        <select id="newAccountCurrency"></select>
+        <select id="newAccountType" class="type-sel">
+          <option value="asset">资产</option>
+          <option value="liability">负债</option>
+        </select>
+        <select id="newAccountCategory" class="cat-sel"></select>
+        <button id="addAccountBtn">添加</button>
+      </div>
+      <div class="hint" id="accountSettingsHint">账户类型可选"资产"或"负债"。负债账户填的是欠款金额（正数），系统会自动从净资产中扣减。每个账户的"原生币种"只是录入时的默认值，每笔可单独换。</div>
+    </div>
+  </details>
+
+
+  <div class="panel" id="entryPanel">
+    <div class="toolbar"><h2><span id="entryTitle">录入</span><span class="edit-badge" id="editBadge" hidden>编辑中</span></h2></div>
+    <form id="entryForm">
+      <div class="row" style="margin-bottom: 14px;">
+        <div class="field" style="max-width: 200px;">
+          <label for="date">日期</label>
+          <input type="date" id="date" required>
+          <div class="date-chips">
+            <button type="button" class="date-chip" data-date="today" id="dateToday">今天</button>
+            <button type="button" class="date-chip" data-date="monthEnd" id="dateMonthEnd">月末</button>
+            <button type="button" class="date-chip" data-date="lastMonthEnd" id="dateLastMonthEnd">上月末</button>
+          </div>
+        </div>
+        <div class="field" style="max-width: 220px;">
+          <label for="inflow">本次净入金（可选）</label>
+          <div class="input-currency">
+            <input type="number" step="any" id="inflow" placeholder="0">
+            <select id="inflowCurrency"></select>
+          </div>
+        </div>
+        <div class="field" style="max-width: 200px;">
+          <label for="inflowAccount">流向账户（可选）</label>
+          <select id="inflowAccount"></select>
+        </div>
+        <div class="field" style="flex: 2; min-width: 180px;">
+          <label for="note">备注（可选）</label>
+          <input type="text" id="note" placeholder="工资 / 月底盘点 …">
+        </div>
+      </div>
+      <div class="balance-rows" id="balanceRows"></div>
+      <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
+      <div class="hint" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
+      <div class="actions">
+        <button type="submit" id="saveBtn" disabled>保存</button>
+        <button type="button" class="link" id="cancelEditBtn" hidden>取消编辑</button>
+        <button type="button" class="ghost" id="exportBtn" style="margin-left: auto;">导出</button>
+        <button type="button" class="ghost" id="importBtn">导入</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+      </div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <h2 id="trendTitle">余额走势</h2>
+      <div class="seg" id="chartMode">
+        <button data-mode="total" class="active">总余额</button>
+        <button data-mode="accounts">各账户</button>
+        <button data-mode="yoy" id="chartYoyBtn">同期</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <h2 id="historyTitle">历史记录</h2>
+      <input type="search" id="historySearch" class="search-input" placeholder="搜索备注 / 账户名">
+    </div>
+    <table id="historyTable">
+      <thead>
+        <tr>
+          <th id="thDate">日期</th>
+          <th id="thUpdates">更新</th>
+          <th id="thTotal" class="num">当日总余额</th>
+          <th id="thNote">备注</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="emptyMsg">还没有记录。</div>
+  </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'xfinance.v3';
+  const LEGACY_KEY = 'xfinance.v2';
+
+  const I18N = {
+    zh: {
+      htmlLang: 'zh-CN',
+      title: 'Record',
+      netWorth: '净资产', totalBalance: '总余额', currentBalance: '当前余额',
+      asOf: d => `截至 ${d}`, ratesLoading: '汇率加载中…', ratesShort: '汇率…',
+      assets: '资产', liabilities: '负债',
+      thisMonth: '本月', thisYear: '本年', inflow: '入金', gain: '涨跌',
+      displayCurrency: '显示币种',
+      currencyComposition: '币种构成', assetCurrencyComposition: '资产币种构成',
+      accountSettings: '账户设置',
+      accountsHintSingle: '默认只用一个『余额』。想分账户管理可以展开',
+      accountsCount: n => `${n} 个账户`,
+      newAccountPlaceholder: '新账户名（招行 / 股票 / 房贷 …）',
+      add: '添加', asset: '资产', liability: '负债',
+      accountSettingsHint: '账户类型可选"资产"或"负债"。负债账户填的是欠款金额（正数），系统会自动从净资产中扣减。每个账户的"原生币种"只是录入时的默认值，每笔可单独换。',
+      entry: '录入', editing: '编辑中',
+      date: '日期', netInflowOptional: '本次净入金（可选）', noteOptional: '备注（可选）',
+      notePlaceholder: '工资 / 月底盘点 …',
+      entryHint: '选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。',
+      chooseAccount: '— 选择账户 —', addAnotherAccount: '+ 添加另一个账户', remove: '移除',
+      inflowAccount: '流向账户（可选）', inflowAccountUnspecified: '— 未指定 —',
+      categoryComposition: '类别构成', byCurrency: '币种', byCategory: '类别',
+      categories: { cash: '现金', savings: '储蓄', investment: '投资', property: '房产', crypto: '加密', other: '其他' },
+      back: '← 返回',
+      preferences: '偏好设置',
+      privacyOn: '隐藏金额', privacyOff: '显示金额',
+      today: '今天', monthEnd: '月末', lastMonthEnd: '上月末',
+      fiscalYearStart: '财年起点（月）', fiscalYearHint: '会按这个月计算"本年"。',
+      monthNames: ['1 月','2 月','3 月','4 月','5 月','6 月','7 月','8 月','9 月','10 月','11 月','12 月'],
+      goal: '目标',
+      goalAmount: '目标金额', goalSet: '设置 / 修改',
+      goalClear: '移除',
+      goalProgress: (cur, tot, pct) => `${cur} / ${tot} · 完成 ${pct}%`,
+      goalRemain: amt => `还差 ${amt}`,
+      goalReached: '🎉 已达成',
+      goalETA: months => `按近期节奏，约 ${months} 个月后达成`,
+      goalETAStalled: '近期节奏不增长，无法估算',
+      goalPlaceholder: '目标金额',
+      pin: '密码锁',
+      pinNotSet: '未设置',
+      pinSet: '已开启',
+      pinChange: '修改',
+      pinRemove: '关闭',
+      pinPromptUnset: '输入当前密码以关闭：',
+      pinPromptChange: '输入当前密码：',
+      pinPromptNew: '输入新密码：',
+      pinWrong: '密码错误',
+      pinInvalid: '密码需为 4–8 位数字',
+      pinPromptUnlock: '请输入密码',
+      unlock: '解锁',
+      milestone: amt => `🎉 净资产突破 ${amt}！`,
+      perRowInflow: '其中入金',
+      historySearch: '搜索备注 / 账户名',
+      noMatch: '没有匹配的记录。',
+      goalNoRecord: '添加一条记录后会显示进度',
+      goalSaved: '✓ 目标已保存',
+      goalRatesPending: '汇率加载中，稍后显示进度',
+      goalBasis: '目标对照', basisNet: '净资产', basisAssets: '总资产',
+      displayBasis: '显示口径', displayBasisHint: '顶部 / 目标 / 图表都按此口径展示',
+      yoy: '同期对比',
+      cloudSync: '本地文件同步',
+      cloudSyncHint: '推荐选 iCloud Drive / Dropbox / OneDrive 等同步盘里的文件，跨设备自动同步',
+      autoSyncing: '同步中…',
+      syncRemoteNewer: '云端文件比本地更新，要从云端加载吗？',
+      syncRemoteNewerLoad: '加载',
+      syncRemoteNewerDismiss: '稍后',
+      snapshots: '本地历史快照',
+      snapshotsHint: '每次改动自动备份本地，最多保留 20 份。误操作时可恢复。',
+      snapshotRestore: '恢复',
+      snapshotConfirmRestore: ts => `恢复到 ${ts} 时的数据？当前数据会被覆盖（也会先存为一份新快照）。`,
+      snapshotsNone: '还没有快照',
+      syncPickFile: '选择同步文件',
+      syncPushFile: '保存到文件',
+      syncPullFile: '从文件加载',
+      syncUnlinkFile: '解除链接',
+      syncFileLinked: name => `已链接 · ${name}`,
+      syncFileHint: '推荐：选择（或新建）一个放在 iCloud Drive 里的 record-finance.json。iCloud 会自动同步到所有 Apple 设备，其他设备打开页面后点"从文件加载"即可。',
+      syncFsUnsupported: '本浏览器不支持自动文件同步（仅 Chrome/Edge 桌面版支持）。请用下方导出/导入按钮，把 JSON 保存到 Files App 的 iCloud Drive，在其他设备打开后导入。',
+      syncFsUnsupportedHint: 'iOS 用户：点右下"导出"→ 在弹出窗口选"存储到文件"→ 选 iCloud Drive 中的位置。下载时选同一文件即可。',
+      syncPushSuccess: '✓ 已写入同步文件',
+      syncPullSuccess: '✓ 已从文件加载',
+      syncFail: msg => `同步失败：${msg}`,
+      syncPullConfirm: (remote, local) => `文件中有 ${remote} 条记录，本地 ${local} 条。\n用文件覆盖本地？（本地数据会丢失）`,
+      syncUnlinkConfirm: '解除链接后将不再同步到此文件（文件本身不会删除）。继续？',
+      syncLastSync: date => `· 最后同步 ${date}`,
+      save: '保存', update: '更新', cancelEdit: '取消编辑',
+      export: '导出', import: '导入',
+      balanceTrend: '余额走势', totalLegend: '总余额', byAccount: '各账户',
+      history: '历史记录',
+      historyDate: '日期', historyUpdates: '更新', historyTotal: '当日总余额', historyNote: '备注',
+      edit: '编辑', del: '删除',
+      noRecords: '还没有记录。',
+      later: '稍后', exportBackup: '导出备份',
+      backupMsg: n => `已有 ${n} 处改动未备份。LocalStorage 可能因清浏览器/换设备丢失，建议导出 JSON 存到云盘。`,
+      confirmDeleteAccount: name => `删除账户「${name}」？将清除它在所有记录中的数据。`,
+      confirmDeleteEntry: '删除这条记录？',
+      alertNoBalance: '至少填写一个账户的余额。',
+      confirmImport: (a, s) => `导入 ${a} 个账户、${s} 条记录，会替换当前数据，确认？`,
+      importFailed: e => `导入失败：${e}`,
+      invalidFormat: '格式不正确',
+      liabBadge: '负债', deletedAccount: '(已删除)',
+      original: text => `原 ${text}`,
+      defaultAccountName: '余额',
+      currencies: { CNY: '人民币 CNY', USD: '美元 USD', JPY: '日元 JPY', EUR: '欧元 EUR', SGD: '新加坡元 SGD', HKD: '港元 HKD' },
+    },
+    en: {
+      htmlLang: 'en',
+      title: 'Record',
+      netWorth: 'Net Worth', totalBalance: 'Total Balance', currentBalance: 'Current Balance',
+      asOf: d => `As of ${d}`, ratesLoading: 'Loading rates…', ratesShort: 'Rates…',
+      assets: 'Assets', liabilities: 'Liabilities',
+      thisMonth: 'MTD', thisYear: 'YTD', inflow: 'Inflow', gain: 'Gains',
+      displayCurrency: 'Display currency',
+      currencyComposition: 'Currency Mix', assetCurrencyComposition: 'Asset Currency Mix',
+      accountSettings: 'Accounts',
+      accountsHintSingle: 'Using one "Balance" account. Expand to manage multiple.',
+      accountsCount: n => `${n} account${n === 1 ? '' : 's'}`,
+      newAccountPlaceholder: 'New account (e.g., Bank / Stocks / Mortgage)',
+      add: 'Add', asset: 'Asset', liability: 'Liability',
+      accountSettingsHint: 'Each account is either an asset or liability. Liability accounts hold the debt amount (positive number); they are auto-subtracted from net worth. The "native currency" is only the default for input — each entry can override it.',
+      entry: 'New Entry', editing: 'Editing',
+      date: 'Date', netInflowOptional: 'Net inflow (optional)', noteOptional: 'Note (optional)',
+      notePlaceholder: 'Salary / Month-end check …',
+      entryHint: 'Pick the accounts you want to update and enter their new balance. Unselected accounts keep their last recorded value. "Net inflow" = how much of this change is money you added/withdrew (not market gain), letting us separate savings from market moves. Rates use the record date.',
+      chooseAccount: '— Choose account —', addAnotherAccount: '+ Add another account', remove: 'Remove',
+      inflowAccount: 'Inflow account (optional)', inflowAccountUnspecified: '— Unspecified —',
+      categoryComposition: 'Category Mix', byCurrency: 'Currency', byCategory: 'Category',
+      categories: { cash: 'Cash', savings: 'Savings', investment: 'Investment', property: 'Property', crypto: 'Crypto', other: 'Other' },
+      back: '← Back',
+      preferences: 'Preferences',
+      privacyOn: 'Hide amounts', privacyOff: 'Show amounts',
+      today: 'Today', monthEnd: 'Month end', lastMonthEnd: 'Last month end',
+      fiscalYearStart: 'Fiscal year start (month)', fiscalYearHint: '"YTD" will be measured from this month.',
+      monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      goal: 'Goal',
+      goalAmount: 'Goal amount', goalSet: 'Set / Update',
+      goalClear: 'Remove',
+      goalProgress: (cur, tot, pct) => `${cur} / ${tot} · ${pct}% complete`,
+      goalRemain: amt => `${amt} to go`,
+      goalReached: '🎉 Reached',
+      goalETA: months => `At recent pace, ~${months} months to go`,
+      goalETAStalled: 'Not growing recently — ETA unknown',
+      goalPlaceholder: 'Goal amount',
+      pin: 'PIN Lock',
+      pinNotSet: 'Off',
+      pinSet: 'On',
+      pinChange: 'Change',
+      pinRemove: 'Disable',
+      pinPromptUnset: 'Enter current PIN to disable:',
+      pinPromptChange: 'Enter current PIN:',
+      pinPromptNew: 'Enter new PIN:',
+      pinWrong: 'Wrong PIN',
+      pinInvalid: 'PIN must be 4–8 digits',
+      pinPromptUnlock: 'Enter PIN',
+      unlock: 'Unlock',
+      milestone: amt => `🎉 Net worth crossed ${amt}!`,
+      perRowInflow: 'Of which inflow',
+      historySearch: 'Search note / account',
+      noMatch: 'No matching records.',
+      goalNoRecord: 'Add a record to see progress',
+      goalSaved: '✓ Goal saved',
+      goalRatesPending: 'Loading rates, progress will show shortly',
+      goalBasis: 'Track against', basisNet: 'Net worth', basisAssets: 'Total assets',
+      displayBasis: 'Display basis', displayBasisHint: 'Hero / Goal / Chart all use this basis',
+      yoy: 'YoY',
+      cloudSync: 'Local File Sync',
+      cloudSyncHint: 'Pick a file inside iCloud Drive / Dropbox / OneDrive — your sync engine handles cross-device propagation',
+      autoSyncing: 'syncing…',
+      syncRemoteNewer: 'Sync file looks newer than your local data. Load it?',
+      syncRemoteNewerLoad: 'Load',
+      syncRemoteNewerDismiss: 'Later',
+      snapshots: 'Local snapshots',
+      snapshotsHint: 'Auto-saved on every change, last 20 kept. Restore here after mistakes.',
+      snapshotRestore: 'Restore',
+      snapshotConfirmRestore: ts => `Restore to data from ${ts}? Current data will be overwritten (a new snapshot will be saved first).`,
+      snapshotsNone: 'No snapshots yet',
+      syncPickFile: 'Pick sync file',
+      syncPushFile: 'Save to file',
+      syncPullFile: 'Load from file',
+      syncUnlinkFile: 'Unlink',
+      syncFileLinked: name => `Linked · ${name}`,
+      syncFileHint: 'Tip: pick (or create) a file inside your iCloud Drive folder (e.g., record-finance.json). iCloud syncs it across devices; on another device just hit "Load from file".',
+      syncFsUnsupported: 'This browser doesn\'t support direct file sync (Chrome/Edge desktop only). Use Export/Import below + save the JSON inside Files → iCloud Drive.',
+      syncFsUnsupportedHint: 'iOS: tap Export → "Save to Files" → pick a location in iCloud Drive. On other devices, Import from the same file.',
+      syncPushSuccess: '✓ Wrote to sync file',
+      syncPullSuccess: '✓ Loaded from file',
+      syncFail: msg => `Sync failed: ${msg}`,
+      syncPullConfirm: (remote, local) => `File has ${remote} records, local has ${local}.\nOverwrite local with file? (Local will be lost.)`,
+      syncUnlinkConfirm: 'Unlinking stops auto-sync to this file (the file itself stays). Continue?',
+      syncLastSync: date => `· Last sync ${date}`,
+      save: 'Save', update: 'Update', cancelEdit: 'Cancel',
+      export: 'Export', import: 'Import',
+      balanceTrend: 'Balance Trend', totalLegend: 'Total', byAccount: 'By Account',
+      history: 'History',
+      historyDate: 'Date', historyUpdates: 'Updates', historyTotal: 'Total that day', historyNote: 'Note',
+      edit: 'Edit', del: 'Delete',
+      noRecords: 'No records yet.',
+      later: 'Later', exportBackup: 'Export backup',
+      backupMsg: n => `${n} change${n === 1 ? '' : 's'} since last export. LocalStorage can be wiped — export the JSON and store it in your cloud drive.`,
+      confirmDeleteAccount: name => `Delete account "${name}"? This removes its data from all records.`,
+      confirmDeleteEntry: 'Delete this record?',
+      alertNoBalance: 'Fill in at least one account balance.',
+      confirmImport: (a, s) => `Import ${a} account${a === 1 ? '' : 's'} and ${s} record${s === 1 ? '' : 's'}? This will replace current data.`,
+      importFailed: e => `Import failed: ${e}`,
+      invalidFormat: 'Invalid format',
+      liabBadge: 'Debt', deletedAccount: '(deleted)',
+      original: text => `Orig. ${text}`,
+      defaultAccountName: 'Balance',
+      currencies: { CNY: 'CNY · Yuan', USD: 'USD · Dollar', JPY: 'JPY · Yen', EUR: 'EUR · Euro', SGD: 'SGD · Sing. Dollar', HKD: 'HKD · HK Dollar' },
+    },
+    ja: {
+      htmlLang: 'ja',
+      title: 'Record',
+      netWorth: '純資産', totalBalance: '総残高', currentBalance: '現在残高',
+      asOf: d => `${d} 時点`, ratesLoading: '為替レート読込中…', ratesShort: 'レート…',
+      assets: '資産', liabilities: '負債',
+      thisMonth: '今月', thisYear: '年初来', inflow: '入金', gain: '騰落',
+      displayCurrency: '表示通貨',
+      currencyComposition: '通貨構成', assetCurrencyComposition: '資産の通貨構成',
+      accountSettings: '口座設定',
+      accountsHintSingle: '「残高」一つだけ使用中。複数口座を管理するには展開',
+      accountsCount: n => `${n} 口座`,
+      newAccountPlaceholder: '新しい口座（銀行 / 株式 / 住宅ローン …）',
+      add: '追加', asset: '資産', liability: '負債',
+      accountSettingsHint: '口座は「資産」または「負債」を選べます。負債口座は債務額（正の数）を入力し、自動的に純資産から差し引かれます。「ネイティブ通貨」は入力時のデフォルトのみで、各記録で個別に変更可能。',
+      entry: '記録', editing: '編集中',
+      date: '日付', netInflowOptional: '今回の純入金（任意）', noteOptional: 'メモ（任意）',
+      notePlaceholder: '給料 / 月末確認 …',
+      entryHint: '更新したい口座を選び、新しい残高を入力します。選ばれていない口座は前回の値を引き継ぎます。「純入金」 = 今回の変動のうち、自分が入出金した額（市場変動を除く）。貯蓄と相場変動を分けるために使います。レートは記録日のもの。',
+      chooseAccount: '— 口座を選択 —', addAnotherAccount: '+ 別の口座を追加', remove: '削除',
+      inflowAccount: '入金先口座（任意）', inflowAccountUnspecified: '— 未指定 —',
+      categoryComposition: 'カテゴリ構成', byCurrency: '通貨', byCategory: 'カテゴリ',
+      categories: { cash: '現金', savings: '預金', investment: '投資', property: '不動産', crypto: '仮想通貨', other: 'その他' },
+      back: '← 戻る',
+      preferences: '設定',
+      privacyOn: '金額を隠す', privacyOff: '金額を表示',
+      today: '今日', monthEnd: '月末', lastMonthEnd: '先月末',
+      fiscalYearStart: '会計年度開始月', fiscalYearHint: '「年初来」はこの月から計算します。',
+      monthNames: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+      goal: '目標',
+      goalAmount: '目標額', goalSet: '設定 / 変更',
+      goalClear: '削除',
+      goalProgress: (cur, tot, pct) => `${cur} / ${tot} · ${pct}% 達成`,
+      goalRemain: amt => `あと ${amt}`,
+      goalReached: '🎉 達成',
+      goalETA: months => `最近のペースで約 ${months} ヶ月で達成`,
+      goalETAStalled: '最近の伸びが不足、ETA 不明',
+      goalPlaceholder: '目標額',
+      pin: 'PIN ロック',
+      pinNotSet: 'オフ',
+      pinSet: 'オン',
+      pinChange: '変更',
+      pinRemove: '無効化',
+      pinPromptUnset: '無効化するには現在の PIN を入力：',
+      pinPromptChange: '現在の PIN を入力：',
+      pinPromptNew: '新しい PIN を入力：',
+      pinWrong: 'PIN が違います',
+      pinInvalid: 'PIN は 4〜8 桁の数字',
+      pinPromptUnlock: 'PIN を入力',
+      unlock: 'ロック解除',
+      milestone: amt => `🎉 純資産が ${amt} を突破！`,
+      perRowInflow: 'うち入金',
+      historySearch: 'メモ / 口座を検索',
+      noMatch: '一致する記録はありません。',
+      goalNoRecord: '記録を追加すると進捗が表示されます',
+      goalSaved: '✓ 目標を保存しました',
+      goalRatesPending: 'レート読込中、進捗はまもなく表示',
+      goalBasis: '目標対象', basisNet: '純資産', basisAssets: '総資産',
+      displayBasis: '表示基準', displayBasisHint: 'ヘッダー / 目標 / グラフは全てこの基準で表示',
+      yoy: '前年比',
+      cloudSync: 'ローカルファイル同期',
+      cloudSyncHint: 'iCloud Drive / Dropbox / OneDrive 内のファイルを選ぶと、同期エンジンが端末間を繋ぎます',
+      autoSyncing: '同期中…',
+      syncRemoteNewer: '同期ファイルがローカルより新しいようです。読み込みますか？',
+      syncRemoteNewerLoad: '読込',
+      syncRemoteNewerDismiss: '後で',
+      snapshots: 'ローカル履歴スナップショット',
+      snapshotsHint: '変更毎に自動バックアップ、最新 20 件保持。誤操作時の復旧用。',
+      snapshotRestore: '復元',
+      snapshotConfirmRestore: ts => `${ts} 時点のデータに復元しますか？現在のデータは上書きされます（先に新しいスナップショットを保存します）。`,
+      snapshotsNone: 'スナップショットはまだありません',
+      syncPickFile: '同期ファイルを選択',
+      syncPushFile: 'ファイルへ書込',
+      syncPullFile: 'ファイルから読込',
+      syncUnlinkFile: 'リンク解除',
+      syncFileLinked: name => `リンク済み · ${name}`,
+      syncFileHint: 'iCloud Drive 内のファイル（例：record-finance.json）を選択（または作成）してください。iCloud が全デバイスに同期し、別デバイスでは「ファイルから読込」で取得できます。',
+      syncFsUnsupported: 'このブラウザはファイル直接同期に未対応です（Chrome/Edge デスクトップのみ）。エクスポート/インポートで JSON を Files の iCloud Drive に保存・読込してください。',
+      syncFsUnsupportedHint: 'iOS：エクスポート → 「ファイルに保存」→ iCloud Drive の場所を選択。別デバイスでは同じファイルをインポート。',
+      syncPushSuccess: '✓ ファイルに書き込みました',
+      syncPullSuccess: '✓ ファイルから読み込みました',
+      syncFail: msg => `同期失敗：${msg}`,
+      syncPullConfirm: (remote, local) => `ファイル ${remote} 件、ローカル ${local} 件。\nファイルでローカルを上書きしますか？（ローカル消失）`,
+      syncUnlinkConfirm: 'リンク解除するとこのファイルへの自動同期が止まります（ファイル自体は残ります）。続行？',
+      syncLastSync: date => `· 最終同期 ${date}`,
+      save: '保存', update: '更新', cancelEdit: 'キャンセル',
+      export: 'エクスポート', import: 'インポート',
+      balanceTrend: '残高推移', totalLegend: '総残高', byAccount: '口座別',
+      history: '履歴',
+      historyDate: '日付', historyUpdates: '更新', historyTotal: '当日総残高', historyNote: 'メモ',
+      edit: '編集', del: '削除',
+      noRecords: '記録はまだありません。',
+      later: '後で', exportBackup: 'バックアップを出力',
+      backupMsg: n => `エクスポート後 ${n} 件の変更があります。LocalStorage は消える可能性があるため、JSON をクラウドに保存してください。`,
+      confirmDeleteAccount: name => `口座「${name}」を削除しますか？すべての記録から該当データが消えます。`,
+      confirmDeleteEntry: 'この記録を削除しますか？',
+      alertNoBalance: '少なくとも1つの口座残高を入力してください。',
+      confirmImport: (a, s) => `${a} 個の口座、${s} 件の記録をインポートします。現在のデータを置き換えますがよろしいですか？`,
+      importFailed: e => `インポート失敗：${e}`,
+      invalidFormat: '形式が正しくありません',
+      liabBadge: '負債', deletedAccount: '(削除済)',
+      original: text => `元 ${text}`,
+      defaultAccountName: '残高',
+      currencies: { CNY: '人民元 CNY', USD: '米ドル USD', JPY: '日本円 JPY', EUR: 'ユーロ EUR', SGD: 'シンガポール・ドル SGD', HKD: '香港ドル HKD' },
+    },
+  };
+
+  function t(key, ...args) {
+    const dict = I18N[state ? state.language : 'zh'] || I18N.zh;
+    const v = dict[key];
+    return typeof v === 'function' ? v(...args) : v;
+  }
+  const PALETTE = ['#4ade80', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#34d399', '#fb923c', '#22d3ee', '#facc15'];
+  const CURRENCIES = [
+    { code: 'CNY', label: '人民币 CNY', symbol: '¥' },
+    { code: 'USD', label: '美元 USD',   symbol: '$' },
+    { code: 'JPY', label: '日元 JPY',   symbol: 'JP¥' },
+    { code: 'EUR', label: '欧元 EUR',   symbol: '€' },
+    { code: 'SGD', label: '新加坡元 SGD', symbol: 'S$' },
+    { code: 'HKD', label: '港元 HKD',  symbol: 'HK$' },
+  ];
+  const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
+  const CURRENCY_COLORS = { CNY: '#f87171', USD: '#4ade80', JPY: '#f472b6', EUR: '#60a5fa', SGD: '#fbbf24', HKD: '#a78bfa' };
+  const CATEGORIES = ['cash', 'savings', 'investment', 'property', 'crypto', 'other'];
+  const CATEGORY_COLORS = {
+    cash: '#60a5fa', savings: '#4ade80', investment: '#fbbf24',
+    property: '#f472b6', crypto: '#a78bfa', other: '#8590a8',
+  };
+  const BACKUP_THRESHOLD = 5; // 改动这么多次后提示导出
+
+  const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function fmt(amount, currency) {
+    if (amount == null || isNaN(amount)) return '—';
+    const decimals = currency === 'JPY' ? 0 : 2;
+    const numStr = Number(amount).toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return SYMBOLS[currency] + numStr;
+  }
+
+  // ===== State =====
+  let state = load();
+  let chart = null;
+  let breakdownChart = null;
+  let chartMode = 'total';
+  let backupBannerDismissed = false;
+  let editingId = null;
+  let entryRows = []; // [{ rowId, accountId, amount, currency }]
+  let viewingAccountId = null;
+  let drillChart = null;
+  const inflight = new Set();
+
+  function newEmptyRow() {
+    return { rowId: crypto.randomUUID(), accountId: '', amount: '', currency: state.displayCurrency, inflow: '' };
+  }
+
+  function migrate(data) {
+    if (!data.displayCurrency) data.displayCurrency = 'CNY';
+    if (!data.language) data.language = 'zh';
+    if (!data.theme) data.theme = 'dark';
+    if (typeof data.privacyBlur !== 'boolean') data.privacyBlur = false;
+    if (typeof data.fiscalYearStartMonth !== 'number') data.fiscalYearStartMonth = 1;
+    if (!data.goal) data.goal = null;
+    // Promote goalBasis -> basis as a global setting (applies to hero, goal, chart)
+    if (data.basis !== 'net' && data.basis !== 'assets') {
+      data.basis = (data.goalBasis === 'assets') ? 'assets' : 'net';
+    }
+    delete data.goalBasis;
+    if (!data.pin) data.pin = null;
+    if (data.sync === undefined) data.sync = null;
+    // Drop legacy Gist-shaped sync state (we now only use file-based sync)
+    if (data.sync && (data.sync.token || data.sync.gistId) && !data.sync.fileName) data.sync = null;
+    if (!Array.isArray(data.milestonesShown)) data.milestonesShown = [];
+    if (typeof data.goalReachedShown !== 'boolean') data.goalReachedShown = false;
+    if (!data.rates) data.rates = {};
+    if (typeof data.dirtySinceExport !== 'number') data.dirtySinceExport = 0;
+    data.accounts.forEach(a => {
+      if (!a.currency) a.currency = 'CNY';
+      if (!a.type) a.type = 'asset';
+      if (!a.category) a.category = 'other';
+    });
+    data.snapshots.forEach(s => {
+      Object.keys(s.updates).forEach(accId => {
+        const v = s.updates[accId];
+        if (typeof v === 'number') {
+          const acc = data.accounts.find(a => a.id === accId);
+          s.updates[accId] = { amount: v, currency: (acc && acc.currency) || 'CNY' };
+        }
+      });
+    });
+    return data;
+  }
+
+  function load() {
+    let data;
+    try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch {}
+    if (!data) {
+      try {
+        const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY));
+        if (legacy && Array.isArray(legacy.accounts) && Array.isArray(legacy.snapshots)) {
+          data = migrate(legacy);
+        }
+      } catch {}
+    }
+    if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.snapshots)) {
+      data = { accounts: [], snapshots: [], displayCurrency: 'CNY', language: 'zh', theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+    } else {
+      data = migrate(data);
+    }
+    if (data.accounts.length === 0) {
+      const defaultName = (I18N[data.language] || I18N.zh).defaultAccountName;
+      data.accounts.push({ id: crypto.randomUUID(), name: defaultName, color: PALETTE[0], currency: data.displayCurrency || 'CNY', type: 'asset', category: 'cash' });
+    }
+    return data;
+  }
+
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function markDirty() {
+    state.dirtySinceExport = (state.dirtySinceExport || 0) + 1;
+    save();
+    saveLocalSnapshot();
+    scheduleAutoSync();
+  }
+
+  function sortedSnapshots() {
+    return [...state.snapshots].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
+  }
+
+  function nextColor() {
+    const used = new Set(state.accounts.map(a => a.color));
+    return PALETTE.find(c => !used.has(c)) || PALETTE[state.accounts.length % PALETTE.length];
+  }
+
+  // ===== Rates =====
+  // Source: fawazahmed0/currency-api via jsDelivr CDN (CORS-friendly, works from file://)
+  // Historical: @{YYYY-MM-DD}, falls back to @latest for dates not yet tagged.
+  async function fetchRates(date) {
+    const cached = state.rates[date];
+    const complete = cached && CURRENCIES.every(c => cached[c.code] !== undefined);
+    if (complete || inflight.has(date)) return;
+    inflight.add(date);
+    try {
+      const urls = [
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/usd.json`,
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json`,
+        `https://${date}.currency-api.pages.dev/v1/currencies/usd.json`,
+        `https://latest.currency-api.pages.dev/v1/currencies/usd.json`,
+      ];
+      let data = null;
+      for (const url of urls) {
+        try {
+          const r = await fetch(url);
+          if (r.ok) { data = await r.json(); break; }
+        } catch {}
+      }
+      if (!data || !data.usd) throw new Error('rates unavailable');
+      const u = data.usd;
+      state.rates[date] = { USD: 1, CNY: u.cny, JPY: u.jpy, EUR: u.eur, SGD: u.sgd, HKD: u.hkd };
+      save();
+    } catch (e) {
+      console.warn('汇率获取失败', date, e);
+    } finally {
+      inflight.delete(date);
+    }
+  }
+
+  async function ensureRates(dates) {
+    const missing = [...new Set(dates)].filter(d => {
+      const c = state.rates[d];
+      return !inflight.has(d) && (!c || CURRENCIES.some(cur => c[cur.code] === undefined));
+    });
+    if (!missing.length) return;
+    await Promise.all(missing.map(fetchRates));
+    renderAll();
+  }
+
+  function convert(amount, from, to, rates) {
+    if (from === to) return amount;
+    if (!rates || !rates[from] || !rates[to]) return null;
+    return amount * rates[to] / rates[from];
+  }
+
+  function signFor(type) { return type === 'liability' ? -1 : 1; }
+  function signedAmount(amount, type) { return amount * signFor(type); }
+
+  // ===== Timeline =====
+  // Carry-forward per-account balances (in their stored currency).
+  // For each snapshot date, convert each held balance to display currency using that date's rates.
+  function computeTimeline() {
+    const list = sortedSnapshots();
+    const running = {}; // accId -> { amount, currency }
+    return list.map(s => {
+      Object.entries(s.updates).forEach(([accId, v]) => { running[accId] = v; });
+      const rates = state.rates[s.date];
+      const balances = {};
+      let total = 0;
+      let totalKnown = true;
+      let assetsTotal = 0; let assetsKnown = true;
+      state.accounts.forEach(a => {
+        const r = running[a.id];
+        if (!r) return;
+        const rawConverted = convert(r.amount, r.currency, state.displayCurrency, rates);
+        const sign = signFor(a.type);
+        const converted = rawConverted == null ? null : rawConverted * sign;
+        balances[a.id] = { amount: r.amount, currency: r.currency, converted, type: a.type };
+        if (converted == null) {
+          totalKnown = false;
+          if (a.type === 'asset') assetsKnown = false;
+        } else {
+          total += converted;
+          if (a.type === 'asset') assetsTotal += rawConverted;
+        }
+      });
+      return {
+        snapshot: s, balances,
+        total: totalKnown ? total : null,
+        assetsTotal: assetsKnown ? assetsTotal : null,
+        ratesMissing: !rates,
+      };
+    });
+  }
+
+  function totalForBasis(entry) {
+    if (!entry) return null;
+    return state.basis === 'assets' ? entry.assetsTotal : entry.total;
+  }
+
+  function currentSnapshot() {
+    const tl = computeTimeline();
+    return tl.length ? tl[tl.length - 1] : null;
+  }
+
+  // ===== Currency selector population =====
+  function populateCurrencySelect(sel, selected) {
+    const labels = t('currencies');
+    sel.innerHTML = CURRENCIES.map(c =>
+      `<option value="${c.code}" ${c.code === selected ? 'selected' : ''}>${labels[c.code] || c.label}</option>`
+    ).join('');
+  }
+
+  function populateInflowAccountSelect() {
+    const sel = document.getElementById('inflowAccount');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = `<option value="">${t('inflowAccountUnspecified')}</option>` +
+      state.accounts.map(a => {
+        const liab = a.type === 'liability' ? ` · ${t('liabBadge')}` : '';
+        return `<option value="${a.id}" ${a.id === current ? 'selected' : ''}>${escapeHtml(a.name + liab)}</option>`;
+      }).join('');
+  }
+
+  // ===== Account management =====
+  function renderAccountList() {
+    const wrap = document.getElementById('accountList');
+    wrap.innerHTML = '';
+    state.accounts.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'account-row';
+      const catSelect = a.type === 'asset'
+        ? `<select data-id="${a.id}" data-field="category" class="cat-sel">${CATEGORIES.map(c =>
+            `<option value="${c}" ${a.category === c ? 'selected' : ''}>${t('categories')[c]}</option>`
+          ).join('')}</select>`
+        : '';
+      row.innerHTML = `
+        <span class="chip-dot" style="background:${a.color}"></span>
+        <input type="text" data-id="${a.id}" data-field="name" value="${escapeHtml(a.name)}">
+        <select data-id="${a.id}" data-field="currency"></select>
+        <select data-id="${a.id}" data-field="type" class="type-sel">
+          <option value="asset" ${a.type === 'asset' ? 'selected' : ''}>${t('asset')}</option>
+          <option value="liability" ${a.type === 'liability' ? 'selected' : ''}>${t('liability')}</option>
+        </select>
+        ${catSelect}
+        <button class="danger" data-id="${a.id}">${t('del')}</button>
+      `;
+      populateCurrencySelect(row.querySelector('select[data-field="currency"]'), a.currency);
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('input[type="text"]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const acc = state.accounts.find(a => a.id === inp.dataset.id);
+        if (acc) { acc.name = inp.value.trim() || acc.name; markDirty(); renderAll(); }
+      });
+    });
+    wrap.querySelectorAll('select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const acc = state.accounts.find(a => a.id === sel.dataset.id);
+        if (!acc) return;
+        const field = sel.dataset.field;
+        if (field === 'currency') acc.currency = sel.value;
+        else if (field === 'type') acc.type = sel.value;
+        else if (field === 'category') acc.category = sel.value;
+        markDirty(); renderAll();
+      });
+    });
+    wrap.querySelectorAll('button.danger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const acc = state.accounts.find(a => a.id === id);
+        if (!confirm(t('confirmDeleteAccount', acc.name))) return;
+        state.accounts = state.accounts.filter(a => a.id !== id);
+        state.snapshots.forEach(s => { delete s.updates[id]; });
+        state.snapshots = state.snapshots.filter(s => Object.keys(s.updates).length > 0);
+        markDirty(); renderAll();
+      });
+    });
+  }
+
+  document.getElementById('addAccountBtn').addEventListener('click', () => {
+    const input = document.getElementById('newAccountName');
+    const name = input.value.trim();
+    if (!name) return;
+    const currency = document.getElementById('newAccountCurrency').value;
+    const type = document.getElementById('newAccountType').value;
+    const category = document.getElementById('newAccountCategory').value;
+    state.accounts.push({ id: crypto.randomUUID(), name, color: nextColor(), currency, type, category });
+    markDirty(); input.value = ''; renderAll();
+  });
+  document.getElementById('newAccountName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addAccountBtn').click(); }
+  });
+
+  // ===== Entry form =====
+  function getAmountPlaceholder(accountId) {
+    if (!accountId) return '0';
+    const cur = currentSnapshot();
+    const prev = cur && cur.balances[accountId];
+    if (!prev) return '0';
+    return Number(prev.amount).toFixed(prev.currency === 'JPY' ? 0 : 2);
+  }
+
+  function renderEntryForm() {
+    const wrap = document.getElementById('balanceRows');
+    const addBtn = document.getElementById('addRowBtn');
+    wrap.innerHTML = '';
+
+    if (state.accounts.length === 0) {
+      document.getElementById('saveBtn').disabled = true;
+      addBtn.disabled = true;
+      return;
+    }
+    document.getElementById('saveBtn').disabled = false;
+
+    if (entryRows.length === 0) entryRows = [newEmptyRow()];
+    entryRows.forEach(row => wrap.appendChild(buildEntryRow(row)));
+
+    const usedCount = entryRows.filter(r => r.accountId).length;
+    addBtn.disabled = usedCount >= state.accounts.length;
+    addBtn.textContent = t('addAnotherAccount');
+  }
+
+  function buildEntryRow(row) {
+    const group = document.createElement('div');
+    group.className = 'balance-row-group';
+    group.dataset.rowId = row.rowId;
+
+    const el = document.createElement('div');
+    el.className = 'balance-row';
+
+    const usedAccIds = new Set(entryRows.filter(r => r.rowId !== row.rowId && r.accountId).map(r => r.accountId));
+    const opts = [`<option value="">${t('chooseAccount')}</option>`]
+      .concat(state.accounts.map(a => {
+        const disabled = usedAccIds.has(a.id) ? 'disabled' : '';
+        const selected = row.accountId === a.id ? 'selected' : '';
+        const liab = a.type === 'liability' ? ` · ${t('liabBadge')}` : '';
+        return `<option value="${a.id}" ${selected} ${disabled}>${escapeHtml(a.name + liab)}</option>`;
+      })).join('');
+
+    el.innerHTML = `
+      <select class="acc-sel">${opts}</select>
+      <input class="amt-input" type="number" step="any" value="${row.amount}" placeholder="${getAmountPlaceholder(row.accountId)}">
+      <select class="cur-sel"></select>
+      <button type="button" class="row-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>
+    `;
+    populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
+
+    el.querySelector('.acc-sel').addEventListener('change', e => {
+      row.accountId = e.target.value;
+      const acc = state.accounts.find(a => a.id === row.accountId);
+      if (acc) row.currency = acc.currency;
+      renderEntryForm();
+    });
+    el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; });
+    el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
+    el.querySelector('.row-remove').addEventListener('click', () => {
+      entryRows = entryRows.filter(r => r.rowId !== row.rowId);
+      if (entryRows.length === 0) entryRows = [newEmptyRow()];
+      renderEntryForm();
+    });
+    if (entryRows.length === 1) el.querySelector('.row-remove').style.visibility = 'hidden';
+
+    group.appendChild(el);
+
+    if (row.accountId) {
+      const inflowMini = document.createElement('div');
+      inflowMini.className = 'row-inflow-mini';
+      inflowMini.innerHTML = `
+        <label>${t('perRowInflow')}</label>
+        <input type="number" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
+        <span style="color: var(--muted);">${row.currency}</span>
+      `;
+      inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => { row.inflow = e.target.value; });
+      group.appendChild(inflowMini);
+    }
+
+    return group;
+  }
+
+  document.getElementById('addRowBtn').addEventListener('click', () => {
+    if (entryRows.filter(r => r.accountId).length >= state.accounts.length) return;
+    entryRows.push(newEmptyRow());
+    renderEntryForm();
+  });
+
+  document.getElementById('entryForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const date = document.getElementById('date').value;
+    const note = document.getElementById('note').value.trim();
+    const updates = {};
+    entryRows.forEach(row => {
+      if (row.accountId && row.amount !== '') {
+        const amt = parseFloat(row.amount);
+        if (!isNaN(amt)) {
+          const u = { amount: amt, currency: row.currency };
+          if (row.inflow !== '') {
+            const infAmt = parseFloat(row.inflow);
+            if (!isNaN(infAmt) && infAmt !== 0) u.inflow = infAmt;
+          }
+          updates[row.accountId] = u;
+        }
+      }
+    });
+    if (!Object.keys(updates).length) {
+      alert(t('alertNoBalance'));
+      return;
+    }
+    const inflowRaw = document.getElementById('inflow').value;
+    let inflow = null;
+    if (inflowRaw !== '') {
+      const amt = parseFloat(inflowRaw);
+      if (!isNaN(amt)) {
+        inflow = { amount: amt, currency: document.getElementById('inflowCurrency').value };
+        const accId = document.getElementById('inflowAccount').value;
+        if (accId) inflow.accountId = accId;
+      }
+    }
+    if (editingId) {
+      const snap = state.snapshots.find(s => s.id === editingId);
+      if (snap) {
+        snap.date = date; snap.note = note; snap.updates = updates;
+        if (inflow) snap.inflow = inflow; else delete snap.inflow;
+      }
+      editingId = null;
+    } else {
+      const snap = { id: crypto.randomUUID(), date, updates, note, createdAt: Date.now() };
+      if (inflow) snap.inflow = inflow;
+      state.snapshots.push(snap);
+    }
+    markDirty();
+    entryRows = [newEmptyRow()];
+    document.getElementById('note').value = '';
+    document.getElementById('inflow').value = '';
+    document.getElementById('inflowAccount').value = '';
+    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    await ensureRates([date]);
+    renderAll();
+    checkMilestones();
+    maybeConfetti();
+  });
+
+  function startEdit(id) {
+    const snap = state.snapshots.find(s => s.id === id);
+    if (!snap) return;
+    editingId = id;
+    entryRows = Object.entries(snap.updates).map(([accId, v]) => ({
+      rowId: crypto.randomUUID(),
+      accountId: accId,
+      amount: String(v.amount),
+      currency: v.currency,
+      inflow: v.inflow != null ? String(v.inflow) : '',
+    }));
+    if (entryRows.length === 0) entryRows = [newEmptyRow()];
+    renderAll();
+    document.getElementById('date').value = snap.date;
+    document.getElementById('note').value = snap.note || '';
+    if (snap.inflow) {
+      document.getElementById('inflow').value = snap.inflow.amount;
+      document.getElementById('inflowCurrency').value = snap.inflow.currency;
+      document.getElementById('inflowAccount').value = snap.inflow.accountId || '';
+    } else {
+      document.getElementById('inflow').value = '';
+      document.getElementById('inflowAccount').value = '';
+    }
+    document.getElementById('entryPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    entryRows = [newEmptyRow()];
+    document.getElementById('note').value = '';
+    document.getElementById('inflow').value = '';
+    document.getElementById('inflowAccount').value = '';
+    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    renderAll();
+  }
+  document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+
+  // ===== Summary =====
+  function renderSummary() {
+    const cur = currentSnapshot();
+    const singleAccount = state.accounts.length <= 1;
+    const totalEl = document.getElementById('totalBalance');
+    const noteEl = document.getElementById('totalNote');
+    const sbEl = document.getElementById('statBreakdown');
+    const hasLiab = state.accounts.some(a => a.type === 'liability');
+    const totalVal = cur ? totalForBasis(cur) : null;
+    document.getElementById('totalLabel').textContent =
+      state.basis === 'assets' ? t('basisAssets')
+        : (hasLiab ? t('netWorth') : (singleAccount ? t('currentBalance') : t('totalBalance')));
+
+    if (!cur) {
+      totalEl.textContent = '—';
+      noteEl.textContent = '';
+      sbEl.hidden = true;
+    } else if (totalVal == null) {
+      totalEl.textContent = '—';
+      noteEl.textContent = t('ratesLoading');
+      sbEl.hidden = true;
+    } else {
+      totalEl.textContent = fmt(totalVal, state.displayCurrency);
+      noteEl.textContent = t('asOf', cur.snapshot.date);
+
+      if (hasLiab) {
+        let assets = 0, liabilities = 0;
+        Object.entries(cur.balances).forEach(([accId, b]) => {
+          if (b.converted == null) return;
+          if (b.type === 'liability') liabilities += Math.abs(b.converted);
+          else assets += b.converted;
+        });
+        sbEl.hidden = false;
+        sbEl.innerHTML = `${t('assets')} ${fmt(assets, state.displayCurrency)} · <span class="liab">${t('liabilities')} ${fmt(liabilities, state.displayCurrency)}</span>`;
+      } else {
+        sbEl.hidden = true;
+      }
+    }
+
+    const chips = document.getElementById('accountChips');
+    chips.innerHTML = '';
+    if (singleAccount) return;
+    state.accounts.forEach(a => {
+      const b = cur && cur.balances[a.id];
+      const chip = document.createElement('div');
+      chip.className = 'chip clickable' + (a.type === 'liability' ? ' liability' : '');
+      chip.dataset.accId = a.id;
+      chip.addEventListener('click', () => startDrilldown(a.id));
+      const converted = b ? b.converted : null;
+      const showOriginal = b && b.currency !== state.displayCurrency;
+      const liabBadge = a.type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
+      const originalSigned = b ? signedAmount(b.amount, a.type) : null;
+      chip.innerHTML = `
+        <div class="chip-name"><span class="chip-dot" style="background:${a.color}"></span>${escapeHtml(a.name)}${liabBadge}</div>
+        <div class="chip-amount">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</div>
+        ${showOriginal ? `<div class="chip-original">${t('original', fmt(originalSigned, b.currency))}</div>` : ''}
+      `;
+      chips.appendChild(chip);
+    });
+  }
+
+  // ===== History =====
+  function renderHistory() {
+    const timeline = computeTimeline();
+    const tbody = document.querySelector('#historyTable tbody');
+    tbody.innerHTML = '';
+    let reversed = [...timeline].reverse();
+    if (historyQuery) {
+      reversed = reversed.filter(({ snapshot }) => {
+        if (snapshot.note && snapshot.note.toLowerCase().includes(historyQuery)) return true;
+        if (snapshot.date.includes(historyQuery)) return true;
+        for (const accId of Object.keys(snapshot.updates)) {
+          const acc = state.accounts.find(a => a.id === accId);
+          if (acc && acc.name.toLowerCase().includes(historyQuery)) return true;
+        }
+        return false;
+      });
+    }
+    reversed.forEach(({ snapshot, total, ratesMissing }) => {
+      const updates = Object.entries(snapshot.updates).map(([id, v]) => {
+        const acc = state.accounts.find(a => a.id === id);
+        const name = acc ? acc.name : t('deletedAccount');
+        const color = acc ? acc.color : '#666';
+        const type = acc ? acc.type : 'asset';
+        const liabBadge = type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
+        return `<span><span class="acc" style="color:${color}">●</span>${escapeHtml(name)} ${fmt(signedAmount(v.amount, type), v.currency)}${liabBadge}</span>`;
+      }).join('');
+      const tr = document.createElement('tr');
+      let inflowLine = '';
+      if (snapshot.inflow) {
+        const inf = snapshot.inflow;
+        const acc = inf.accountId && state.accounts.find(a => a.id === inf.accountId);
+        const arrow = acc ? ` <span class="arrow">→</span> ${escapeHtml(acc.name)}` : '';
+        inflowLine = `<div class="inflow-line">${t('inflow')} ${fmt(inf.amount, inf.currency)}${arrow}</div>`;
+      }
+      tr.innerHTML = `
+        <td>${snapshot.date}</td>
+        <td><div class="update-list">${updates}</div>${inflowLine}</td>
+        <td class="num">${total != null ? fmt(total, state.displayCurrency) : (ratesMissing ? t('ratesShort') : '—')}</td>
+        <td>${snapshot.note ? escapeHtml(snapshot.note) : ''}</td>
+        <td style="white-space: nowrap;">
+          <button class="link" data-edit="${snapshot.id}">${t('edit')}</button>
+          <button class="danger" data-id="${snapshot.id}">${t('del')}</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    const hasRows = reversed.length > 0;
+    const emptyEl = document.getElementById('emptyMsg');
+    emptyEl.style.display = hasRows ? 'none' : 'block';
+    emptyEl.textContent = (historyQuery && timeline.length) ? t('noMatch') : t('noRecords');
+    document.getElementById('historyTable').style.display = hasRows ? '' : 'none';
+  }
+
+  document.querySelector('#historyTable tbody').addEventListener('click', e => {
+    if (e.target.matches('button[data-edit]')) {
+      startEdit(e.target.dataset.edit);
+    } else if (e.target.matches('button.danger')) {
+      const id = e.target.dataset.id;
+      if (confirm(t('confirmDeleteEntry'))) {
+        if (editingId === id) editingId = null;
+        state.snapshots = state.snapshots.filter(s => s.id !== id);
+        markDirty(); renderAll();
+      }
+    }
+  });
+
+  // ===== Chart =====
+  function totalAtOrBefore(timeline, dateStr) {
+    let result = null;
+    for (const t of timeline) {
+      if (t.snapshot.date <= dateStr) result = totalForBasis(t);
+      else break;
+    }
+    return result;
+  }
+
+  function computeYoY() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const priorYear = currentYear - 1;
+    const tl = computeTimeline();
+    const labels = [], current = [], prior = [];
+    for (let m = 0; m < 12; m++) {
+      labels.push(t('monthNames')[m]);
+      const curEnd = `${currentYear}-${String(m + 1).padStart(2, '0')}-${String(new Date(currentYear, m + 1, 0).getDate()).padStart(2, '0')}`;
+      const priEnd = `${priorYear}-${String(m + 1).padStart(2, '0')}-${String(new Date(priorYear, m + 1, 0).getDate()).padStart(2, '0')}`;
+      current.push(m > now.getMonth() ? null : totalAtOrBefore(tl, curEnd));
+      prior.push(totalAtOrBefore(tl, priEnd));
+    }
+    return { labels, current, prior, currentYear, priorYear };
+  }
+
+  // Find indices in timeline where total crossed a milestone (USD-equivalent thresholds)
+  function findMilestoneCrossings(timeline) {
+    const thresholds = [10000, 50000, 100000, 250000, 500000, 1000000, 2000000, 5000000, 10000000, 50000000];
+    const crossings = [];
+    let prevUsd = 0;
+    for (let i = 0; i < timeline.length; i++) {
+      const tn = timeline[i];
+      const v = totalForBasis(tn);
+      if (v == null) continue;
+      const rates = state.rates[tn.snapshot.date];
+      const ratio = rates && rates[state.displayCurrency] ? rates[state.displayCurrency] : 1;
+      const usd = v / ratio;
+      for (const m of thresholds) {
+        if (prevUsd < m && usd >= m) {
+          crossings.push({ index: i, milestone: m, label: fmt(m * ratio, state.displayCurrency) });
+        }
+      }
+      prevUsd = usd;
+    }
+    return crossings;
+  }
+
+  function renderChart() {
+    const ctx = document.getElementById('chart');
+    if (chart) chart.destroy();
+
+    let labels, datasets;
+    let crossings = [];
+
+    if (chartMode === 'yoy') {
+      const yoy = computeYoY();
+      labels = yoy.labels;
+      datasets = [
+        {
+          label: String(yoy.currentYear),
+          data: yoy.current,
+          borderColor: '#4ade80',
+          backgroundColor: 'rgba(74, 222, 128, 0.12)',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 4,
+          spanGaps: false,
+        },
+        {
+          label: String(yoy.priorYear),
+          data: yoy.prior,
+          borderColor: cssVar('--muted'),
+          backgroundColor: 'transparent',
+          fill: false,
+          borderDash: [6, 4],
+          tension: 0.25,
+          pointRadius: 3,
+          spanGaps: false,
+        },
+      ];
+    } else {
+      const timeline = computeTimeline();
+      labels = timeline.map(t => t.snapshot.date);
+      if (chartMode === 'total') {
+        crossings = findMilestoneCrossings(timeline);
+        const crossSet = new Set(crossings.map(c => c.index));
+        const radii = timeline.map((_, i) => crossSet.has(i) ? 7 : 4);
+        const pointColors = timeline.map((_, i) => crossSet.has(i) ? cssVar('--warning') : '#4ade80');
+        datasets = [{
+          label: `${t('totalLegend')}（${state.displayCurrency}）`,
+          data: timeline.map(t => totalForBasis(t)),
+          borderColor: '#4ade80',
+          backgroundColor: 'rgba(74, 222, 128, 0.12)',
+          fill: true,
+          tension: 0.25,
+          pointRadius: radii,
+          pointHoverRadius: radii.map(r => r + 2),
+          pointBackgroundColor: pointColors,
+          pointBorderColor: pointColors,
+          spanGaps: true,
+        }];
+      } else {
+        datasets = state.accounts.map(a => ({
+          label: a.name,
+          data: timeline.map(t => {
+            const b = t.balances[a.id];
+            return b ? b.converted : null;
+          }),
+          borderColor: a.color,
+          backgroundColor: a.color + '22',
+          tension: 0.25,
+          pointRadius: 3,
+          spanGaps: true,
+        }));
+      }
+    }
+
+    // Custom plugin: draw goal line + milestone labels (only in total mode)
+    const overlayPlugin = {
+      id: 'goalAndMilestones',
+      afterDatasetsDraw(chartInstance) {
+        if (chartMode !== 'total') return;
+        const c = chartInstance.ctx;
+        const area = chartInstance.chartArea;
+        // Milestone labels above their crossing points
+        if (crossings.length) {
+          const meta = chartInstance.getDatasetMeta(0);
+          crossings.forEach(cr => {
+            const pt = meta.data[cr.index];
+            if (!pt) return;
+            c.save();
+            c.fillStyle = cssVar('--warning');
+            c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
+            c.textAlign = 'center';
+            c.textBaseline = 'bottom';
+            const text = `🎉 ${cr.label}`;
+            // background pill
+            const metrics = c.measureText(text);
+            const padX = 6, padY = 3;
+            const x = pt.x, y = pt.y - 14;
+            c.fillStyle = 'rgba(251, 191, 36, 0.18)';
+            c.beginPath();
+            const w = metrics.width + padX * 2, h = 16;
+            const rx = x - w / 2, ry = y - h;
+            c.roundRect ? c.roundRect(rx, ry, w, h, 4) : c.rect(rx, ry, w, h);
+            c.fill();
+            c.fillStyle = cssVar('--warning');
+            c.fillText(text, x, y - 2);
+            c.restore();
+          });
+        }
+        // Goal line
+        if (state.goal) {
+          const cur = currentSnapshot();
+          if (!cur) return;
+          const rates = state.rates[cur.snapshot.date];
+          let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
+          if (goalInDisplay == null && state.goal.currency === state.displayCurrency) goalInDisplay = state.goal.amount;
+          if (goalInDisplay == null) return;
+          const yScale = chartInstance.scales.y;
+          const y = yScale.getPixelForValue(goalInDisplay);
+          if (y < area.top || y > area.bottom) return;
+          c.save();
+          c.strokeStyle = cssVar('--warning');
+          c.lineWidth = 1.5;
+          c.setLineDash([6, 4]);
+          c.beginPath();
+          c.moveTo(area.left, y);
+          c.lineTo(area.right, y);
+          c.stroke();
+          c.setLineDash([]);
+          c.fillStyle = cssVar('--warning');
+          c.font = '11px Inter, -apple-system, system-ui, sans-serif';
+          c.textAlign = 'right';
+          c.textBaseline = 'bottom';
+          c.fillText(`${t('goal')} ${fmt(goalInDisplay, state.displayCurrency)}`, area.right - 6, y - 4);
+          c.restore();
+        }
+      }
+    };
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      plugins: [overlayPlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 24 } },
+        plugins: {
+          legend: { display: chartMode !== 'total', labels: { color: cssVar('--text') } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` } }
+        },
+        scales: {
+          x: { ticks: { color: cssVar('--muted') }, grid: { color: cssVar('--grid') } },
+          y: { ticks: { color: cssVar('--muted'), callback: v => fmt(v, state.displayCurrency) }, grid: { color: cssVar('--grid') } }
+        }
+      }
+    });
+  }
+
+  document.getElementById('chartMode').addEventListener('click', e => {
+    if (e.target.matches('button[data-mode]')) {
+      chartMode = e.target.dataset.mode;
+      document.querySelectorAll('#chartMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === chartMode));
+      renderChart();
+    }
+  });
+
+  // ===== Display currency =====
+  document.getElementById('displayCurrency').addEventListener('change', e => {
+    state.displayCurrency = e.target.value;
+    save();
+    renderAll();
+  });
+
+  // ===== Import / Export =====
+  function doExport() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `record-finance-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    state.dirtySinceExport = 0;
+    backupBannerDismissed = false;
+    save();
+    renderBackupBanner();
+  }
+  document.getElementById('exportBtn').addEventListener('click', doExport);
+  document.getElementById('backupBannerExport').addEventListener('click', doExport);
+  document.getElementById('backupBannerDismiss').addEventListener('click', () => {
+    backupBannerDismissed = true;
+    renderBackupBanner();
+  });
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      let data = JSON.parse(await file.text());
+      if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.snapshots)) throw new Error(t('invalidFormat'));
+      data = migrate(data);
+      if (confirm(t('confirmImport', data.accounts.length, data.snapshots.length))) {
+        // Sync setup is per-device; don't overwrite it from imported data
+        const keepSync = state.sync;
+        state = data;
+        state.sync = keepSync;
+        state.dirtySinceExport = 0;
+        backupBannerDismissed = false;
+        // Reset form state — incoming accounts may differ
+        entryRows = [];
+        editingId = null;
+        historyQuery = '';
+        const hs = document.getElementById('historySearch');
+        if (hs) hs.value = '';
+        save();
+        await ensureRates(state.snapshots.map(s => s.date));
+        renderAll();
+      }
+    } catch (err) { alert(t('importFailed', err.message)); }
+    e.target.value = '';
+  });
+
+  // ===== Backup banner =====
+  function renderBackupBanner() {
+    const banner = document.getElementById('backupBanner');
+    const count = state.dirtySinceExport || 0;
+    const show = !backupBannerDismissed && count >= BACKUP_THRESHOLD;
+    banner.hidden = !show;
+    if (show) {
+      document.getElementById('backupBannerMsg').textContent = t('backupMsg', count);
+    }
+  }
+
+  // ===== Currency breakdown =====
+  function computeBreakdown(mode) {
+    const cur = currentSnapshot();
+    if (!cur) return [];
+    const groups = {};
+    Object.entries(cur.balances).forEach(([accId, b]) => {
+      if (b.converted == null || b.type === 'liability') return;
+      const acc = state.accounts.find(a => a.id === accId);
+      const key = mode === 'category' ? (acc?.category || 'other') : b.currency;
+      groups[key] = (groups[key] || 0) + b.converted;
+    });
+    const total = Object.values(groups).reduce((s, v) => s + v, 0);
+    if (total <= 0) return [];
+    return Object.entries(groups)
+      .map(([k, amt]) => ({ key: k, amount: amt, pct: amt / total * 100 }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+
+  let breakdownMode = 'currency';
+
+  function renderBreakdown() {
+    const currencyData = computeBreakdown('currency');
+    const categoryData = computeBreakdown('category');
+    const hasCategorySplit = categoryData.length >= 2;
+    const hasCurrencySplit = currencyData.length >= 2;
+    const panel = document.getElementById('breakdownPanel');
+    const modeToggle = document.getElementById('breakdownMode');
+
+    if (!hasCurrencySplit && !hasCategorySplit) {
+      panel.hidden = true;
+      if (breakdownChart) { breakdownChart.destroy(); breakdownChart = null; }
+      return;
+    }
+    panel.hidden = false;
+
+    // Fall back to a usable mode if the selected one is degenerate
+    if (breakdownMode === 'currency' && !hasCurrencySplit) breakdownMode = 'category';
+    if (breakdownMode === 'category' && !hasCategorySplit) breakdownMode = 'currency';
+
+    // Show toggle only if both modes have data worth seeing
+    modeToggle.hidden = !(hasCurrencySplit && hasCategorySplit);
+    document.querySelectorAll('#breakdownMode button').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === breakdownMode)
+    );
+    document.getElementById('bmodeCur').textContent = t('byCurrency');
+    document.getElementById('bmodeCat').textContent = t('byCategory');
+
+    const hasLiab = state.accounts.some(a => a.type === 'liability');
+    const titleEl = document.getElementById('breakdownTitle');
+    if (breakdownMode === 'category') {
+      titleEl.textContent = t('categoryComposition');
+    } else {
+      titleEl.textContent = hasLiab ? t('assetCurrencyComposition') : t('currencyComposition');
+    }
+
+    const data = breakdownMode === 'category' ? categoryData : currencyData;
+    const colorOf = d => breakdownMode === 'category' ? (CATEGORY_COLORS[d.key] || '#8590a8') : (CURRENCY_COLORS[d.key] || '#8590a8');
+    const labelOf = d => breakdownMode === 'category' ? (t('categories')[d.key] || d.key) : d.key;
+
+    const legend = document.getElementById('breakdownLegend');
+    legend.innerHTML = data.map(d => `
+      <div class="legend-row">
+        <span class="chip-dot" style="background:${colorOf(d)}"></span>
+        <span class="lr-cur">${escapeHtml(labelOf(d))}</span>
+        <span class="lr-amt">${fmt(d.amount, state.displayCurrency)}</span>
+        <span class="lr-bar"><span class="lr-bar-fill" style="width:${d.pct.toFixed(1)}%;background:${colorOf(d)}"></span></span>
+        <span class="lr-pct">${d.pct.toFixed(1)}%</span>
+      </div>
+    `).join('');
+
+    const ctx = document.getElementById('breakdownChart');
+    if (breakdownChart) breakdownChart.destroy();
+    breakdownChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(labelOf),
+        datasets: [{
+          data: data.map(d => d.amount),
+          backgroundColor: data.map(colorOf),
+          borderColor: cssVar('--panel'),
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => `${labelOf(data[c.dataIndex])}: ${fmt(c.parsed, state.displayCurrency)} (${data[c.dataIndex].pct.toFixed(1)}%)`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  document.getElementById('breakdownMode').addEventListener('click', e => {
+    if (e.target.matches('button[data-mode]')) {
+      breakdownMode = e.target.dataset.mode;
+      renderBreakdown();
+    }
+  });
+
+  // ===== Period change (MTD / YTD) =====
+  function startOfMonthStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  }
+  function startOfYearStr() {
+    const today = new Date();
+    const fy = (state && state.fiscalYearStartMonth) || 1;
+    let year = today.getFullYear();
+    if (today.getMonth() + 1 < fy) year -= 1;
+    return `${year}-${String(fy).padStart(2, '0')}-01`;
+  }
+
+  function computePeriodChange(startDateInclusive) {
+    const tl = computeTimeline();
+    if (!tl.length) return null;
+    const current = tl[tl.length - 1];
+    const currentVal = totalForBasis(current);
+    if (currentVal == null) return null;
+    if (!tl.some(t => t.snapshot.date >= startDateInclusive)) return null;
+
+    let baseline = null;
+    for (const t of tl) {
+      if (t.snapshot.date < startDateInclusive) baseline = t;
+      else break;
+    }
+    const baselineVal = baseline ? totalForBasis(baseline) : null;
+    if (baselineVal == null) return null;
+
+    let inflowTotal = 0;
+    let inflowHas = false;
+    for (const tn of tl) {
+      if (tn.snapshot.date < startDateInclusive) continue;
+      const rates = state.rates[tn.snapshot.date];
+      // Snapshot-level inflow (legacy + still supported)
+      if (tn.snapshot.inflow) {
+        const inf = tn.snapshot.inflow;
+        const conv = convert(inf.amount, inf.currency, state.displayCurrency, rates);
+        if (conv != null) { inflowTotal += conv; inflowHas = true; }
+      }
+      // Per-update inflow
+      Object.entries(tn.snapshot.updates).forEach(([accId, u]) => {
+        if (u.inflow != null) {
+          const acc = state.accounts.find(a => a.id === accId);
+          const sign = acc ? signFor(acc.type) : 1;
+          const conv = convert(u.inflow, u.currency, state.displayCurrency, rates);
+          if (conv != null) { inflowTotal += conv * sign; inflowHas = true; }
+        }
+      });
+    }
+
+    const delta = currentVal - baselineVal;
+    const pct = baselineVal !== 0 ? delta / baselineVal * 100 : null;
+    return { delta, pct, inflowTotal, inflowHas };
+  }
+
+  function fmtSigned(n, currency) {
+    const sign = n > 0 ? '+' : (n < 0 ? '−' : '');
+    return sign + fmt(Math.abs(n), currency);
+  }
+
+  function renderPeriodChanges() {
+    const slot = document.getElementById('periodChanges');
+    const mtd = computePeriodChange(startOfMonthStr());
+    const ytd = computePeriodChange(startOfYearStr());
+
+    const renderRow = (label, info) => {
+      if (!info) return '';
+      const cls = info.delta > 0 ? 'pos' : info.delta < 0 ? 'neg' : 'neutral';
+      const pctStr = info.pct != null ? `<span class="pct">${info.pct > 0 ? '+' : info.pct < 0 ? '−' : ''}${Math.abs(info.pct).toFixed(1)}%</span>` : '';
+      let split = '';
+      if (info.inflowHas) {
+        const market = info.delta - info.inflowTotal;
+        split = `<span class="split">${t('inflow')} ${fmtSigned(info.inflowTotal, state.displayCurrency)} · ${t('gain')} ${fmtSigned(market, state.displayCurrency)}</span>`;
+      }
+      return `<div class="change-row ${cls}"><span class="change-label">${label}</span>${fmtSigned(info.delta, state.displayCurrency)}${pctStr}${split}</div>`;
+    };
+
+    slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd);
+  }
+
+  // ===== Theme =====
+  function applyTheme() {
+    document.body.classList.toggle('light', state.theme === 'light');
+    document.getElementById('themeBtn').textContent = state.theme === 'light' ? '◑' : '◐';
+  }
+  // Preferences modal
+  const prefsModal = document.getElementById('prefsModal');
+  function openPrefs() { prefsModal.hidden = false; renderSnapshotList(); }
+  function closePrefs() { prefsModal.hidden = true; }
+  document.getElementById('prefsBtn').addEventListener('click', openPrefs);
+  document.getElementById('prefsCloseBtn').addEventListener('click', closePrefs);
+  prefsModal.addEventListener('click', e => { if (e.target === prefsModal) closePrefs(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !prefsModal.hidden) closePrefs();
+  });
+
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    state.theme = state.theme === 'light' ? 'dark' : 'light';
+    save(); applyTheme(); renderAll();
+  });
+  function cssVar(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+
+  // ===== Privacy blur =====
+  function applyPrivacy() {
+    document.body.classList.toggle('privacy-blur', state.privacyBlur);
+    document.getElementById('privacyBtn').textContent = state.privacyBlur ? '🔒' : '👁';
+    document.getElementById('privacyBtn').title = state.privacyBlur ? t('privacyOff') : t('privacyOn');
+  }
+  // Press-and-hold to peek; quick click toggles persistent privacy mode
+  (() => {
+    const btn = document.getElementById('privacyBtn');
+    let pressStart = 0;
+    let peeking = false;
+    const HOLD_MS = 250;
+    function down(e) {
+      e.preventDefault();
+      pressStart = Date.now();
+      peeking = false;
+      if (state.privacyBlur) {
+        setTimeout(() => {
+          if (pressStart && Date.now() - pressStart >= HOLD_MS) {
+            peeking = true;
+            document.body.classList.remove('privacy-blur');
+          }
+        }, HOLD_MS);
+      }
+    }
+    function up() {
+      const held = Date.now() - pressStart;
+      pressStart = 0;
+      if (peeking) {
+        document.body.classList.add('privacy-blur');
+        peeking = false;
+      } else if (held < HOLD_MS) {
+        state.privacyBlur = !state.privacyBlur;
+        save(); applyPrivacy();
+      }
+    }
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('touchstart', down);
+    btn.addEventListener('mouseup', up);
+    btn.addEventListener('mouseleave', up);
+    btn.addEventListener('touchend', up);
+    btn.addEventListener('touchcancel', up);
+  })();
+
+  // ===== Date shortcuts =====
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+  function monthEndStr(d = new Date()) {
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return last.toISOString().slice(0, 10);
+  }
+  function lastMonthEndStr() {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth(), 0);
+    return last.toISOString().slice(0, 10);
+  }
+  document.querySelectorAll('.date-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.date;
+      const dateEl = document.getElementById('date');
+      if (kind === 'today') dateEl.value = todayStr();
+      else if (kind === 'monthEnd') dateEl.value = monthEndStr();
+      else if (kind === 'lastMonthEnd') dateEl.value = lastMonthEndStr();
+    });
+  });
+
+  // ===== Fiscal year =====
+  function populateFiscalYearSelect() {
+    const sel = document.getElementById('fiscalYearStart');
+    const names = t('monthNames');
+    sel.innerHTML = names.map((n, i) =>
+      `<option value="${i + 1}" ${i + 1 === state.fiscalYearStartMonth ? 'selected' : ''}>${n}</option>`
+    ).join('');
+  }
+  document.getElementById('fiscalYearStart').addEventListener('change', e => {
+    state.fiscalYearStartMonth = parseInt(e.target.value, 10);
+    save(); renderAll();
+  });
+
+  // ===== Goal =====
+  function trailingMonthlyGrowth() {
+    // Use snapshots within last 180 days, slope = (latest - oldest) / months_between
+    const tl = computeTimeline().filter(t => totalForBasis(t) != null);
+    if (tl.length < 2) return null;
+    const lastDate = new Date(tl[tl.length - 1].snapshot.date);
+    const cutoff = new Date(lastDate.getTime() - 180 * 86400000);
+    const window = tl.filter(t => new Date(t.snapshot.date) >= cutoff);
+    if (window.length < 2) return null;
+    const first = window[0], last = window[window.length - 1];
+    const months = (new Date(last.snapshot.date) - new Date(first.snapshot.date)) / (30.44 * 86400000);
+    if (months < 0.5) return null;
+    return (totalForBasis(last) - totalForBasis(first)) / months;
+  }
+
+  function renderGoal() {
+    const panel = document.getElementById('goalPanel');
+    const clearBtn = document.getElementById('goalClearBtn');
+    const goalInput = document.getElementById('goalInput');
+    const goalCurSel = document.getElementById('goalCurrencySel');
+
+    if (!state.goal) {
+      panel.hidden = true;
+      clearBtn.hidden = true;
+      if (document.activeElement !== goalInput) goalInput.value = '';
+      return;
+    }
+
+    // Reflect current goal in the modal inputs (so user can see/edit)
+    if (document.activeElement !== goalInput) goalInput.value = state.goal.amount;
+    if (goalCurSel && state.goal.currency) goalCurSel.value = state.goal.currency;
+    clearBtn.hidden = false;
+
+    panel.hidden = false;
+    const basisLabel = state.basis === 'assets' ? t('basisAssets') : t('basisNet');
+    document.getElementById('goalTitle').innerHTML = `${escapeHtml(t('goal'))} <span style="color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 6px;">· ${escapeHtml(basisLabel)}</span>`;
+
+    const cur = currentSnapshot();
+    const rates = cur ? state.rates[cur.snapshot.date] : null;
+
+    const progressTotal = totalForBasis(cur);
+
+    let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
+    // Fallback: same currency needs no conversion
+    if (goalInDisplay == null && state.goal.currency === state.displayCurrency) {
+      goalInDisplay = state.goal.amount;
+    }
+
+    // No data yet: show 0%, prompt user to add a record
+    if (!cur || progressTotal == null) {
+      document.getElementById('goalBarFill').style.width = '0%';
+      const goalShown = goalInDisplay != null
+        ? fmt(goalInDisplay, state.displayCurrency)
+        : fmt(state.goal.amount, state.goal.currency);
+      document.getElementById('goalHeadline').innerHTML =
+        `<span class="goal-progress-text">${fmt(0, state.displayCurrency)} / ${goalShown} · 0%</span>`;
+      document.getElementById('goalSub').textContent = t('goalNoRecord');
+      return;
+    }
+
+    // Rates pending — show what we can
+    if (goalInDisplay == null) {
+      document.getElementById('goalBarFill').style.width = '0%';
+      document.getElementById('goalHeadline').innerHTML =
+        `<span class="goal-progress-text">${fmt(progressTotal, state.displayCurrency)} / ${fmt(state.goal.amount, state.goal.currency)}</span>`;
+      document.getElementById('goalSub').textContent = t('goalRatesPending');
+      return;
+    }
+    if (goalInDisplay <= 0) { panel.hidden = true; return; }
+
+    const pct = Math.min(100, Math.max(0, progressTotal / goalInDisplay * 100));
+    document.getElementById('goalBarFill').style.width = pct.toFixed(1) + '%';
+
+    if (progressTotal >= goalInDisplay) {
+      document.getElementById('goalHeadline').innerHTML = `<span class="goal-progress-text">${t('goalProgress', fmt(progressTotal, state.displayCurrency), fmt(goalInDisplay, state.displayCurrency), pct.toFixed(0))}</span>`;
+      document.getElementById('goalSub').textContent = t('goalReached');
+    } else {
+      document.getElementById('goalHeadline').innerHTML = `<span class="goal-progress-text">${t('goalProgress', fmt(progressTotal, state.displayCurrency), fmt(goalInDisplay, state.displayCurrency), pct.toFixed(1))}</span>`;
+      const remain = goalInDisplay - progressTotal;
+      const growth = trailingMonthlyGrowth();
+      let eta;
+      if (growth == null || growth <= 0) eta = t('goalETAStalled');
+      else {
+        const months = Math.ceil(remain / growth);
+        eta = t('goalETA', months);
+      }
+      document.getElementById('goalSub').textContent = `${t('goalRemain', fmt(remain, state.displayCurrency))} · ${eta}`;
+    }
+  }
+
+  document.getElementById('basisSeg').addEventListener('click', e => {
+    if (!e.target.matches('button[data-basis]')) return;
+    const basis = e.target.dataset.basis;
+    if (basis === state.basis) return;
+    state.basis = basis;
+    save(); renderAll();
+  });
+
+  document.getElementById('goalSetBtn').addEventListener('click', () => {
+    const amt = parseFloat(document.getElementById('goalInput').value);
+    if (isNaN(amt) || amt <= 0) return;
+    const cur = document.getElementById('goalCurrencySel').value;
+    state.goal = { amount: amt, currency: cur };
+    // Reset the "reached" flag so confetti can fire if newly-set goal is already satisfied
+    state.goalReachedShown = false;
+    markDirty(); renderAll();
+    closePrefs();
+    showToast(t('goalSaved'));
+    maybeConfetti();
+  });
+  document.getElementById('goalClearBtn').addEventListener('click', () => {
+    state.goal = null;
+    document.getElementById('goalInput').value = '';
+    markDirty(); renderAll();
+  });
+
+  // ===== Milestones =====
+  function checkMilestones() {
+    const cur = currentSnapshot();
+    const v = cur ? totalForBasis(cur) : null;
+    if (v == null || v <= 0) return;
+    const thresholds = [
+      { amount: 10000, key: '10k' }, { amount: 50000, key: '50k' },
+      { amount: 100000, key: '100k' }, { amount: 250000, key: '250k' },
+      { amount: 500000, key: '500k' }, { amount: 1000000, key: '1M' },
+      { amount: 2000000, key: '2M' }, { amount: 5000000, key: '5M' },
+      { amount: 10000000, key: '10M' }, { amount: 50000000, key: '50M' },
+    ];
+    // Approximate rough comparison in USD-equivalent so milestones aren't currency-dependent.
+    const rates = state.rates[cur.snapshot.date];
+    let totalInUSD = v;
+    if (rates && rates[state.displayCurrency]) {
+      totalInUSD = v / rates[state.displayCurrency];
+    }
+    for (const m of thresholds) {
+      const milestoneKey = state.displayCurrency + ':' + m.key;
+      if (totalInUSD >= m.amount && !state.milestonesShown.includes(milestoneKey)) {
+        state.milestonesShown.push(milestoneKey);
+        save();
+        showToast(t('milestone', fmt(m.amount * (rates ? rates[state.displayCurrency] : 1), state.displayCurrency)));
+        break; // one at a time
+      }
+    }
+  }
+
+  function showToast(text) {
+    const slot = document.getElementById('toastSlot');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = text;
+    slot.appendChild(toast);
+    setTimeout(() => toast.remove(), 4500);
+  }
+
+  // ===== Confetti (goal reached) =====
+  function launchConfetti() {
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:300;';
+    canvas.width = innerWidth; canvas.height = innerHeight;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const colors = ['#4ade80', '#22d3ee', '#fbbf24', '#f472b6', '#a78bfa', '#60a5fa'];
+    const pieces = [];
+    for (let i = 0; i < 140; i++) {
+      pieces.push({
+        x: Math.random() * canvas.width,
+        y: -20 - Math.random() * 200,
+        vx: (Math.random() - 0.5) * 3,
+        vy: 2.5 + Math.random() * 3,
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.25,
+        size: 6 + Math.random() * 6,
+        color: colors[i % colors.length],
+      });
+    }
+    const start = Date.now();
+    function tick() {
+      const t = Date.now() - start;
+      if (t > 4500) { canvas.remove(); return; }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const fade = t > 3500 ? 1 - (t - 3500) / 1000 : 1;
+      pieces.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.angle += p.spin;
+        p.vy += 0.02; // gravity
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.5);
+        ctx.restore();
+      });
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function maybeConfetti() {
+    if (!state.goal) { state.goalReachedShown = false; return; }
+    const cur = currentSnapshot();
+    const total = cur ? totalForBasis(cur) : null;
+    if (total == null) return;
+    const rates = state.rates[cur.snapshot.date];
+    let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
+    if (goalInDisplay == null && state.goal.currency === state.displayCurrency) goalInDisplay = state.goal.amount;
+    if (goalInDisplay == null || goalInDisplay <= 0) return;
+    const reached = total >= goalInDisplay;
+    if (reached && !state.goalReachedShown) {
+      state.goalReachedShown = true;
+      save();
+      launchConfetti();
+      showToast(t('goalReached'));
+    } else if (!reached && state.goalReachedShown) {
+      state.goalReachedShown = false;
+      save();
+    }
+  }
+
+  // ===== PIN =====
+  async function hashPin(pin, salt) {
+    const data = new TextEncoder().encode(pin + ':' + salt);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function validPinFormat(p) { return /^\d{4,8}$/.test(p); }
+
+  async function setPinFlow(currentRequired) {
+    if (currentRequired && state.pin) {
+      const cur = prompt(t('pinPromptChange'));
+      if (cur == null) return;
+      const h = await hashPin(cur, state.pin.salt);
+      if (h !== state.pin.hash) { alert(t('pinWrong')); return; }
+    }
+    const np = prompt(t('pinPromptNew'));
+    if (np == null) return;
+    if (!validPinFormat(np)) { alert(t('pinInvalid')); return; }
+    const salt = crypto.randomUUID();
+    const hash = await hashPin(np, salt);
+    state.pin = { hash, salt };
+    sessionStorage.setItem(SESSION_UNLOCK_KEY, hash); // remain unlocked in this session
+    markDirty(); renderPin();
+  }
+  async function removePinFlow() {
+    if (!state.pin) return;
+    const cur = prompt(t('pinPromptUnset'));
+    if (cur == null) return;
+    const h = await hashPin(cur, state.pin.salt);
+    if (h !== state.pin.hash) { alert(t('pinWrong')); return; }
+    state.pin = null;
+    sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+    markDirty(); renderPin();
+  }
+
+  document.getElementById('pinSetBtn').addEventListener('click', () => setPinFlow(true));
+  document.getElementById('pinRemoveBtn').addEventListener('click', removePinFlow);
+
+  function renderPin() {
+    const status = document.getElementById('pinStatus');
+    const setBtn = document.getElementById('pinSetBtn');
+    const removeBtn = document.getElementById('pinRemoveBtn');
+    if (state.pin) {
+      status.textContent = t('pinSet');
+      setBtn.textContent = t('pinChange');
+      removeBtn.hidden = false;
+      removeBtn.textContent = t('pinRemove');
+    } else {
+      status.textContent = t('pinNotSet');
+      setBtn.textContent = state.language === 'en' ? 'Set' : (state.language === 'ja' ? '設定' : '设置');
+      removeBtn.hidden = true;
+    }
+  }
+
+  const SESSION_UNLOCK_KEY = 'xfinance.sessionUnlock';
+  async function gateAccess() {
+    if (!state.pin) return;
+    // If already unlocked in this browser session with the current PIN, skip
+    if (sessionStorage.getItem(SESSION_UNLOCK_KEY) === state.pin.hash) return;
+
+    const overlay = document.getElementById('lockOverlay');
+    const input = document.getElementById('lockInput');
+    const err = document.getElementById('lockErr');
+    const btn = document.getElementById('lockUnlockBtn');
+    overlay.hidden = false;
+    document.getElementById('lockTitle').textContent = t('pinPromptUnlock');
+    btn.textContent = t('unlock');
+    err.textContent = '';
+    input.value = '';
+    setTimeout(() => input.focus(), 50);
+    await new Promise(resolve => {
+      const tryUnlock = async () => {
+        const h = await hashPin(input.value, state.pin.salt);
+        if (h === state.pin.hash) {
+          sessionStorage.setItem(SESSION_UNLOCK_KEY, state.pin.hash);
+          overlay.hidden = true;
+          resolve();
+        } else {
+          err.textContent = t('pinWrong');
+          input.select();
+        }
+      };
+      btn.addEventListener('click', tryUnlock);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+    });
+  }
+
+  // ===== iCloud / File sync (File System Access API + IndexedDB for handle) =====
+  const SUPPORTS_FS = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
+  const IDB_DB = 'xfinance';
+  const IDB_STORE = 'meta';
+  const IDB_HANDLE_KEY = 'syncFileHandle';
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_DB, 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        if (!db.objectStoreNames.contains('snapshots')) {
+          db.createObjectStore('snapshots', { keyPath: 'id', autoIncrement: true });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  const MAX_SNAPSHOTS = 20;
+  let lastSnapshotMs = 0;
+  async function saveLocalSnapshot() {
+    // Debounce — at most one snapshot per 5 minutes to bound storage growth
+    if (Date.now() - lastSnapshotMs < 5 * 60 * 1000) return;
+    lastSnapshotMs = Date.now();
+    try {
+      const db = await idbOpen();
+      const tx = db.transaction('snapshots', 'readwrite');
+      const store = tx.objectStore('snapshots');
+      // Strip sync metadata so restoring won't tamper with sync setup
+      const { sync: _, ...clean } = state;
+      store.add({ timestamp: new Date().toISOString(), data: JSON.stringify(clean) });
+      // Trim oldest beyond MAX_SNAPSHOTS
+      const countReq = store.count();
+      countReq.onsuccess = () => {
+        const excess = countReq.result - MAX_SNAPSHOTS;
+        if (excess <= 0) return;
+        let toDelete = excess;
+        const cur = store.openCursor();
+        cur.onsuccess = (e) => {
+          const c = e.target.result;
+          if (c && toDelete > 0) { c.delete(); toDelete--; c.continue(); }
+        };
+      };
+    } catch (e) { console.warn('snapshot save failed', e); }
+  }
+
+  async function listLocalSnapshots() {
+    try {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('snapshots', 'readonly');
+        const req = tx.objectStore('snapshots').getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch { return []; }
+  }
+
+  async function getLocalSnapshot(id) {
+    try {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('snapshots', 'readonly');
+        const req = tx.objectStore('snapshots').get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    } catch { return null; }
+  }
+  async function idbSet(key, value) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function idbGet(key) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function idbDelete(key) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function getSyncHandle() {
+    try { return await idbGet(IDB_HANDLE_KEY); } catch { return null; }
+  }
+  async function verifyPermission(handle, write) {
+    const opts = { mode: write ? 'readwrite' : 'read' };
+    if ((await handle.queryPermission?.(opts)) === 'granted') return true;
+    return (await handle.requestPermission?.(opts)) === 'granted';
+  }
+
+  // Auto-sync: debounced silent push when state changes
+  let autoSyncTimer = null;
+  let autoSyncing = false;
+  function scheduleAutoSync() {
+    if (!SUPPORTS_FS || !state.sync || !state.sync.fileName) return;
+    if (autoSyncTimer) clearTimeout(autoSyncTimer);
+    autoSyncTimer = setTimeout(async () => {
+      autoSyncTimer = null;
+      try {
+        const handle = await getSyncHandle();
+        if (!handle) return;
+        // Only proceed if permission already granted (no prompt during background sync)
+        const perm = await handle.queryPermission?.({ mode: 'readwrite' });
+        if (perm !== 'granted') return;
+        autoSyncing = true; renderSync();
+        const { sync: _, ...cleanState } = state;
+        const writable = await handle.createWritable();
+        await writable.write(JSON.stringify(cleanState, null, 2));
+        await writable.close();
+        state.sync.lastSync = new Date().toISOString();
+        state.dirtySinceExport = 0;
+        save();
+      } catch (e) {
+        console.warn('auto-sync failed', e);
+      } finally {
+        autoSyncing = false;
+        renderSync(); renderBackupBanner();
+      }
+    }, 5000);
+  }
+
+  // Remote-newer check on init
+  async function checkRemoteFreshness() {
+    if (!SUPPORTS_FS || !state.sync || !state.sync.fileName || !state.sync.lastSync) return;
+    const handle = await getSyncHandle();
+    if (!handle) return;
+    if (await handle.queryPermission?.({ mode: 'read' }) !== 'granted') return;
+    try {
+      const file = await handle.getFile();
+      const lastSyncMs = new Date(state.sync.lastSync).getTime();
+      if (file.lastModified > lastSyncMs + 5000) {
+        document.getElementById('remoteNewerBanner').hidden = false;
+      }
+    } catch (e) { console.warn('freshness check failed', e); }
+  }
+
+  document.getElementById('remoteNewerLoad').addEventListener('click', async () => {
+    document.getElementById('remoteNewerBanner').hidden = true;
+    await syncPull();
+  });
+  document.getElementById('remoteNewerDismiss').addEventListener('click', () => {
+    document.getElementById('remoteNewerBanner').hidden = true;
+  });
+
+  // Snapshot list UI
+  async function renderSnapshotList() {
+    const wrap = document.getElementById('snapList');
+    if (!wrap) return;
+    const snaps = (await listLocalSnapshots()).slice().reverse(); // newest first
+    if (!snaps.length) {
+      wrap.innerHTML = `<div class="snap-empty">${escapeHtml(t('snapshotsNone'))}</div>`;
+      return;
+    }
+    wrap.innerHTML = snaps.map(s => {
+      const d = new Date(s.timestamp);
+      const ts = d.toLocaleString();
+      return `<div class="snap-row"><span class="ts">${escapeHtml(ts)}</span><button type="button" class="ghost" data-snap-id="${s.id}">${escapeHtml(t('snapshotRestore'))}</button></div>`;
+    }).join('');
+    wrap.querySelectorAll('button[data-snap-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.snapId, 10);
+        const snap = await getLocalSnapshot(id);
+        if (!snap) return;
+        const ts = new Date(snap.timestamp).toLocaleString();
+        if (!confirm(t('snapshotConfirmRestore', ts))) return;
+        // Save current as new snapshot before overwriting
+        lastSnapshotMs = 0; // force-allow another save
+        await saveLocalSnapshot();
+        // Restore
+        const keepSync = state.sync;
+        const parsed = JSON.parse(snap.data);
+        state = migrate(parsed);
+        state.sync = keepSync;
+        state.dirtySinceExport = 0;
+        entryRows = []; editingId = null; historyQuery = '';
+        const hs = document.getElementById('historySearch');
+        if (hs) hs.value = '';
+        save();
+        await ensureRates(state.snapshots.map(s2 => s2.date));
+        applyTheme(); applyI18n(); renderAll();
+        renderSnapshotList();
+        showToast('✓');
+      });
+    });
+  }
+
+  function renderSync() {
+    const fsBlock = document.getElementById('syncFsBlock');
+    const manualBlock = document.getElementById('syncManualBlock');
+    if (!SUPPORTS_FS) {
+      fsBlock.hidden = true;
+      manualBlock.hidden = false;
+      return;
+    }
+    fsBlock.hidden = false;
+    manualBlock.hidden = true;
+    const linked = state.sync && state.sync.fileName;
+    document.getElementById('syncPickBtn').hidden = !!linked;
+    document.getElementById('syncPushBtn').hidden = !linked;
+    document.getElementById('syncPullBtn').hidden = !linked;
+    document.getElementById('syncUnlinkBtn').hidden = !linked;
+    const status = document.getElementById('syncStatus');
+    if (linked) {
+      const last = state.sync.lastSync
+        ? ' ' + t('syncLastSync', new Date(state.sync.lastSync).toLocaleString())
+        : '';
+      status.innerHTML = escapeHtml(t('syncFileLinked', state.sync.fileName) + last) + (autoSyncing ? ` <span class="syncing-dot" title="${escapeHtml(t('autoSyncing'))}"></span>` : '');
+    } else {
+      status.textContent = '—';
+    }
+  }
+
+  async function pickSyncFile() {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'record-finance.json',
+        types: [{ description: 'xFinance JSON', accept: { 'application/json': ['.json'] } }],
+      });
+      await idbSet(IDB_HANDLE_KEY, handle);
+      state.sync = { fileName: handle.name };
+      save();
+      renderSync();
+      // Immediately write current state to the file
+      await syncPush();
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast(t('syncFail', e.message));
+    }
+  }
+
+  async function syncPush() {
+    if (!SUPPORTS_FS) return;
+    const handle = await getSyncHandle();
+    if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
+    if (!(await verifyPermission(handle, true))) { showToast(t('syncFail', 'permission denied')); return; }
+    try {
+      const { sync: _, ...cleanState } = state;
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(cleanState, null, 2));
+      await writable.close();
+      state.sync = state.sync || { fileName: handle.name };
+      state.sync.lastSync = new Date().toISOString();
+      state.dirtySinceExport = 0; // synced counts as a backup
+      save();
+      renderSync(); renderBackupBanner();
+      showToast(t('syncPushSuccess'));
+    } catch (e) {
+      showToast(t('syncFail', e.message));
+    }
+  }
+
+  async function syncPull() {
+    if (!SUPPORTS_FS) return;
+    const handle = await getSyncHandle();
+    if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
+    if (!(await verifyPermission(handle, false))) { showToast(t('syncFail', 'permission denied')); return; }
+    try {
+      const file = await handle.getFile();
+      const text = await file.text();
+      const remote = JSON.parse(text);
+      if (!confirm(t('syncPullConfirm', remote.snapshots?.length || 0, state.snapshots.length))) return;
+      const keepSync = state.sync || { fileName: handle.name };
+      state = migrate(remote);
+      state.sync = keepSync;
+      state.sync.lastSync = new Date().toISOString();
+      state.dirtySinceExport = 0;
+      // Reset form state — incoming accounts may differ
+      entryRows = [];
+      editingId = null;
+      historyQuery = '';
+      const hs = document.getElementById('historySearch');
+      if (hs) hs.value = '';
+      save();
+      await ensureRates(state.snapshots.map(s => s.date));
+      applyTheme(); applyI18n(); renderAll();
+      showToast(t('syncPullSuccess'));
+    } catch (e) {
+      showToast(t('syncFail', e.message));
+    }
+  }
+
+  async function unlinkSync() {
+    if (!confirm(t('syncUnlinkConfirm'))) return;
+    await idbDelete(IDB_HANDLE_KEY);
+    state.sync = null;
+    save();
+    renderSync();
+  }
+
+  document.getElementById('syncPickBtn').addEventListener('click', pickSyncFile);
+  document.getElementById('syncPushBtn').addEventListener('click', syncPush);
+  document.getElementById('syncPullBtn').addEventListener('click', syncPull);
+  document.getElementById('syncUnlinkBtn').addEventListener('click', unlinkSync);
+
+  // ===== History search =====
+  let historyQuery = '';
+  document.getElementById('historySearch').addEventListener('input', e => {
+    historyQuery = e.target.value.trim().toLowerCase();
+    renderHistory();
+  });
+
+  // ===== i18n apply (static labels) =====
+  function applyI18n() {
+    document.documentElement.lang = t('htmlLang');
+    document.title = t('title') + ' · Finance';
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setText('pageTitle', t('title'));
+    setText('accountSettingsLabel', t('accountSettings'));
+    setText('entryTitle', t('entry'));
+    setText('editBadge', t('editing'));
+    setText('trendTitle', t('balanceTrend'));
+    setText('historyTitle', t('history'));
+    setText('thDate', t('historyDate'));
+    setText('thUpdates', t('historyUpdates'));
+    setText('thTotal', t('historyTotal'));
+    setText('thNote', t('historyNote'));
+    setText('emptyMsg', t('noRecords'));
+    setText('accountSettingsHint', t('accountSettingsHint'));
+    setText('entryHint', t('entryHint'));
+    setText('addAccountBtn', t('add'));
+    setText('exportBtn', t('export'));
+    setText('importBtn', t('import'));
+    setText('backupBannerExport', t('exportBackup'));
+    setText('backupBannerDismiss', t('later'));
+
+    const setLabelFor = (id, v) => { const el = document.querySelector(`label[for="${id}"]`); if (el) el.textContent = v; };
+    setLabelFor('displayCurrency', t('displayCurrency'));
+    setLabelFor('date', t('date'));
+    setLabelFor('inflow', t('netInflowOptional'));
+    setLabelFor('inflowAccount', t('inflowAccount'));
+    setLabelFor('note', t('noteOptional'));
+
+    const setPh = (id, v) => { const el = document.getElementById(id); if (el) el.placeholder = v; };
+    setPh('newAccountName', t('newAccountPlaceholder'));
+    setPh('note', t('notePlaceholder'));
+
+    const totalBtn = document.querySelector('#chartMode button[data-mode="total"]');
+    const accBtn = document.querySelector('#chartMode button[data-mode="accounts"]');
+    const yoyBtn = document.getElementById('chartYoyBtn');
+    if (totalBtn) totalBtn.textContent = t('totalLegend');
+    if (accBtn) accBtn.textContent = t('byAccount');
+    if (yoyBtn) yoyBtn.textContent = t('yoy');
+
+    const ntype = document.getElementById('newAccountType');
+    if (ntype) { ntype.options[0].textContent = t('asset'); ntype.options[1].textContent = t('liability'); }
+
+    const ncat = document.getElementById('newAccountCategory');
+    if (ncat) {
+      const cur = ncat.value || 'cash';
+      ncat.innerHTML = CATEGORIES.map(c =>
+        `<option value="${c}" ${c === cur ? 'selected' : ''}>${t('categories')[c]}</option>`
+      ).join('');
+    }
+
+    ['displayCurrency', 'newAccountCurrency', 'inflowCurrency', 'goalCurrencySel'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (sel) populateCurrencySelect(sel, sel.value || state.displayCurrency);
+    });
+
+    // New i18n bindings
+    setText('prefsLabel', t('preferences'));
+    setText('fiscalYearStartLabel', t('fiscalYearStart'));
+    setText('fiscalYearHint', t('fiscalYearHint'));
+    setText('goalLabel', t('goalAmount'));
+    setText('goalSetBtn', t('goalSet'));
+    setText('goalClearBtn', t('goalClear'));
+    setText('basisLabel', t('displayBasis'));
+    setText('basisHint', t('displayBasisHint'));
+    setText('basisNetBtn', t('basisNet'));
+    setText('basisAssetsBtn', t('basisAssets'));
+    setText('syncLabel', t('cloudSync'));
+    setText('syncPickBtn', t('syncPickFile'));
+    setText('syncPushBtn', t('syncPushFile'));
+    setText('syncPullBtn', t('syncPullFile'));
+    setText('syncUnlinkBtn', t('syncUnlinkFile'));
+    setText('syncFileHint', t('syncFileHint'));
+    setText('syncFsUnsupportedHint', t('syncFsUnsupported'));
+    setText('syncFsUnsupportedHint2', t('syncFsUnsupportedHint'));
+    setText('snapshotsLabel', t('snapshots'));
+    setText('snapshotsHint', t('snapshotsHint'));
+    setText('remoteNewerMsg', t('syncRemoteNewer'));
+    setText('remoteNewerLoad', t('syncRemoteNewerLoad'));
+    setText('remoteNewerDismiss', t('syncRemoteNewerDismiss'));
+    setText('pinLabel', t('pin'));
+    setText('lockTitle', t('pinPromptUnlock'));
+    setText('lockUnlockBtn', t('unlock'));
+    setText('dateToday', t('today'));
+    setText('dateMonthEnd', t('monthEnd'));
+    setText('dateLastMonthEnd', t('lastMonthEnd'));
+    const goalInp = document.getElementById('goalInput');
+    if (goalInp) goalInp.placeholder = t('goalPlaceholder');
+    const hs = document.getElementById('historySearch');
+    if (hs) hs.placeholder = t('historySearch');
+    populateFiscalYearSelect();
+    applyPrivacy();
+  }
+
+  document.getElementById('langSelect').addEventListener('change', e => {
+    state.language = e.target.value;
+    save();
+    applyI18n();
+    renderAll();
+  });
+
+  // ===== Drilldown =====
+  function startDrilldown(accId) {
+    viewingAccountId = accId;
+    renderAll();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function exitDrilldown() {
+    viewingAccountId = null;
+    renderAll();
+  }
+  document.getElementById('drillBack').addEventListener('click', exitDrilldown);
+
+  function computeAccountPeriodChange(accId, startDateInclusive) {
+    const tl = computeTimeline();
+    if (!tl.length) return null;
+    let current = null;
+    let baseline = null;
+    for (const t of tl) {
+      const b = t.balances[accId];
+      if (b && b.converted != null) {
+        if (t.snapshot.date < startDateInclusive) baseline = b.converted;
+        current = b.converted;
+      }
+    }
+    if (current == null || baseline == null) return null;
+    const delta = current - baseline;
+    const pct = baseline !== 0 ? delta / Math.abs(baseline) * 100 : null;
+    return { delta, pct };
+  }
+
+  function renderDrilldown() {
+    const acc = state.accounts.find(a => a.id === viewingAccountId);
+    if (!acc) { exitDrilldown(); return; }
+    const tl = computeTimeline();
+    const lastWithAcc = [...tl].reverse().find(t => t.balances[acc.id]);
+    const b = lastWithAcc ? lastWithAcc.balances[acc.id] : null;
+
+    document.getElementById('drillBackLabel').textContent = t('back').replace(/^← /, '');
+    const nameEl = document.getElementById('drillAccountName');
+    const liabBadge = acc.type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
+    nameEl.innerHTML = `<span class="chip-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${acc.color};margin-right:8px;vertical-align:middle;"></span>${escapeHtml(acc.name)}${liabBadge}`;
+    document.getElementById('drillBalance').textContent = b && b.converted != null ? fmt(b.converted, state.displayCurrency) : '—';
+    const origEl = document.getElementById('drillOriginal');
+    if (b && b.currency !== state.displayCurrency) {
+      const signedOrig = signedAmount(b.amount, acc.type);
+      origEl.textContent = t('original', fmt(signedOrig, b.currency));
+      origEl.hidden = false;
+    } else {
+      origEl.hidden = true;
+    }
+    document.getElementById('drillNote').textContent = lastWithAcc ? t('asOf', lastWithAcc.snapshot.date) : '';
+
+    // Period changes
+    const mtd = computeAccountPeriodChange(acc.id, startOfMonthStr());
+    const ytd = computeAccountPeriodChange(acc.id, startOfYearStr());
+    const renderRow = (label, info) => {
+      if (!info) return '';
+      const cls = info.delta > 0 ? 'pos' : info.delta < 0 ? 'neg' : 'neutral';
+      const pctStr = info.pct != null ? `<span class="pct">${info.pct > 0 ? '+' : info.pct < 0 ? '−' : ''}${Math.abs(info.pct).toFixed(1)}%</span>` : '';
+      return `<div class="change-row ${cls}"><span class="change-label">${label}</span>${fmtSigned(info.delta, state.displayCurrency)}${pctStr}</div>`;
+    };
+    document.getElementById('drillPeriodChanges').innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd);
+
+    // Chart - balance over time for this account
+    document.getElementById('drillTrendTitle').textContent = t('balanceTrend');
+    const labels = tl.map(p => p.snapshot.date);
+    const data = tl.map(p => {
+      const pb = p.balances[acc.id];
+      return pb ? pb.converted : null;
+    });
+    const ctx = document.getElementById('drillChart');
+    if (drillChart) drillChart.destroy();
+    drillChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: acc.name,
+          data,
+          borderColor: acc.color,
+          backgroundColor: acc.color + '20',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 4,
+          spanGaps: true,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${acc.name}：${fmt(c.parsed.y, state.displayCurrency)}` } }
+        },
+        scales: {
+          x: { ticks: { color: cssVar('--muted') }, grid: { color: cssVar('--grid') } },
+          y: { ticks: { color: '#8590a8', callback: v => fmt(v, state.displayCurrency) }, grid: { color: cssVar('--grid') } }
+        }
+      }
+    });
+
+    // History - only snapshots that touched this account
+    document.getElementById('drillHistoryTitle').textContent = t('history');
+    document.getElementById('drillThDate').textContent = t('historyDate');
+    document.getElementById('drillThAmount').textContent = t('original', '').trim().replace(/\(\)$/, '') || t('historyTotal');
+    document.getElementById('drillThConverted').textContent = state.displayCurrency;
+    document.getElementById('drillThNote').textContent = t('historyNote');
+
+    const tbody = document.querySelector('#drillHistoryTable tbody');
+    tbody.innerHTML = '';
+    const rows = sortedSnapshots().filter(s => s.updates[acc.id]).reverse();
+    rows.forEach(s => {
+      const upd = s.updates[acc.id];
+      const rates = state.rates[s.date];
+      const rawConverted = convert(upd.amount, upd.currency, state.displayCurrency, rates);
+      const converted = rawConverted == null ? null : rawConverted * signFor(acc.type);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${s.date}</td>
+        <td class="num">${fmt(signedAmount(upd.amount, acc.type), upd.currency)}</td>
+        <td class="num">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</td>
+        <td>${s.note ? escapeHtml(s.note) : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('drillEmpty').hidden = rows.length > 0;
+    document.getElementById('drillHistoryTable').style.display = rows.length ? '' : 'none';
+  }
+
+  // ===== Render =====
+  function renderAll() {
+    if (viewingAccountId) {
+      document.getElementById('mainView').hidden = true;
+      document.getElementById('drilldownView').hidden = false;
+      renderDrilldown();
+      return;
+    }
+    document.getElementById('mainView').hidden = false;
+    document.getElementById('drilldownView').hidden = true;
+    const single = state.accounts.length <= 1;
+    document.getElementById('accountsSumHint').textContent = single
+      ? t('accountsHintSingle')
+      : t('accountsCount', state.accounts.length);
+    document.getElementById('chartMode').style.display = single ? 'none' : '';
+    if (single) chartMode = 'total';
+    document.getElementById('saveBtn').textContent = editingId ? t('update') : t('save');
+    document.getElementById('cancelEditBtn').textContent = t('cancelEdit');
+    document.getElementById('cancelEditBtn').hidden = !editingId;
+    document.getElementById('editBadge').hidden = !editingId;
+    document.getElementById('entryPanel').classList.toggle('editing', !!editingId);
+    renderBackupBanner();
+    populateInflowAccountSelect();
+    document.querySelectorAll('#basisSeg button').forEach(b =>
+      b.classList.toggle('active', b.dataset.basis === state.basis)
+    );
+    renderSummary();
+    renderPeriodChanges();
+    renderGoal();
+    renderPin();
+    renderSync();
+    renderBreakdown();
+    renderAccountList();
+    renderEntryForm();
+    renderHistory();
+    renderChart();
+  }
+
+  // ===== Init =====
+  populateCurrencySelect(document.getElementById('displayCurrency'), state.displayCurrency);
+  populateCurrencySelect(document.getElementById('newAccountCurrency'), state.displayCurrency);
+  populateCurrencySelect(document.getElementById('inflowCurrency'), state.displayCurrency);
+  populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
+  document.getElementById('langSelect').value = state.language;
+  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  applyTheme();
+  applyI18n();
+
+  (async () => {
+    await gateAccess();
+    renderAll();
+    ensureRates(state.snapshots.map(s => s.date));
+    checkRemoteFreshness();
+
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed', err));
+      });
+    }
+  })();
+</script>
+</body>
+</html>
