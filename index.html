@@ -353,6 +353,20 @@
   /* History search */
   .search-input { padding: 8px 12px; font-size: 13px; width: 260px; max-width: 100%; }
 
+  /* Early-stage hint (shown when snapshots count is small) */
+  .early-hint {
+    background:
+      linear-gradient(135deg, var(--accent-soft), transparent 60%),
+      var(--panel);
+    border: 1px solid rgba(74, 222, 128, 0.22);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--muted-strong);
+    line-height: 1.5;
+  }
+
   /* Snapshot list */
   .snap-list {
     display: flex; flex-direction: column; gap: 4px;
@@ -782,6 +796,13 @@
     letter-spacing: -0.015em;
   }
   .chip-original { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip.liability {
+    background:
+      linear-gradient(135deg, rgba(248, 113, 113, 0.06), transparent 60%),
+      var(--panel-elev);
+    border-color: rgba(248, 113, 113, 0.18);
+  }
+  .chip.liability:hover { border-color: rgba(248, 113, 113, 0.36); }
   .chip.liability .chip-amount { color: var(--danger); }
   .currency-control { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
 
@@ -791,6 +812,18 @@
   .account-row select { width: 120px; }
   .account-row select.type-sel { width: 92px; flex-shrink: 0; }
   .account-row select.cat-sel { width: 100px; flex-shrink: 0; }
+  .drag-handle {
+    cursor: grab; color: var(--muted);
+    user-select: none; -webkit-user-select: none;
+    font-size: 16px; line-height: 1;
+    padding: 4px 2px; letter-spacing: -2px;
+    flex-shrink: 0;
+    transition: color 0.18s var(--ease);
+  }
+  .drag-handle:hover { color: var(--text); }
+  .account-row.dragging { opacity: 0.4; }
+  .account-row.drag-over-top { box-shadow: inset 0 2px 0 var(--accent); }
+  .account-row.drag-over-bottom { box-shadow: inset 0 -2px 0 var(--accent); }
   .account-row .chip-dot { flex-shrink: 0; width: 10px; height: 10px; }
 
   /* Form */
@@ -1281,6 +1314,10 @@
     </div>
   </div>
 
+  <div class="early-hint" id="earlyHint" hidden>
+    <span id="earlyHintText"></span>
+  </div>
+
   <div class="panel" id="breakdownPanel" hidden>
     <div class="toolbar">
       <h2 id="breakdownTitle">构成</h2>
@@ -1474,6 +1511,8 @@
       welcomeStart: '开始记录',
       welcomeLoadExisting: '已有数据？从同步文件加载',
       welcomeOpenSource: 'GitHub 开源 →',
+      earlyHint1: '👋 再过几天回来记一次，趋势线就会显现。',
+      earlyHint2: '🌱 记到第 3 次，月度对比就有数据可看了。',
       goalSaved: '✓ 目标已保存',
       goalRatesPending: '汇率加载中，稍后显示进度',
       goalBasis: '目标对照', basisNet: '净资产', basisAssets: '总资产',
@@ -1591,6 +1630,8 @@
       welcomeStart: 'Start tracking',
       welcomeLoadExisting: 'Already have data? Load from sync file',
       welcomeOpenSource: 'Open source on GitHub →',
+      earlyHint1: '👋 Come back in a few days for another record — your trend line will appear.',
+      earlyHint2: '🌱 After three records, monthly comparisons start to make sense.',
       goalSaved: '✓ Goal saved',
       goalRatesPending: 'Loading rates, progress will show shortly',
       goalBasis: 'Track against', basisNet: 'Net worth', basisAssets: 'Total assets',
@@ -1708,6 +1749,8 @@
       welcomeStart: '記録を始める',
       welcomeLoadExisting: 'データを持っている？同期ファイルから読込',
       welcomeOpenSource: 'GitHub でオープンソース →',
+      earlyHint1: '👋 数日後にもう1回記録すれば、推移ラインが見えてきます。',
+      earlyHint2: '🌱 3回記録すると、月次比較が意味を持ち始めます。',
       goalSaved: '✓ 目標を保存しました',
       goalRatesPending: 'レート読込中、進捗はまもなく表示',
       goalBasis: '目標対象', basisNet: '純資産', basisAssets: '総資産',
@@ -1799,9 +1842,12 @@
 
   function fmt(amount, currency) {
     if (amount == null || isNaN(amount)) return '—';
+    const negative = Number(amount) < 0;
+    const abs = Math.abs(Number(amount));
     const decimals = currency === 'JPY' ? 0 : 2;
-    const numStr = Number(amount).toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    return SYMBOLS[currency] + numStr;
+    const numStr = abs.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    // Use proper Unicode minus (U+2212), placed BEFORE the currency symbol for readability
+    return (negative ? '−' : '') + SYMBOLS[currency] + numStr;
   }
 
   // ===== State =====
@@ -1814,6 +1860,7 @@
   let entryRows = []; // [{ rowId, accountId, amount, currency }]
   let viewingAccountId = null;
   let drillChart = null;
+  let dragSrcAccId = null;
   const inflight = new Set();
 
   function newEmptyRow() {
@@ -2029,12 +2076,14 @@
     state.accounts.forEach(a => {
       const row = document.createElement('div');
       row.className = 'account-row';
+      row.dataset.accId = a.id;
       const catSelect = a.type === 'asset'
         ? `<select data-id="${a.id}" data-field="category" class="cat-sel">${CATEGORIES.map(c =>
             `<option value="${c}" ${a.category === c ? 'selected' : ''}>${t('categories')[c]}</option>`
           ).join('')}</select>`
         : '';
       row.innerHTML = `
+        <span class="drag-handle" title="拖拽排序" aria-label="Drag to reorder">⋮⋮</span>
         <span class="chip-dot" style="background:${a.color}"></span>
         <input type="text" data-id="${a.id}" data-field="name" value="${escapeHtml(a.name)}">
         <select data-id="${a.id}" data-field="currency"></select>
@@ -2046,6 +2095,45 @@
         <button class="danger" data-id="${a.id}">${t('del')}</button>
       `;
       populateCurrencySelect(row.querySelector('select[data-field="currency"]'), a.currency);
+      // Drag-reorder: handle initiates drag, but the row receives drop events
+      const handle = row.querySelector('.drag-handle');
+      handle.addEventListener('mousedown', () => { row.draggable = true; });
+      handle.addEventListener('touchstart', () => { row.draggable = true; }, { passive: true });
+      row.addEventListener('dragstart', e => {
+        dragSrcAccId = a.id;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', a.id); } catch {}
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        row.draggable = false;
+        wrap.querySelectorAll('.account-row').forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+      });
+      row.addEventListener('dragover', e => {
+        if (!dragSrcAccId || dragSrcAccId === a.id) return;
+        e.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < rect.height / 2;
+        row.classList.toggle('drag-over-top', before);
+        row.classList.toggle('drag-over-bottom', !before);
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over-top', 'drag-over-bottom'));
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        const before = row.classList.contains('drag-over-top');
+        row.classList.remove('drag-over-top', 'drag-over-bottom');
+        if (!dragSrcAccId || dragSrcAccId === a.id) return;
+        const srcIdx = state.accounts.findIndex(x => x.id === dragSrcAccId);
+        let tgtIdx = state.accounts.findIndex(x => x.id === a.id);
+        if (srcIdx < 0 || tgtIdx < 0) return;
+        const [moved] = state.accounts.splice(srcIdx, 1);
+        // After splice, indices > srcIdx shifted by -1
+        if (srcIdx < tgtIdx) tgtIdx -= 1;
+        state.accounts.splice(before ? tgtIdx : tgtIdx + 1, 0, moved);
+        dragSrcAccId = null;
+        markDirty(); renderAll();
+      });
       wrap.appendChild(row);
     });
     wrap.querySelectorAll('input[type="text"]').forEach(inp => {
@@ -3925,6 +4013,16 @@
     document.querySelectorAll('#basisSeg button').forEach(b =>
       b.classList.toggle('active', b.dataset.basis === state.basis)
     );
+    // Early-stage encouragement: show a hint when user has just started
+    const earlyEl = document.getElementById('earlyHint');
+    const earlyTxt = document.getElementById('earlyHintText');
+    const n = state.snapshots.length;
+    if (n >= 1 && n < 3) {
+      earlyEl.hidden = false;
+      earlyTxt.textContent = n === 1 ? t('earlyHint1') : t('earlyHint2');
+    } else {
+      earlyEl.hidden = true;
+    }
     renderSummary();
     renderPeriodChanges();
     renderGoal();
