@@ -687,7 +687,26 @@
   .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
 
   /* Summary / hero */
-  .summary { display: flex; flex-wrap: wrap; gap: 28px 40px; align-items: flex-end; }
+  .summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 24px 32px;
+    align-items: end;
+  }
+  .summary > .total { grid-column: 1; grid-row: 1; min-width: 0; }
+  .summary > .currency-control { grid-column: 2; grid-row: 1; }
+  .summary > .account-chips {
+    grid-column: 1 / -1; grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  /* Hide chip container entirely when empty so no row gap is wasted */
+  .summary > .account-chips:empty { display: none; }
+  @media (max-width: 640px) {
+    .summary { grid-template-columns: 1fr; }
+    .summary > .currency-control { grid-column: 1; grid-row: auto; }
+  }
   .total .stat-label {
     font-size: 13px; color: var(--muted);
     font-weight: 500;
@@ -736,7 +755,8 @@
   }
 
   /* Chips */
-  .account-chips { display: flex; flex-wrap: wrap; gap: 12px; flex: 1; }
+  /* legacy fallback — overridden by .summary > .account-chips grid above */
+  .account-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .chip {
     display: flex; flex-direction: column; gap: 4px;
     padding: 14px 16px; border-radius: 14px;
@@ -803,6 +823,16 @@
 
   /* Tables */
   table { width: 100%; border-collapse: collapse; }
+  /* History table: let Date / Total / actions shrink, Updates / Note fill */
+  #historyTable th:nth-child(1),
+  #historyTable td:nth-child(1),
+  #historyTable th:nth-child(3),
+  #historyTable td:nth-child(3),
+  #historyTable th:nth-child(5),
+  #historyTable td:nth-child(5) {
+    width: 1%; white-space: nowrap;
+  }
+  #historyTable td:nth-child(4) { color: var(--muted); }
   th, td {
     text-align: left; padding: 12px 8px;
     border-bottom: 1px solid var(--border);
