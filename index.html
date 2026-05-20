@@ -2493,6 +2493,15 @@
   });
 
   // ===== Chart =====
+  // Multiple snapshots can share the same date (user fixes a value, adds a note, etc.).
+  // For the trend chart we collapse to one point per date — the last entry of that date
+  // already reflects the carry-forward state after every update on it.
+  function collapseTimelineByDate(tl) {
+    const byDate = new Map();
+    for (const entry of tl) byDate.set(entry.snapshot.date, entry);
+    return [...byDate.values()];
+  }
+
   function totalAtOrBefore(timeline, dateStr) {
     let result = null;
     for (const t of timeline) {
@@ -2574,7 +2583,7 @@
         },
       ];
     } else {
-      const timeline = computeTimeline();
+      const timeline = collapseTimelineByDate(computeTimeline());
       labels = timeline.map(t => t.snapshot.date);
       if (chartMode === 'total') {
         crossings = findMilestoneCrossings(timeline);
@@ -3915,8 +3924,9 @@
 
     // Chart - balance over time for this account
     document.getElementById('drillTrendTitle').textContent = t('balanceTrend');
-    const labels = tl.map(p => p.snapshot.date);
-    const data = tl.map(p => {
+    const chartTl = collapseTimelineByDate(tl);
+    const labels = chartTl.map(p => p.snapshot.date);
+    const data = chartTl.map(p => {
       const pb = p.balances[acc.id];
       return pb ? pb.converted : null;
     });
