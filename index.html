@@ -196,6 +196,21 @@
     border-radius: 10px;
     box-shadow: 0 0 28px rgba(74, 222, 128, 0.35), 0 6px 14px rgba(34, 211, 238, 0.25);
     flex-shrink: 0;
+    transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
+  }
+  h1#pageTitle {
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1#pageTitle:hover::before {
+    transform: rotate(-6deg) scale(1.05);
+    box-shadow: 0 0 36px rgba(74, 222, 128, 0.5), 0 8px 18px rgba(34, 211, 238, 0.32);
+  }
+  h1#pageTitle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 8px;
   }
   .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; gap: 12px; }
   .lang-select { padding: 9px 14px; font-size: 13px; min-width: 116px; border-radius: var(--radius-pill); }
@@ -450,6 +465,9 @@
     padding: 8px 0; color: var(--muted-strong); font-size: 14px;
   }
   .welcome-actions button.link:hover { color: var(--text); background: transparent; }
+  .welcome-actions button#welcomeDemoBtn {
+    color: var(--text); font-weight: 500;
+  }
 
   /* Product preview card */
   .welcome-preview-wrap {
@@ -949,6 +967,18 @@
   .banner button:hover { background: #fcc94d; }
   .banner button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
   .banner button.ghost:hover { background: var(--panel-elev); color: var(--text); }
+  .banner-info {
+    background: var(--panel-elev);
+    border: 1px solid var(--border);
+  }
+  .banner-info .banner-msg { color: var(--muted-strong); }
+  .banner-info button {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-weight: 500;
+  }
+  .banner-info button:hover { background: var(--panel); color: var(--text); }
 
   /* Editing state */
   .panel.editing {
@@ -1028,7 +1058,7 @@
 </head>
 <body>
   <div class="page-header">
-    <h1 id="pageTitle">Record</h1>
+    <h1 id="pageTitle" role="button" tabindex="0" aria-label="Record · home">Record</h1>
     <div class="header-actions">
       <button class="icon-btn" id="syncBtn" title="本地文件同步" aria-label="Sync">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1200,6 +1230,7 @@
         <p class="welcome-tagline" id="welcomeTagline">A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.</p>
         <div class="welcome-actions">
           <button class="primary" id="welcomeStartBtn">Start tracking</button>
+          <button class="link" id="welcomeDemoBtn">Try with sample data first →</button>
           <button class="link" id="welcomeLoadBtn">Already have data? Load from sync file</button>
         </div>
       </div>
@@ -1281,6 +1312,13 @@
   </div>
 
   <div id="mainView">
+  <div class="banner banner-info" id="demoBanner" hidden>
+    <span class="banner-msg" id="demoBannerMsg"></span>
+    <div class="banner-actions">
+      <button id="demoClearBtn"></button>
+    </div>
+  </div>
+
   <div class="banner" id="backupBanner" hidden>
     <span class="banner-msg" id="backupBannerMsg"></span>
     <div class="banner-actions">
@@ -1509,8 +1547,18 @@
       featNwT: '净资产，看得清', featNwD: '资产 / 负债、月度 / 年度走势、目标、入金 vs 涨跌的清晰拆解。',
       featPrvT: '数据完全归你', featPrvD: '无后端，无账号。可选同步到 iCloud Drive / Dropbox 中你自己挑的文件。',
       welcomeStart: '开始记录',
+      welcomeTryDemo: '先看看示例数据 →',
       welcomeLoadExisting: '已有数据？从同步文件加载',
       welcomeOpenSource: 'GitHub 开源 →',
+      demoBannerMsg: '正在浏览示例数据 · 随便点点看',
+      demoClear: '清空，开始记录我自己的',
+      demoConfirmClear: '清空示例数据并开始记录你自己的？',
+      demoAccounts: {
+        savings: '招行储蓄', stocks: '美股账户', crypto: '比特币',
+        cash: '现金', mortgage: '房贷',
+      },
+      demoNoteLatest: '月底盘点',
+      demoNoteFirst: '示例：第一次记录',
       earlyHint1: '👋 再过几天回来记一次，趋势线就会显现。',
       earlyHint2: '🌱 记到第 3 次，月度对比就有数据可看了。',
       goalSaved: '✓ 目标已保存',
@@ -1628,7 +1676,17 @@
       featNwT: 'Net worth, decomposed', featNwD: 'Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.',
       featPrvT: 'Yours, fully', featPrvD: 'No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.',
       welcomeStart: 'Start tracking',
+      welcomeTryDemo: 'Try with sample data first →',
       welcomeLoadExisting: 'Already have data? Load from sync file',
+      demoBannerMsg: 'Browsing sample data · click around to explore',
+      demoClear: 'Clear & start with my own',
+      demoConfirmClear: 'Clear the sample data and start tracking your own?',
+      demoAccounts: {
+        savings: 'Bank Savings', stocks: 'US Stocks', crypto: 'Bitcoin',
+        cash: 'Cash', mortgage: 'Mortgage',
+      },
+      demoNoteLatest: 'Month-end review',
+      demoNoteFirst: 'Sample: first record',
       welcomeOpenSource: 'Open source on GitHub →',
       earlyHint1: '👋 Come back in a few days for another record — your trend line will appear.',
       earlyHint2: '🌱 After three records, monthly comparisons start to make sense.',
@@ -1747,8 +1805,18 @@
       featNwT: '純資産を分解', featNwD: '資産と負債、今月 / 年初来の推移、目標、入金 vs 市場変動の分解。',
       featPrvT: '完全に自分のもの', featPrvD: 'バックエンドなし、アカウント不要。iCloud Drive 等のファイルへ任意で同期。',
       welcomeStart: '記録を始める',
+      welcomeTryDemo: 'まずサンプルを試す →',
       welcomeLoadExisting: 'データを持っている？同期ファイルから読込',
       welcomeOpenSource: 'GitHub でオープンソース →',
+      demoBannerMsg: 'サンプルデータを表示中 · 自由に触ってみてください',
+      demoClear: 'クリアして自分の記録を始める',
+      demoConfirmClear: 'サンプルデータを消して、自分の記録を始めますか？',
+      demoAccounts: {
+        savings: '銀行貯蓄', stocks: '米国株', crypto: 'ビットコイン',
+        cash: '現金', mortgage: '住宅ローン',
+      },
+      demoNoteLatest: '月末チェック',
+      demoNoteFirst: 'サンプル：初回記録',
       earlyHint1: '👋 数日後にもう1回記録すれば、推移ラインが見えてきます。',
       earlyHint2: '🌱 3回記録すると、月次比較が意味を持ち始めます。',
       goalSaved: '✓ 目標を保存しました',
@@ -1886,6 +1954,7 @@
     if (!Array.isArray(data.milestonesShown)) data.milestonesShown = [];
     if (typeof data.goalReachedShown !== 'boolean') data.goalReachedShown = false;
     if (typeof data.welcomeDismissed !== 'boolean') data.welcomeDismissed = false;
+    if (typeof data.isDemo !== 'boolean') data.isDemo = false;
     if (!data.rates) data.rates = {};
     if (typeof data.dirtySinceExport !== 'number') data.dirtySinceExport = 0;
     data.accounts.forEach(a => {
@@ -1938,6 +2007,9 @@
   function markDirty() {
     state.dirtySinceExport = (state.dirtySinceExport || 0) + 1;
     save();
+    // While exploring sample data we don't want to pollute the user's real
+    // rolling backups or their linked sync file.
+    if (state.isDemo) return;
     saveLocalSnapshot();
     scheduleAutoSync();
   }
@@ -2973,6 +3045,22 @@
   function closePrefs() { prefsModal.hidden = true; }
   document.getElementById('prefsBtn').addEventListener('click', openPrefs);
 
+  // Logo / wordmark — drilldown? return to main. Otherwise scroll to top.
+  (function wireLogo() {
+    const logo = document.getElementById('pageTitle');
+    const activate = () => {
+      if (viewingAccountId) {
+        exitDrilldown();
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    logo.addEventListener('click', activate);
+    logo.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+    });
+  })();
+
   // Welcome view
   document.getElementById('welcomeStartBtn').addEventListener('click', () => {
     state.welcomeDismissed = true;
@@ -2988,6 +3076,110 @@
     // Open sync modal so user can pick existing file
     openSync();
   });
+  document.getElementById('welcomeDemoBtn').addEventListener('click', async () => {
+    await loadDemoData();
+  });
+  document.getElementById('demoClearBtn').addEventListener('click', () => {
+    if (!confirm(t('demoConfirmClear'))) return;
+    exitDemo();
+  });
+
+  // ===== Demo data =====
+  // Builds ~14 months of plausible multi-currency history so first-time visitors
+  // can see the app in its mature state (trend chart, breakdowns, goal ETA, drill-down)
+  // instead of staring at an empty form.
+  function buildDemoData() {
+    const lang = state.language;
+    const names = (I18N[lang] || I18N.zh).demoAccounts;
+    const accounts = [
+      { id: crypto.randomUUID(), name: names.savings,  color: PALETTE[0], currency: 'CNY', type: 'asset',     category: 'savings' },
+      { id: crypto.randomUUID(), name: names.stocks,   color: PALETTE[1], currency: 'USD', type: 'asset',     category: 'investment' },
+      { id: crypto.randomUUID(), name: names.crypto,   color: PALETTE[4], currency: 'USD', type: 'asset',     category: 'crypto' },
+      { id: crypto.randomUUID(), name: names.cash,     color: PALETTE[7], currency: 'CNY', type: 'asset',     category: 'cash' },
+      { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[5], currency: 'CNY', type: 'liability', category: 'other' },
+    ];
+    // Predetermined move sequences (instead of Math.random) for a reproducible, visually pleasing trajectory.
+    const stockMoves  = [1.02, 1.01, 0.96, 1.03, 1.05, 1.04, 0.93, 1.02, 1.06, 1.03, 1.07, 1.04, 1.02, 1.03];
+    const cryptoMoves = [1.05, 0.92, 1.18, 0.88, 1.15, 1.06, 0.85, 1.20, 1.10, 0.92, 1.12, 1.05, 1.08, 1.04];
+    const inflows     = [12000, 12000, 14000, 12000, 12000, 18000, 12000, 12000, 14000, 12000, 12000, 20000, 12000, 13000];
+    let savings = 600000;
+    let stocks = 25000;
+    let cryptoVal = 18000;
+    let cash = 12000;
+    let mortgage = 220000;
+    const snapshots = [];
+    const today = new Date();
+    const N = 14;
+    const createdBase = Date.now() - N * 86400000;
+    for (let i = 0; i < N; i++) {
+      // Month-end of (today - (N-1-i)) months.
+      const d = new Date(today.getFullYear(), today.getMonth() - (N - 1 - i) + 1, 0);
+      const dateStr = d.toISOString().slice(0, 10);
+      savings += inflows[i];
+      stocks = Math.round(stocks * stockMoves[i]);
+      cryptoVal = Math.round(cryptoVal * cryptoMoves[i]);
+      cash = Math.max(3000, cash + (i % 3 === 0 ? 2000 : -800));
+      mortgage = Math.max(380000, mortgage - 2500);
+
+      const updates = {};
+      updates[accounts[0].id] = { amount: savings,   currency: 'CNY' };
+      updates[accounts[1].id] = { amount: stocks,    currency: 'USD' };
+      updates[accounts[2].id] = { amount: cryptoVal, currency: 'USD' };
+      // Cash updated less often (realistic: people don't recount cash every month)
+      if (i % 2 === 0 || i === N - 1) updates[accounts[3].id] = { amount: cash, currency: 'CNY' };
+      updates[accounts[4].id] = { amount: mortgage, currency: 'CNY' };
+
+      let note = '';
+      if (i === 0) note = t('demoNoteFirst');
+      else if (i === N - 1) note = t('demoNoteLatest');
+
+      const snap = {
+        id: crypto.randomUUID(),
+        date: dateStr,
+        updates,
+        note,
+        createdAt: createdBase + i * 86400000,
+        inflow: { amount: inflows[i], currency: 'CNY', accountId: accounts[0].id },
+      };
+      snapshots.push(snap);
+    }
+    return { accounts, snapshots };
+  }
+
+  async function loadDemoData() {
+    const { accounts, snapshots } = buildDemoData();
+    state.accounts = accounts;
+    state.snapshots = snapshots;
+    state.isDemo = true;
+    state.welcomeDismissed = true;
+    state.goal = { amount: 1500000, currency: 'CNY' };
+    state.goalReachedShown = true;
+    // Suppress milestone confetti for thresholds the demo already sits above
+    // (≈1M CNY ≈ 140k USD → 10k/50k/100k crossed in current display currency).
+    state.milestonesShown = ['10k', '50k', '100k'].map(k => state.displayCurrency + ':' + k);
+    state.dirtySinceExport = 0;
+    save();
+    renderAll();
+    // Fetch rates for demo dates so the chart and conversions populate.
+    ensureRates(state.snapshots.map(s => s.date));
+  }
+
+  function exitDemo() {
+    const defaultName = (I18N[state.language] || I18N.zh).defaultAccountName;
+    state.accounts = [{
+      id: crypto.randomUUID(), name: defaultName, color: PALETTE[0],
+      currency: state.displayCurrency || 'CNY', type: 'asset', category: 'cash',
+    }];
+    state.snapshots = [];
+    state.isDemo = false;
+    state.welcomeDismissed = true;
+    state.goal = null;
+    state.goalReachedShown = false;
+    state.milestonesShown = [];
+    state.dirtySinceExport = 0;
+    save();
+    renderAll();
+  }
 
   // Sync modal (data safety — file sync + local snapshots)
   const syncModal = document.getElementById('syncModal');
@@ -3833,7 +4025,10 @@
     setText('featPrvT', t('featPrvT'));
     setText('featPrvD', t('featPrvD'));
     setText('welcomeStartBtn', t('welcomeStart'));
+    setText('welcomeDemoBtn', t('welcomeTryDemo'));
     setText('welcomeLoadBtn', t('welcomeLoadExisting'));
+    setText('demoBannerMsg', t('demoBannerMsg'));
+    setText('demoClearBtn', t('demoClear'));
     setText('welcomeGitHub', t('welcomeOpenSource'));
     setText('remoteNewerMsg', t('syncRemoteNewer'));
     setText('remoteNewerLoad', t('syncRemoteNewerLoad'));
@@ -4018,6 +4213,7 @@
     document.getElementById('cancelEditBtn').hidden = !editingId;
     document.getElementById('editBadge').hidden = !editingId;
     document.getElementById('entryPanel').classList.toggle('editing', !!editingId);
+    document.getElementById('demoBanner').hidden = !state.isDemo;
     renderBackupBanner();
     populateInflowAccountSelect();
     document.querySelectorAll('#basisSeg button').forEach(b =>
