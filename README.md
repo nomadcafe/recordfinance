@@ -1,5 +1,7 @@
 # Record · Finance
 
+**English** · [中文](README.zh.md) · [日本語](README.ja.md)
+
 Private, offline-first multi-currency net worth tracker.
 Your data never leaves your device.
 
