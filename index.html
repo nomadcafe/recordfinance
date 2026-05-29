@@ -843,10 +843,12 @@
     cursor: grab; color: var(--muted);
     user-select: none; -webkit-user-select: none;
     font-size: 16px; line-height: 1;
-    padding: 4px 2px; letter-spacing: -2px;
+    padding: 4px 6px; letter-spacing: -2px;
     flex-shrink: 0;
+    touch-action: none; /* let a touch-drag reorder instead of scrolling the page */
     transition: color 0.18s var(--ease);
   }
+  .drag-handle:active { cursor: grabbing; }
   .drag-handle:hover { color: var(--text); }
   .account-row.dragging { opacity: 0.4; }
   .account-row.drag-over-top { box-shadow: inset 0 2px 0 var(--accent); }
@@ -1959,8 +1961,77 @@
   let entryRows = []; // [{ rowId, accountId, amount, currency }]
   let viewingAccountId = null;
   let drillChart = null;
-  let dragSrcAccId = null;
   const inflight = new Set();
+
+  // Pointer-based account reorder (mouse + touch). Started from a row's drag handle.
+  let accountReorderActive = false;
+  function startAccountReorder(e, accId) {
+    if (accountReorderActive) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // left-click only for mouse
+    e.preventDefault();
+    const wrap = document.getElementById('accountList');
+    if (!wrap) return;
+    const rows = [...wrap.querySelectorAll('.account-row')];
+    const row = rows.find(r => r.dataset.accId === accId);
+    if (!row) return;
+    accountReorderActive = true;
+    row.classList.add('dragging');
+    document.body.style.userSelect = 'none'; // avoid stray text selection while dragging
+
+    const clearIndicators = () => rows.forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+    let targetId = null, before = false;
+
+    const onMove = ev => {
+      const y = ev.clientY;
+      clearIndicators();
+      targetId = null;
+      for (const r of rows) {
+        if (r === row) continue;
+        const rect = r.getBoundingClientRect();
+        if (y >= rect.top && y <= rect.bottom) {
+          before = (y - rect.top) < rect.height / 2;
+          r.classList.toggle('drag-over-top', before);
+          r.classList.toggle('drag-over-bottom', !before);
+          targetId = r.dataset.accId;
+          return;
+        }
+      }
+      // Past the ends: snap to first/last (skipping the row being dragged).
+      const others = rows.filter(r => r !== row);
+      if (!others.length) return;
+      const first = others[0], last = others[others.length - 1];
+      if (y < first.getBoundingClientRect().top) {
+        before = true; targetId = first.dataset.accId; first.classList.add('drag-over-top');
+      } else if (y > last.getBoundingClientRect().bottom) {
+        before = false; targetId = last.dataset.accId; last.classList.add('drag-over-bottom');
+      }
+    };
+
+    const finish = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      row.classList.remove('dragging');
+      clearIndicators();
+      document.body.style.userSelect = '';
+      accountReorderActive = false;
+      if (targetId && targetId !== accId) {
+        const srcIdx = state.accounts.findIndex(x => x.id === accId);
+        let tgtIdx = state.accounts.findIndex(x => x.id === targetId);
+        if (srcIdx >= 0 && tgtIdx >= 0) {
+          const [moved] = state.accounts.splice(srcIdx, 1);
+          if (srcIdx < tgtIdx) tgtIdx -= 1; // indices after the removed one shift left
+          state.accounts.splice(before ? tgtIdx : tgtIdx + 1, 0, moved);
+          markDirty();
+        }
+      }
+      renderAll();
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
+  }
 
   function newEmptyRow() {
     return { rowId: crypto.randomUUID(), accountId: '', amount: '', currency: state.displayCurrency, inflow: '' };
@@ -2216,45 +2287,10 @@
         <button class="danger" data-id="${a.id}">${t('del')}</button>
       `;
       populateCurrencySelect(row.querySelector('select[data-field="currency"]'), a.currency);
-      // Drag-reorder: handle initiates drag, but the row receives drop events
+      // Pointer-based drag-reorder — works for mouse AND touch (the old native
+      // HTML5 DnD never fired from touch, so reordering was broken on phones).
       const handle = row.querySelector('.drag-handle');
-      handle.addEventListener('mousedown', () => { row.draggable = true; });
-      handle.addEventListener('touchstart', () => { row.draggable = true; }, { passive: true });
-      row.addEventListener('dragstart', e => {
-        dragSrcAccId = a.id;
-        row.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', a.id); } catch {}
-      });
-      row.addEventListener('dragend', () => {
-        row.classList.remove('dragging');
-        row.draggable = false;
-        wrap.querySelectorAll('.account-row').forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
-      });
-      row.addEventListener('dragover', e => {
-        if (!dragSrcAccId || dragSrcAccId === a.id) return;
-        e.preventDefault();
-        const rect = row.getBoundingClientRect();
-        const before = (e.clientY - rect.top) < rect.height / 2;
-        row.classList.toggle('drag-over-top', before);
-        row.classList.toggle('drag-over-bottom', !before);
-      });
-      row.addEventListener('dragleave', () => row.classList.remove('drag-over-top', 'drag-over-bottom'));
-      row.addEventListener('drop', e => {
-        e.preventDefault();
-        const before = row.classList.contains('drag-over-top');
-        row.classList.remove('drag-over-top', 'drag-over-bottom');
-        if (!dragSrcAccId || dragSrcAccId === a.id) return;
-        const srcIdx = state.accounts.findIndex(x => x.id === dragSrcAccId);
-        let tgtIdx = state.accounts.findIndex(x => x.id === a.id);
-        if (srcIdx < 0 || tgtIdx < 0) return;
-        const [moved] = state.accounts.splice(srcIdx, 1);
-        // After splice, indices > srcIdx shifted by -1
-        if (srcIdx < tgtIdx) tgtIdx -= 1;
-        state.accounts.splice(before ? tgtIdx : tgtIdx + 1, 0, moved);
-        dragSrcAccId = null;
-        markDirty(); renderAll();
-      });
+      handle.addEventListener('pointerdown', e => startAccountReorder(e, a.id));
       wrap.appendChild(row);
     });
     wrap.querySelectorAll('input[type="text"]').forEach(inp => {
