@@ -1988,12 +1988,25 @@
     if (typeof data.isDemo !== 'boolean') data.isDemo = false;
     if (!data.rates) data.rates = {};
     if (typeof data.dirtySinceExport !== 'number') data.dirtySinceExport = 0;
-    data.accounts.forEach(a => {
-      if (!a.currency) a.currency = 'CNY';
-      if (!a.type) a.type = 'asset';
-      if (!a.category) a.category = 'other';
+    // Sanitize untrusted fields. migrate() is the single choke point for every
+    // ingestion path (load, import, sync-pull, snapshot restore), so validating
+    // here neutralizes injected values (e.g. a `color` crafted to break out of a
+    // style attribute) regardless of where the data came from.
+    if (!Array.isArray(data.accounts)) data.accounts = [];
+    if (!Array.isArray(data.snapshots)) data.snapshots = [];
+    const CUR_CODES = CURRENCIES.map(c => c.code);
+    const isHexColor = c => typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c);
+    data.accounts.forEach((a, i) => {
+      if (!CUR_CODES.includes(a.currency)) a.currency = 'CNY';
+      if (a.type !== 'asset' && a.type !== 'liability') a.type = 'asset';
+      if (!CATEGORIES.includes(a.category)) a.category = 'other';
+      if (!isHexColor(a.color)) a.color = PALETTE[i % PALETTE.length];
+      if (typeof a.name !== 'string') a.name = a.name == null ? '' : String(a.name);
     });
     data.snapshots.forEach(s => {
+      if (typeof s.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) s.date = todayStr();
+      if (typeof s.note !== 'string') s.note = s.note == null ? '' : String(s.note);
+      if (!s.updates || typeof s.updates !== 'object') s.updates = {};
       Object.keys(s.updates).forEach(accId => {
         const v = s.updates[accId];
         if (typeof v === 'number') {
@@ -2063,11 +2076,16 @@
     if (complete || inflight.has(date)) return;
     inflight.add(date);
     try {
-      const urls = [
-        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/usd.json`,
+      // Historical dates must use the dated endpoints ONLY. Falling back to @latest
+      // would silently store TODAY's rates under a past date and corrupt history
+      // (and then cache it forever). @latest is reserved for today / future dates.
+      const isToday = date >= todayStr();
+      const urls = isToday ? [
         `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json`,
-        `https://${date}.currency-api.pages.dev/v1/currencies/usd.json`,
         `https://latest.currency-api.pages.dev/v1/currencies/usd.json`,
+      ] : [
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/usd.json`,
+        `https://${date}.currency-api.pages.dev/v1/currencies/usd.json`,
       ];
       let data = null;
       for (const url of urls) {
@@ -2424,7 +2442,7 @@
     document.getElementById('note').value = '';
     document.getElementById('inflow').value = '';
     document.getElementById('inflowAccount').value = '';
-    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('date').value = localDateStr();
     await ensureRates([date]);
     renderAll();
     checkMilestones();
@@ -2463,7 +2481,7 @@
     document.getElementById('note').value = '';
     document.getElementById('inflow').value = '';
     document.getElementById('inflowAccount').value = '';
-    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('date').value = localDateStr();
     renderAll();
   }
   document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
@@ -2564,7 +2582,7 @@
         inflowLine = `<div class="inflow-line">${t('inflow')} ${fmt(inf.amount, inf.currency)}${arrow}</div>`;
       }
       tr.innerHTML = `
-        <td>${snapshot.date}</td>
+        <td>${escapeHtml(snapshot.date)}</td>
         <td><div class="update-list">${updates}</div>${inflowLine}</td>
         <td class="num">${total != null ? fmt(total, state.displayCurrency) : (ratesMissing ? t('ratesShort') : '—')}</td>
         <td>${snapshot.note ? escapeHtml(snapshot.note) : ''}</td>
@@ -3145,7 +3163,7 @@
     for (let i = 0; i < N; i++) {
       // Month-end of (today - (N-1-i)) months.
       const d = new Date(today.getFullYear(), today.getMonth() - (N - 1 - i) + 1, 0);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = localDateStr(d);
       savings += inflows[i];
       stocks = Math.round(stocks * stockMoves[i]);
       cryptoVal = Math.round(cryptoVal * cryptoMoves[i]);
@@ -3283,15 +3301,19 @@
   })();
 
   // ===== Date shortcuts =====
-  function todayStr() { return new Date().toISOString().slice(0, 10); }
+  // Local calendar date as YYYY-MM-DD. NOT toISOString() — that converts to UTC and
+  // rolls back a day for users east of UTC (e.g. "month end" becomes the 29th, not 30th).
+  function localDateStr(d = new Date()) {
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  function todayStr() { return localDateStr(); }
   function monthEndStr(d = new Date()) {
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return last.toISOString().slice(0, 10);
+    return localDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
   }
   function lastMonthEndStr() {
     const d = new Date();
-    const last = new Date(d.getFullYear(), d.getMonth(), 0);
-    return last.toISOString().slice(0, 10);
+    return localDateStr(new Date(d.getFullYear(), d.getMonth(), 0));
   }
   document.querySelectorAll('.date-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4282,7 +4304,7 @@
       const converted = rawConverted == null ? null : rawConverted * signFor(acc.type);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${s.date}</td>
+        <td>${escapeHtml(s.date)}</td>
         <td class="num">${fmt(signedAmount(upd.amount, acc.type), upd.currency)}</td>
         <td class="num">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</td>
         <td>${s.note ? escapeHtml(s.note) : ''}</td>

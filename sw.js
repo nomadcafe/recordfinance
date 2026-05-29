@@ -1,4 +1,4 @@
-const CACHE = 'record-v3';
+const CACHE = 'record-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -23,26 +23,44 @@ self.addEventListener('activate', e => {
   );
 });
 
+function putInCache(request, response) {
+  if (response && response.ok && request.method === 'GET') {
+    const clone = response.clone();
+    caches.open(CACHE).then(c => c.put(request, clone)).catch(() => {});
+  }
+  return response;
+}
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Don't cache exchange rate fetches — we want fresh data when online.
-  // When offline, fall back to whatever's cached (the in-app state.rates handles missing rates).
+
+  // Exchange-rate fetches: always prefer fresh data online, fall back to cache offline.
   if (url.hostname.includes('currency-api') || url.hostname.includes('frankfurter') || url.hostname.includes('cloudflare')) {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    return;
+  }
+
+  // App shell / navigations: NETWORK-FIRST. The entire app lives inside index.html,
+  // so a cache-first shell would strand users on a stale build (including stale
+  // security fixes) until two reloads. Online → fetch fresh + update cache;
+  // offline → fall back to the cached shell.
+  const isShell = e.request.mode === 'navigate' ||
+    url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+  if (isShell) {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(e.request)
+        .then(res => putInCache(e.request, res))
+        .catch(() => caches.match(e.request).then(c => c || caches.match('./index.html')))
     );
     return;
   }
-  // Cache-first for everything else (HTML, Chart.js, fonts, icons).
+
+  // Other static assets (icons, manifest, CDN Chart.js): cache-first + background refresh.
   e.respondWith(
     caches.match(e.request).then(cached => {
-      const fetchPromise = fetch(e.request).then(res => {
-        if (res.ok && e.request.method === 'GET') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
-        }
-        return res;
-      }).catch(() => cached);
+      const fetchPromise = fetch(e.request)
+        .then(res => putInCache(e.request, res))
+        .catch(() => cached);
       return cached || fetchPromise;
     })
   );
