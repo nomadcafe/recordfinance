@@ -626,6 +626,18 @@
   }
   @keyframes syncPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
+  /* Respect users who ask for less motion: neutralize decorative animations and
+     transitions (final state still applies, so nothing breaks). Confetti is a
+     canvas animation and is short-circuited in JS instead. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -1077,8 +1089,8 @@
         </svg>
       </button>
       <button class="icon-btn" id="privacyBtn" title="隐藏金额">👁</button>
-      <button class="icon-btn" id="themeBtn" title="切换主题">◐</button>
-      <button class="icon-btn" id="prefsBtn" title="偏好设置">⚙</button>
+      <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">◐</button>
+      <button class="icon-btn" id="prefsBtn" title="偏好设置" aria-label="偏好设置">⚙</button>
       <select id="langSelect" class="lang-select" aria-label="Language">
         <option value="zh">中文</option>
         <option value="en">English</option>
@@ -1144,7 +1156,7 @@
           <label id="goalLabel">目标金额</label>
           <div class="goal-actions">
             <div class="goal-input-row">
-              <input type="number" step="any" id="goalInput" placeholder="目标金额">
+              <input type="number" inputmode="decimal" step="any" id="goalInput" placeholder="目标金额">
               <select id="goalCurrencySel"></select>
             </div>
             <button id="goalSetBtn" type="button">设置 / 修改</button>
@@ -1439,7 +1451,7 @@
         <div class="field" style="max-width: 220px;">
           <label for="inflow">本次净入金（可选）</label>
           <div class="input-currency">
-            <input type="number" step="any" id="inflow" placeholder="0">
+            <input type="number" inputmode="decimal" step="any" id="inflow" placeholder="0">
             <select id="inflowCurrency"></select>
           </div>
         </div>
@@ -1528,6 +1540,7 @@
       categories: { cash: '现金', savings: '储蓄', investment: '投资', property: '房产', crypto: '加密', other: '其他' },
       back: '← 返回',
       preferences: '偏好设置',
+      theme: '切换主题',
       privacyOn: '隐藏金额', privacyOff: '显示金额',
       today: '今天', monthEnd: '月末', lastMonthEnd: '上月末',
       fiscalYearStart: '财年起点（月）', fiscalYearHint: '会按这个月计算"本年"。',
@@ -1661,6 +1674,7 @@
       categories: { cash: 'Cash', savings: 'Savings', investment: 'Investment', property: 'Property', crypto: 'Crypto', other: 'Other' },
       back: '← Back',
       preferences: 'Preferences',
+      theme: 'Toggle theme',
       privacyOn: 'Hide amounts', privacyOff: 'Show amounts',
       today: 'Today', monthEnd: 'Month end', lastMonthEnd: 'Last month end',
       fiscalYearStart: 'Fiscal year start (month)', fiscalYearHint: '"YTD" will be measured from this month.',
@@ -1794,6 +1808,7 @@
       categories: { cash: '現金', savings: '預金', investment: '投資', property: '不動産', crypto: '仮想通貨', other: 'その他' },
       back: '← 戻る',
       preferences: '設定',
+      theme: 'テーマ切替',
       privacyOn: '金額を隠す', privacyOff: '金額を表示',
       today: '今日', monthEnd: '月末', lastMonthEnd: '先月末',
       fiscalYearStart: '会計年度開始月', fiscalYearHint: '「年初来」はこの月から計算します。',
@@ -2412,7 +2427,7 @@
 
     el.innerHTML = `
       <select class="acc-sel">${opts}</select>
-      <input class="amt-input" type="number" step="any" value="${row.amount}" placeholder="${getAmountPlaceholder(row.accountId)}">
+      <input class="amt-input" type="number" inputmode="decimal" step="any" value="${row.amount}" placeholder="${getAmountPlaceholder(row.accountId)}">
       <select class="cur-sel"></select>
       <button type="button" class="row-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>
     `;
@@ -2440,7 +2455,7 @@
       inflowMini.className = 'row-inflow-mini';
       inflowMini.innerHTML = `
         <label>${t('perRowInflow')}</label>
-        <input type="number" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
+        <input type="number" inputmode="decimal" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
         <span style="color: var(--muted);">${row.currency}</span>
       `;
       inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => { row.inflow = e.target.value; });
@@ -3166,7 +3181,13 @@
   // ===== Theme =====
   function applyTheme() {
     document.body.classList.toggle('light', state.theme === 'light');
-    document.getElementById('themeBtn').textContent = state.theme === 'light' ? '◑' : '◐';
+    const tb = document.getElementById('themeBtn');
+    tb.textContent = state.theme === 'light' ? '◑' : '◐';
+    tb.title = t('theme');
+    tb.setAttribute('aria-label', t('theme'));
+    // Keep the PWA / mobile status-bar chrome in sync with the active theme.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = state.theme === 'light' ? '#f7f8fc' : '#0a0e16';
   }
   // Preferences modal (settings)
   const prefsModal = document.getElementById('prefsModal');
@@ -3574,6 +3595,8 @@
 
   // ===== Confetti (goal reached) =====
   function launchConfetti() {
+    // Skip the celebration animation for users who prefer reduced motion.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:300;';
     canvas.width = innerWidth; canvas.height = innerHeight;
@@ -4199,6 +4222,8 @@
 
     // New i18n bindings
     setText('prefsLabel', t('preferences'));
+    const prefsBtn = document.getElementById('prefsBtn');
+    if (prefsBtn) { prefsBtn.title = t('preferences'); prefsBtn.setAttribute('aria-label', t('preferences')); }
     setText('fiscalYearStartLabel', t('fiscalYearStart'));
     setText('fiscalYearHint', t('fiscalYearHint'));
     setText('goalLabel', t('goalAmount'));
