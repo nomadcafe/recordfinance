@@ -1956,6 +1956,9 @@
   let chart = null;
   let breakdownChart = null;
   let chartMode = 'total';
+  // Per-render inputs the trend overlay plugin reads — kept in module scope (not a
+  // renderChart closure) so the chart can be updated in place instead of rebuilt.
+  let chartOverlay = { crossings: [], mode: 'total' };
   let backupBannerDismissed = false;
   let editingId = null;
   let entryRows = []; // [{ rowId, accountId, amount, currency }]
@@ -2118,7 +2121,9 @@
     return data;
   }
 
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  // Bumped on every persisted mutation; used to invalidate the timeline memo below.
+  let stateVersion = 0;
+  function save() { stateVersion++; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   function markDirty() {
     state.dirtySinceExport = (state.dirtySinceExport || 0) + 1;
     save();
@@ -2182,7 +2187,18 @@
       return !inflight.has(d) && (!c || CURRENCIES.some(cur => c[cur.code] === undefined));
     });
     if (!missing.length) return;
-    await Promise.all(missing.map(fetchRates));
+    // Bound concurrency: importing a multi-year file would otherwise open dozens of
+    // simultaneous CDN fetches (each a 2-URL fallback chain), tripping the browser's
+    // per-host connection cap and the API's rate limiting.
+    const POOL = 6;
+    let next = 0;
+    const worker = async () => {
+      while (next < missing.length) {
+        const date = missing[next++];
+        await fetchRates(date);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(POOL, missing.length) }, worker));
     renderAll();
   }
 
@@ -2198,7 +2214,18 @@
   // ===== Timeline =====
   // Carry-forward per-account balances (in their stored currency).
   // For each snapshot date, convert each held balance to display currency using that date's rates.
+  // Memoized: a single renderAll() calls this ~7×, and it's an O(snapshots×accounts)
+  // scan. The result is pure over snapshots/accounts/rates/displayCurrency, all of
+  // which only change through save() — so we recompute only when stateVersion moves.
+  let _timelineCache = null, _timelineCacheVersion = -1;
   function computeTimeline() {
+    if (_timelineCache && _timelineCacheVersion === stateVersion) return _timelineCache;
+    const result = _computeTimeline();
+    _timelineCache = result;
+    _timelineCacheVersion = stateVersion;
+    return result;
+  }
+  function _computeTimeline() {
     const list = sortedSnapshots();
     const running = {}; // accId -> { amount, currency }
     return list.map(s => {
@@ -2708,7 +2735,6 @@
 
   function renderChart() {
     const ctx = document.getElementById('chart');
-    if (chart) chart.destroy();
 
     let labels, datasets;
     let crossings = [];
@@ -2776,17 +2802,18 @@
       }
     }
 
-    // Custom plugin: draw goal line + milestone labels (only in total mode)
+    // Custom plugin: draw goal line + milestone labels (only in total mode).
+    // Reads chartOverlay (module scope) so the chart can be updated in place.
     const overlayPlugin = {
       id: 'goalAndMilestones',
       afterDatasetsDraw(chartInstance) {
-        if (chartMode !== 'total') return;
+        if (chartOverlay.mode !== 'total') return;
         const c = chartInstance.ctx;
         const area = chartInstance.chartArea;
         // Milestone labels above their crossing points
-        if (crossings.length) {
+        if (chartOverlay.crossings.length) {
           const meta = chartInstance.getDatasetMeta(0);
-          crossings.forEach(cr => {
+          chartOverlay.crossings.forEach(cr => {
             const pt = meta.data[cr.index];
             if (!pt) return;
             c.save();
@@ -2839,6 +2866,23 @@
         }
       }
     };
+
+    // What the overlay plugin draws this pass.
+    chartOverlay = { crossings, mode: chartMode };
+
+    if (chart) {
+      // Update in place — far cheaper than destroy()+new, and keeps the registered
+      // overlay plugin. Refresh data, legend state, and theme-derived colors.
+      chart.data = { labels, datasets };
+      chart.options.plugins.legend.display = chartMode !== 'total';
+      chart.options.plugins.legend.labels.color = cssVar('--text');
+      chart.options.scales.x.ticks.color = cssVar('--muted');
+      chart.options.scales.x.grid.color = cssVar('--grid');
+      chart.options.scales.y.ticks.color = cssVar('--muted');
+      chart.options.scales.y.grid.color = cssVar('--grid');
+      chart.update();
+      return;
+    }
 
     chart = new Chart(ctx, {
       type: 'line',
