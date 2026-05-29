@@ -536,7 +536,7 @@
   /* Feature cards (3-up) */
   .welcome-features {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 48px;
   }
@@ -1273,6 +1273,16 @@
       <div class="welcome-card">
         <div class="welcome-card-icon">
           <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 4 C14 11 15 12 22 12 C15 12 14 13 14 20 C14 13 13 12 6 12 C13 12 14 11 14 4 Z"/>
+            <path d="M24 18 C24 21 24.3 21.5 27 21.5 C24.3 21.5 24 22 24 25 C24 22 23.7 21.5 21 21.5 C23.7 21.5 24 21 24 18 Z"/>
+          </svg>
+        </div>
+        <div class="welcome-card-title" id="featSmpT">Simple by design</div>
+        <div class="welcome-card-desc" id="featSmpD">Just update a balance when you want — no transactions, no categories, no daily bookkeeping.</div>
+      </div>
+      <div class="welcome-card">
+        <div class="welcome-card-icon">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/>
             <circle cx="21" cy="21" r="7"/>
             <path d="M11 7v8M8 11h6"/>
@@ -1543,6 +1553,7 @@
       welcomePreviewLabel: '净资产',
       welcomePreviewChange: '今年至今',
       welcomeTrust: '6 种币种 · 离线可用 · 私密 · 开源',
+      featSmpT: '简单，不复杂', featSmpD: '想记的时候更新一下余额就好 —— 没有流水、没有分类、不用每天记账。',
       featMcyT: '六种币种，实时汇率', featMcyD: 'CNY、USD、JPY、EUR、SGD、HKD，每天自动同步最新外汇。',
       featNwT: '净资产，看得清', featNwD: '资产 / 负债、月度 / 年度走势、目标、入金 vs 涨跌的清晰拆解。',
       featPrvT: '数据完全归你', featPrvD: '无后端，无账号。可选同步到 iCloud Drive / Dropbox 中你自己挑的文件。',
@@ -1672,6 +1683,7 @@
       welcomePreviewLabel: 'Net worth',
       welcomePreviewChange: 'YTD',
       welcomeTrust: '6 currencies · offline · private · open source',
+      featSmpT: 'Simple by design', featSmpD: 'Just update a balance when you want — no transactions, no categories, no daily bookkeeping.',
       featMcyT: 'Six currencies, live rates', featMcyD: 'CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.',
       featNwT: 'Net worth, decomposed', featNwD: 'Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.',
       featPrvT: 'Yours, fully', featPrvD: 'No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.',
@@ -1801,6 +1813,7 @@
       welcomePreviewLabel: '純資産',
       welcomePreviewChange: '年初来',
       welcomeTrust: '6 通貨 · オフライン · プライベート · オープンソース',
+      featSmpT: 'シンプル設計', featSmpD: '残高を好きなときに更新するだけ。取引入力もカテゴリ分けも、毎日の記帳も不要。',
       featMcyT: '6 通貨、ライブレート', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、毎日自動でレート取得。',
       featNwT: '純資産を分解', featNwD: '資産と負債、今月 / 年初来の推移、目標、入金 vs 市場変動の分解。',
       featPrvT: '完全に自分のもの', featPrvD: 'バックエンドなし、アカウント不要。iCloud Drive 等のファイルへ任意で同期。',
@@ -4018,6 +4031,8 @@
     setText('welcomePreviewLabel', t('welcomePreviewLabel'));
     setText('welcomePreviewChange', t('welcomePreviewChange'));
     setText('welcomeTrust', t('welcomeTrust'));
+    setText('featSmpT', t('featSmpT'));
+    setText('featSmpD', t('featSmpD'));
     setText('featMcyT', t('featMcyT'));
     setText('featMcyD', t('featMcyD'));
     setText('featNwT', t('featNwT'));
