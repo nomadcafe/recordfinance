@@ -461,13 +461,18 @@
     transform: translateY(-2px);
     box-shadow: 0 12px 36px var(--accent-glow), 0 4px 10px rgba(0, 0, 0, 0.18);
   }
-  .welcome-actions button.link {
-    padding: 8px 0; color: var(--muted-strong); font-size: 14px;
+  .welcome-actions button.ghost {
+    padding: 13px 30px; font-size: 15px; font-weight: 600;
   }
-  .welcome-actions button.link:hover { color: var(--text); background: transparent; }
-  .welcome-actions button#welcomeDemoBtn {
-    color: var(--text); font-weight: 500;
+  .welcome-load-link {
+    display: inline-block;
+    margin-top: 18px;
+    padding: 4px 2px;
+    font-size: 13px;
+    color: var(--muted);
+    background: transparent;
   }
+  .welcome-load-link:hover { color: var(--muted-strong); background: transparent; box-shadow: none; transform: none; }
 
   /* Product preview card */
   .welcome-preview-wrap {
@@ -594,19 +599,23 @@
   .welcome-footer a { color: var(--muted-strong); text-decoration: none; transition: color 0.18s var(--ease); }
   .welcome-footer a:hover { color: var(--text); }
 
+  @media (max-width: 920px) {
+    .welcome-features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   @media (max-width: 860px) {
     .welcome-hero { grid-template-columns: 1fr; gap: 32px; }
-    .welcome-features { grid-template-columns: 1fr; }
     .welcome-title { font-size: 42px; }
     .welcome-tagline { font-size: 15px; }
     .welcome-preview { transform: rotate(0deg); max-width: 100%; }
   }
   @media (max-width: 640px) {
     .welcome-view { padding: 4px 4px 40px; margin-top: 8px; }
+    .welcome-features { grid-template-columns: 1fr; }
     .welcome-title { font-size: 36px; }
     .welcome-logo { width: 56px; height: 56px; border-radius: 18px; margin-bottom: 20px; }
     .welcome-card { padding: 22px 20px; border-radius: 16px; }
-    .welcome-actions button.primary { padding: 13px 32px; font-size: 14px; }
+    .welcome-actions button.primary,
+    .welcome-actions button.ghost { padding: 12px 26px; font-size: 14px; }
     .welcome-trust { margin-bottom: 36px; }
   }
 
@@ -1230,9 +1239,9 @@
         <p class="welcome-tagline" id="welcomeTagline">A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.</p>
         <div class="welcome-actions">
           <button class="primary" id="welcomeStartBtn">Start tracking</button>
-          <button class="link" id="welcomeDemoBtn">Try with sample data first →</button>
-          <button class="link" id="welcomeLoadBtn">Already have data? Load from sync file</button>
+          <button class="ghost" id="welcomeDemoBtn">Try with sample data →</button>
         </div>
+        <button class="link welcome-load-link" id="welcomeLoadBtn">Already have data? Load from a sync file →</button>
       </div>
       <div class="welcome-preview-wrap" aria-hidden="true">
         <div class="welcome-preview">
@@ -1267,7 +1276,7 @@
       </div>
     </section>
 
-    <div class="welcome-trust" id="welcomeTrust">6 currencies · offline · private · open source</div>
+    <div class="welcome-trust" id="welcomeTrust">simple · 6 currencies · offline · private · open source</div>
 
     <section class="welcome-features">
       <div class="welcome-card">
@@ -1552,7 +1561,7 @@
       welcomeTagline: '多币种净资产追踪器，只活在你的设备上。无账号、无服务器、无追踪。',
       welcomePreviewLabel: '净资产',
       welcomePreviewChange: '今年至今',
-      welcomeTrust: '6 种币种 · 离线可用 · 私密 · 开源',
+      welcomeTrust: '简单 · 6 种币种 · 离线可用 · 私密 · 开源',
       featSmpT: '简单，不复杂', featSmpD: '想记的时候更新一下余额就好 —— 没有流水、没有分类、不用每天记账。',
       featMcyT: '六种币种，实时汇率', featMcyD: 'CNY、USD、JPY、EUR、SGD、HKD，每天自动同步最新外汇。',
       featNwT: '净资产，看得清', featNwD: '资产 / 负债、月度 / 年度走势、目标、入金 vs 涨跌的清晰拆解。',
@@ -1682,13 +1691,13 @@
       welcomeTagline: 'A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.',
       welcomePreviewLabel: 'Net worth',
       welcomePreviewChange: 'YTD',
-      welcomeTrust: '6 currencies · offline · private · open source',
+      welcomeTrust: 'simple · 6 currencies · offline · private · open source',
       featSmpT: 'Simple by design', featSmpD: 'Just update a balance when you want — no transactions, no categories, no daily bookkeeping.',
       featMcyT: 'Six currencies, live rates', featMcyD: 'CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.',
       featNwT: 'Net worth, decomposed', featNwD: 'Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.',
       featPrvT: 'Yours, fully', featPrvD: 'No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.',
       welcomeStart: 'Start tracking',
-      welcomeTryDemo: 'Try with sample data first →',
+      welcomeTryDemo: 'Try with sample data →',
       welcomeLoadExisting: 'Already have data? Load from sync file',
       demoBannerMsg: 'Browsing sample data · click around to explore',
       demoClear: 'Clear & start with my own',
@@ -1812,7 +1821,7 @@
       welcomeTagline: '端末だけで動く、多通貨対応の純資産トラッカー。アカウント不要・サーバー不要・トラッキングなし。',
       welcomePreviewLabel: '純資産',
       welcomePreviewChange: '年初来',
-      welcomeTrust: '6 通貨 · オフライン · プライベート · オープンソース',
+      welcomeTrust: 'シンプル · 6 通貨 · オフライン · プライベート · オープンソース',
       featSmpT: 'シンプル設計', featSmpD: '残高を好きなときに更新するだけ。取引入力もカテゴリ分けも、毎日の記帳も不要。',
       featMcyT: '6 通貨、ライブレート', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、毎日自動でレート取得。',
       featNwT: '純資産を分解', featNwD: '資産と負債、今月 / 年初来の推移、目標、入金 vs 市場変動の分解。',
