@@ -267,6 +267,7 @@
     box-shadow: var(--shadow-lg);
     animation: modalIn 0.22s var(--ease);
   }
+  .modal:focus { outline: none; } /* container is focused programmatically on open */
   @keyframes modalIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
   .modal-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -1128,10 +1129,10 @@
     <button id="lockUnlockBtn" type="button">解锁</button>
   </div>
 
-  <div id="toastSlot"></div>
+  <div id="toastSlot" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="modal-overlay" id="prefsModal" hidden>
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="prefsLabel" tabindex="-1">
       <div class="modal-header">
         <h2 id="prefsLabel">偏好设置</h2>
         <button class="icon-btn modal-close" id="prefsCloseBtn" aria-label="Close">×</button>
@@ -1176,7 +1177,7 @@
   </div>
 
   <div class="modal-overlay" id="syncModal" hidden>
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="syncModalTitle" tabindex="-1">
       <div class="modal-header">
         <h2 id="syncModalTitle">本地文件同步</h2>
         <button class="icon-btn modal-close" id="syncCloseBtn" aria-label="Close">×</button>
@@ -3189,10 +3190,27 @@
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = state.theme === 'light' ? '#f7f8fc' : '#0a0e16';
   }
+  // Shared modal focus management: move focus into the dialog on open, restore it
+  // to whatever triggered the modal on close. (Esc / click-outside also route here.)
+  let lastFocusedBeforeModal = null;
+  function openModal(modal) {
+    lastFocusedBeforeModal = document.activeElement;
+    modal.hidden = false;
+    const dialog = modal.querySelector('.modal');
+    if (dialog) dialog.focus();
+  }
+  function closeModal(modal) {
+    modal.hidden = true;
+    if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+      lastFocusedBeforeModal.focus();
+    }
+    lastFocusedBeforeModal = null;
+  }
+
   // Preferences modal (settings)
   const prefsModal = document.getElementById('prefsModal');
-  function openPrefs() { prefsModal.hidden = false; }
-  function closePrefs() { prefsModal.hidden = true; }
+  function openPrefs() { openModal(prefsModal); }
+  function closePrefs() { closeModal(prefsModal); }
   document.getElementById('prefsBtn').addEventListener('click', openPrefs);
 
   // Logo / wordmark — drilldown? return to main. Otherwise scroll to top.
@@ -3334,11 +3352,11 @@
   // Sync modal (data safety — file sync + local snapshots)
   const syncModal = document.getElementById('syncModal');
   function openSync() {
-    syncModal.hidden = false;
+    openModal(syncModal);
     renderSync();
     renderSnapshotList();
   }
-  function closeSync() { syncModal.hidden = true; }
+  function closeSync() { closeModal(syncModal); }
   document.getElementById('syncBtn').addEventListener('click', openSync);
   document.getElementById('syncCloseBtn').addEventListener('click', closeSync);
   syncModal.addEventListener('click', e => { if (e.target === syncModal) closeSync(); });
