@@ -1,7 +1,7 @@
 {
   "name": "Record Finance",
   "short_name": "Record",
-  "description": "Private offline-first multi-currency net worth tracker",
+  "description": "Simple, private offline-first multi-currency net worth tracker",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
