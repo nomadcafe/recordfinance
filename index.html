@@ -1535,7 +1535,7 @@
       entry: '录入', editing: '编辑中',
       date: '日期', netInflowOptional: '本次净入金（可选）', noteOptional: '备注（可选）',
       notePlaceholder: '工资 / 月底盘点 …',
-      entryHint: '选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。',
+      entryHint: '选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。填了"净入金"并选好"流向账户"时，会自动把该账户余额预填成"上次余额 + 入金"，可再手动微调。汇率按记录日。',
       chooseAccount: '— 选择账户 —', addAnotherAccount: '+ 添加另一个账户', remove: '移除',
       inflowAccount: '流向账户（可选）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: '类别构成', byCurrency: '币种', byCategory: '类别',
@@ -1670,7 +1670,7 @@
       entry: 'New Entry', editing: 'Editing',
       date: 'Date', netInflowOptional: 'Net inflow (optional)', noteOptional: 'Note (optional)',
       notePlaceholder: 'Salary / Month-end check …',
-      entryHint: 'Pick the accounts you want to update and enter their new balance. Unselected accounts keep their last recorded value. "Net inflow" = how much of this change is money you added/withdrew (not market gain), letting us separate savings from market moves. Rates use the record date.',
+      entryHint: 'Pick the accounts you want to update and enter their new balance. Unselected accounts keep their last recorded value. "Net inflow" = how much of this change is money you added/withdrew (not market gain), letting us separate savings from market moves. When you enter a net inflow and pick a destination account, that account\'s new balance is pre-filled as "last balance + inflow" — you can still tweak it by hand. Rates use the record date.',
       chooseAccount: '— Choose account —', addAnotherAccount: '+ Add another account', remove: 'Remove',
       inflowAccount: 'Inflow account (optional)', inflowAccountUnspecified: '— Unspecified —',
       categoryComposition: 'Category Mix', byCurrency: 'Currency', byCategory: 'Category',
@@ -1805,7 +1805,7 @@
       entry: '記録', editing: '編集中',
       date: '日付', netInflowOptional: '今回の純入金（任意）', noteOptional: 'メモ（任意）',
       notePlaceholder: '給料 / 月末確認 …',
-      entryHint: '更新したい口座を選び、新しい残高を入力します。選ばれていない口座は前回の値を引き継ぎます。「純入金」 = 今回の変動のうち、自分が入出金した額（市場変動を除く）。貯蓄と相場変動を分けるために使います。レートは記録日のもの。',
+      entryHint: '更新したい口座を選び、新しい残高を入力します。選ばれていない口座は前回の値を引き継ぎます。「純入金」 = 今回の変動のうち、自分が入出金した額（市場変動を除く）。貯蓄と相場変動を分けるために使います。「純入金」を入力して「入金先口座」を選ぶと、その口座の新しい残高が「前回の残高 + 入金」で自動入力されます（手動で調整も可能）。レートは記録日のもの。',
       chooseAccount: '— 口座を選択 —', addAnotherAccount: '+ 別の口座を追加', remove: '削除',
       inflowAccount: '入金先口座（任意）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: 'カテゴリ構成', byCurrency: '通貨', byCategory: 'カテゴリ',
@@ -2404,6 +2404,64 @@
     return Number(prev.amount).toFixed(prev.currency === 'JPY' ? 0 : 2);
   }
 
+  // Rates for a given date, falling back to the most recent date we have — used by
+  // the inflow auto-fill so we can convert before the record date's rate is fetched.
+  function bestRatesForDate(date) {
+    if (state.rates[date]) return state.rates[date];
+    const dates = Object.keys(state.rates).sort();
+    return dates.length ? state.rates[dates[dates.length - 1]] : null;
+  }
+
+  // When the user enters a net inflow AND picks a destination account, pre-fill that
+  // account's new balance = last recorded balance + inflow. This makes "deposit to an
+  // account" actually move the total, instead of inflow being a pure annotation. The
+  // user can still hand-edit the amount afterward (which clears the auto-fill flag, so
+  // we stop overwriting it). A manually-typed balance is never clobbered.
+  function applyInflowAutofill() {
+    const accId = document.getElementById('inflowAccount').value;
+    const rawAmt = document.getElementById('inflow').value;
+    const inflowCur = document.getElementById('inflowCurrency').value;
+    const inflowAmt = parseFloat(rawAmt);
+    const valid = accId && rawAmt !== '' && !isNaN(inflowAmt) && inflowAmt !== 0;
+
+    let changed = false;
+    // Drop any previous auto-fill that no longer applies (inflow cleared, or target changed).
+    entryRows.forEach(row => {
+      if (row.autoFilled && (!valid || row.accountId !== accId)) {
+        row.amount = '';
+        row.autoFilled = false;
+        changed = true;
+      }
+    });
+
+    if (valid) {
+      let row = entryRows.find(r => r.accountId === accId);
+      const manualConflict = row && row.amount !== '' && !row.autoFilled;
+      if (!manualConflict) {
+        if (!row) {
+          row = entryRows.find(r => !r.accountId) || newEmptyRow();
+          if (!entryRows.includes(row)) entryRows.push(row);
+          row.accountId = accId;
+        }
+        const acc = accountById(accId);
+        const cur = currentSnapshot();
+        const prev = cur && cur.balances[accId];
+        const targetCur = prev ? prev.currency : (acc ? acc.currency : inflowCur);
+        const base = prev ? Number(prev.amount) : 0;
+        let conv = convert(inflowAmt, inflowCur, targetCur, bestRatesForDate(document.getElementById('date').value));
+        if (conv == null && inflowCur === targetCur) conv = inflowAmt;
+        if (conv != null) {
+          row.currency = targetCur;
+          row.amount = (base + conv).toFixed(targetCur === 'JPY' ? 0 : 2);
+          row.autoFilled = true;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) renderEntryForm();
+  }
+
   function renderEntryForm() {
     const wrap = document.getElementById('balanceRows');
     const addBtn = document.getElementById('addRowBtn');
@@ -2455,7 +2513,7 @@
       if (acc) row.currency = acc.currency;
       renderEntryForm();
     });
-    el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; });
+    el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; row.autoFilled = false; });
     el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
     el.querySelector('.row-remove').addEventListener('click', () => {
       entryRows = entryRows.filter(r => r.rowId !== row.rowId);
@@ -4529,6 +4587,10 @@
   populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
   document.getElementById('langSelect').value = state.language;
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  // Inflow → destination account: auto-fill that account's new balance (last + inflow).
+  document.getElementById('inflow').addEventListener('input', applyInflowAutofill);
+  document.getElementById('inflowCurrency').addEventListener('change', applyInflowAutofill);
+  document.getElementById('inflowAccount').addEventListener('change', applyInflowAutofill);
   applyTheme();
   applyI18n();
 
