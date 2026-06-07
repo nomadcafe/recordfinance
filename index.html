@@ -1450,17 +1450,6 @@
             <button type="button" class="date-chip" data-date="lastMonthEnd" id="dateLastMonthEnd">上月末</button>
           </div>
         </div>
-        <div class="field" style="max-width: 220px;">
-          <label for="inflow">本次净入金（可选）</label>
-          <div class="input-currency">
-            <input type="number" inputmode="decimal" step="any" id="inflow" placeholder="0">
-            <select id="inflowCurrency"></select>
-          </div>
-        </div>
-        <div class="field" style="max-width: 200px;">
-          <label for="inflowAccount">流向账户（可选）</label>
-          <select id="inflowAccount"></select>
-        </div>
         <div class="field" style="flex: 2; min-width: 180px;">
           <label for="note">备注（可选）</label>
           <input type="text" id="note" placeholder="工资 / 月底盘点 …">
@@ -1535,7 +1524,7 @@
       entry: '录入', editing: '编辑中',
       date: '日期', netInflowOptional: '本次净入金（可选）', noteOptional: '备注（可选）',
       notePlaceholder: '工资 / 月底盘点 …',
-      entryHint: '选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。填了"净入金"并选好"流向账户"时，会自动把该账户余额预填成"上次余额 + 入金"，可再手动微调。汇率按记录日。',
+      entryHint: '选择要更新的账户填入新余额。未选的账户沿用最近一次的值。每行的"其中入金" = 这次该账户余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开；填了"其中入金"会自动把该行新余额预填成"上次余额 + 入金"（负债账户填借/还的方向），可再手动微调。汇率按记录日。',
       chooseAccount: '— 选择账户 —', addAnotherAccount: '+ 添加另一个账户', remove: '移除',
       inflowAccount: '流向账户（可选）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: '类别构成', byCurrency: '币种', byCategory: '类别',
@@ -1670,7 +1659,7 @@
       entry: 'New Entry', editing: 'Editing',
       date: 'Date', netInflowOptional: 'Net inflow (optional)', noteOptional: 'Note (optional)',
       notePlaceholder: 'Salary / Month-end check …',
-      entryHint: 'Pick the accounts you want to update and enter their new balance. Unselected accounts keep their last recorded value. "Net inflow" = how much of this change is money you added/withdrew (not market gain), letting us separate savings from market moves. When you enter a net inflow and pick a destination account, that account\'s new balance is pre-filled as "last balance + inflow" — you can still tweak it by hand. Rates use the record date.',
+      entryHint: 'Pick the accounts you want to update and enter their new balance. Unselected accounts keep their last recorded value. A row\'s "of which inflow" = how much of that account\'s change is money you added/withdrew (not market gain), letting us separate savings from market moves. Entering an inflow pre-fills that row\'s new balance as "last balance + inflow" (in the account\'s own direction for liabilities) — you can still tweak it by hand. Rates use the record date.',
       chooseAccount: '— Choose account —', addAnotherAccount: '+ Add another account', remove: 'Remove',
       inflowAccount: 'Inflow account (optional)', inflowAccountUnspecified: '— Unspecified —',
       categoryComposition: 'Category Mix', byCurrency: 'Currency', byCategory: 'Category',
@@ -1805,7 +1794,7 @@
       entry: '記録', editing: '編集中',
       date: '日付', netInflowOptional: '今回の純入金（任意）', noteOptional: 'メモ（任意）',
       notePlaceholder: '給料 / 月末確認 …',
-      entryHint: '更新したい口座を選び、新しい残高を入力します。選ばれていない口座は前回の値を引き継ぎます。「純入金」 = 今回の変動のうち、自分が入出金した額（市場変動を除く）。貯蓄と相場変動を分けるために使います。「純入金」を入力して「入金先口座」を選ぶと、その口座の新しい残高が「前回の残高 + 入金」で自動入力されます（手動で調整も可能）。レートは記録日のもの。',
+      entryHint: '更新したい口座を選び、新しい残高を入力します。選ばれていない口座は前回の値を引き継ぎます。各行の「うち入金」 = その口座の今回の変動のうち、自分が入出金した額（市場変動を除く）。貯蓄と相場変動を分けるために使います。「うち入金」を入力すると、その行の新しい残高が「前回の残高 + 入金」で自動入力されます（負債は増減の方向で）。手動調整も可能。レートは記録日のもの。',
       chooseAccount: '— 口座を選択 —', addAnotherAccount: '+ 別の口座を追加', remove: '削除',
       inflowAccount: '入金先口座（任意）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: 'カテゴリ構成', byCurrency: '通貨', byCategory: 'カテゴリ',
@@ -2308,17 +2297,6 @@
     ).join('');
   }
 
-  function populateInflowAccountSelect() {
-    const sel = document.getElementById('inflowAccount');
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = `<option value="">${t('inflowAccountUnspecified')}</option>` +
-      state.accounts.map(a => {
-        const liab = a.type === 'liability' ? ` · ${t('liabBadge')}` : '';
-        return `<option value="${a.id}" ${a.id === current ? 'selected' : ''}>${escapeHtml(a.name + liab)}</option>`;
-      }).join('');
-  }
-
   // ===== Account management =====
   function renderAccountList() {
     const wrap = document.getElementById('accountList');
@@ -2412,54 +2390,32 @@
     return dates.length ? state.rates[dates[dates.length - 1]] : null;
   }
 
-  // When the user enters a net inflow AND picks a destination account, pre-fill that
-  // account's new balance = last recorded balance + inflow. This makes "deposit to an
-  // account" actually move the total, instead of inflow being a pure annotation. The
-  // user can still hand-edit the amount afterward (which clears the auto-fill flag, so
-  // we stop overwriting it). A manually-typed balance is never clobbered.
-  function applyInflowAutofill() {
-    const accId = document.getElementById('inflowAccount').value;
-    const rawAmt = document.getElementById('inflow').value;
-    const inflowCur = document.getElementById('inflowCurrency').value;
-    const inflowAmt = parseFloat(rawAmt);
-    const valid = accId && rawAmt !== '' && !isNaN(inflowAmt) && inflowAmt !== 0;
-
-    let changed = false;
-    // Drop any previous auto-fill that no longer applies (inflow cleared, or target changed).
-    entryRows.forEach(row => {
-      if (row.autoFilled && (!valid || row.accountId !== accId)) {
-        row.amount = '';
-        row.autoFilled = false;
-        changed = true;
-      }
-    });
-
-    if (valid) {
-      let row = entryRows.find(r => r.accountId === accId);
-      const manualConflict = row && row.amount !== '' && !row.autoFilled;
-      if (!manualConflict) {
-        if (!row) {
-          row = entryRows.find(r => !r.accountId) || newEmptyRow();
-          if (!entryRows.includes(row)) entryRows.push(row);
-          row.accountId = accId;
-        }
-        const acc = accountById(accId);
-        const cur = currentSnapshot();
-        const prev = cur && cur.balances[accId];
-        const targetCur = prev ? prev.currency : (acc ? acc.currency : inflowCur);
-        const base = prev ? Number(prev.amount) : 0;
-        let conv = convert(inflowAmt, inflowCur, targetCur, bestRatesForDate(document.getElementById('date').value));
-        if (conv == null && inflowCur === targetCur) conv = inflowAmt;
-        if (conv != null) {
-          row.currency = targetCur;
-          row.amount = (base + conv).toFixed(targetCur === 'JPY' ? 0 : 2);
-          row.autoFilled = true;
-          changed = true;
-        }
-      }
+  // When the user types a row's inflow ("其中入金"), pre-fill that row's new balance =
+  // last recorded balance + inflow, so recording a deposit/withdrawal actually moves the
+  // total instead of inflow being a pure annotation. Per-row inflow is in the account's
+  // own balance-change direction (for a liability, +inflow = owed went up), so it adds
+  // directly — no per-type sign needed. Returns true if row.amount changed.
+  // A manually-typed balance is never clobbered; a hand-edit clears the auto-fill flag.
+  function autofillRowBalance(row) {
+    if (!row.accountId) return false;
+    const raw = row.inflow;
+    const inflowAmt = parseFloat(raw);
+    if (raw === '' || isNaN(inflowAmt) || inflowAmt === 0) {
+      if (row.autoFilled) { row.amount = ''; row.autoFilled = false; return true; }
+      return false;
     }
-
-    if (changed) renderEntryForm();
+    if (row.amount !== '' && !row.autoFilled) return false; // don't clobber a manual balance
+    const cur = currentSnapshot();
+    const prev = cur && cur.balances[row.accountId];
+    let base = 0;
+    if (prev) {
+      base = prev.currency === row.currency
+        ? Number(prev.amount)
+        : (convert(Number(prev.amount), prev.currency, row.currency, bestRatesForDate(document.getElementById('date').value)) ?? 0);
+    }
+    row.amount = (base + inflowAmt).toFixed(row.currency === 'JPY' ? 0 : 2);
+    row.autoFilled = true;
+    return true;
   }
 
   function renderEntryForm() {
@@ -2514,7 +2470,14 @@
       renderEntryForm();
     });
     el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; row.autoFilled = false; });
-    el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
+    el.querySelector('.cur-sel').addEventListener('change', e => {
+      row.currency = e.target.value;
+      // Re-derive an auto-filled balance in the new currency (and refresh the unit shown
+      // next to the per-row inflow). A manual balance is left untouched.
+      if (row.autoFilled) { autofillRowBalance(row); el.querySelector('.amt-input').value = row.amount; }
+      const unit = group.querySelector('.row-inflow-mini span');
+      if (unit) unit.textContent = row.currency;
+    });
     el.querySelector('.row-remove').addEventListener('click', () => {
       entryRows = entryRows.filter(r => r.rowId !== row.rowId);
       if (entryRows.length === 0) entryRows = [newEmptyRow()];
@@ -2532,7 +2495,12 @@
         <input type="number" inputmode="decimal" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
         <span style="color: var(--muted);">${row.currency}</span>
       `;
-      inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => { row.inflow = e.target.value; });
+      inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => {
+        row.inflow = e.target.value;
+        // Auto-fill this row's balance in place. Don't re-render the form (that would
+        // blur the inflow field the user is typing into) — just sync the amount input.
+        if (autofillRowBalance(row)) el.querySelector('.amt-input').value = row.amount;
+      });
       group.appendChild(inflowMini);
     }
 
@@ -2567,33 +2535,17 @@
       alert(t('alertNoBalance'));
       return;
     }
-    const inflowRaw = document.getElementById('inflow').value;
-    let inflow = null;
-    if (inflowRaw !== '') {
-      const amt = parseFloat(inflowRaw);
-      if (!isNaN(amt)) {
-        inflow = { amount: amt, currency: document.getElementById('inflowCurrency').value };
-        const accId = document.getElementById('inflowAccount').value;
-        if (accId) inflow.accountId = accId;
-      }
-    }
     if (editingId) {
       const snap = state.snapshots.find(s => s.id === editingId);
-      if (snap) {
-        snap.date = date; snap.note = note; snap.updates = updates;
-        if (inflow) snap.inflow = inflow; else delete snap.inflow;
-      }
+      if (snap) { snap.date = date; snap.note = note; snap.updates = updates; }
       editingId = null;
     } else {
       const snap = { id: crypto.randomUUID(), date, updates, note, createdAt: Date.now() };
-      if (inflow) snap.inflow = inflow;
       state.snapshots.push(snap);
     }
     markDirty();
     entryRows = [newEmptyRow()];
     document.getElementById('note').value = '';
-    document.getElementById('inflow').value = '';
-    document.getElementById('inflowAccount').value = '';
     document.getElementById('date').value = localDateStr();
     await ensureRates([date]);
     renderAll();
@@ -2616,14 +2568,6 @@
     renderAll();
     document.getElementById('date').value = snap.date;
     document.getElementById('note').value = snap.note || '';
-    if (snap.inflow) {
-      document.getElementById('inflow').value = snap.inflow.amount;
-      document.getElementById('inflowCurrency').value = snap.inflow.currency;
-      document.getElementById('inflowAccount').value = snap.inflow.accountId || '';
-    } else {
-      document.getElementById('inflow').value = '';
-      document.getElementById('inflowAccount').value = '';
-    }
     document.getElementById('entryPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -2631,8 +2575,6 @@
     editingId = null;
     entryRows = [newEmptyRow()];
     document.getElementById('note').value = '';
-    document.getElementById('inflow').value = '';
-    document.getElementById('inflowAccount').value = '';
     document.getElementById('date').value = localDateStr();
     renderAll();
   }
@@ -4290,8 +4232,6 @@
     const setLabelFor = (id, v) => { const el = document.querySelector(`label[for="${id}"]`); if (el) el.textContent = v; };
     setLabelFor('displayCurrency', t('displayCurrency'));
     setLabelFor('date', t('date'));
-    setLabelFor('inflow', t('netInflowOptional'));
-    setLabelFor('inflowAccount', t('inflowAccount'));
     setLabelFor('note', t('noteOptional'));
 
     const setPh = (id, v) => { const el = document.getElementById(id); if (el) el.placeholder = v; };
@@ -4316,7 +4256,7 @@
       ).join('');
     }
 
-    ['displayCurrency', 'newAccountCurrency', 'inflowCurrency', 'goalCurrencySel'].forEach(id => {
+    ['displayCurrency', 'newAccountCurrency', 'goalCurrencySel'].forEach(id => {
       const sel = document.getElementById(id);
       if (sel) populateCurrencySelect(sel, sel.value || state.displayCurrency);
     });
@@ -4554,7 +4494,6 @@
     document.getElementById('entryPanel').classList.toggle('editing', !!editingId);
     document.getElementById('demoBanner').hidden = !state.isDemo;
     renderBackupBanner();
-    populateInflowAccountSelect();
     document.querySelectorAll('#basisSeg button').forEach(b =>
       b.classList.toggle('active', b.dataset.basis === state.basis)
     );
@@ -4583,14 +4522,9 @@
   // ===== Init =====
   populateCurrencySelect(document.getElementById('displayCurrency'), state.displayCurrency);
   populateCurrencySelect(document.getElementById('newAccountCurrency'), state.displayCurrency);
-  populateCurrencySelect(document.getElementById('inflowCurrency'), state.displayCurrency);
   populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
   document.getElementById('langSelect').value = state.language;
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
-  // Inflow → destination account: auto-fill that account's new balance (last + inflow).
-  document.getElementById('inflow').addEventListener('input', applyInflowAutofill);
-  document.getElementById('inflowCurrency').addEventListener('change', applyInflowAutofill);
-  document.getElementById('inflowAccount').addEventListener('change', applyInflowAutofill);
   applyTheme();
   applyI18n();
 
