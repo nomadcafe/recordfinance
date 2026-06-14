@@ -1625,6 +1625,8 @@
       syncPickHasData: (remote, local) => `该文件已有 ${remote} 条记录，本地有 ${local} 条。\n\n确定 = 从文件加载（本地会被覆盖）\n取消 = 用本地覆盖该文件（文件内容会丢失）`,
       syncPaused: name => `同步已暂停 · ${name}`,
       syncReconnect: '重新授权',
+      syncRelinkNeeded: '同步链接已失效（找不到文件句柄），请重新选择文件',
+      syncRelink: '重新选择文件',
       save: '保存', update: '更新', cancelEdit: '取消编辑',
       export: '导出', import: '导入', exportCsv: 'CSV', exportCsvTitle: '导出为 CSV 表格（按日期 × 账户）',
       balanceTrend: '余额走势', totalLegend: '总余额', byAccount: '各账户',
@@ -1763,6 +1765,8 @@
       syncPickHasData: (remote, local) => `This file already has ${remote} records; local has ${local}.\n\nOK = load from the file (local will be replaced)\nCancel = overwrite the file with local data (file contents will be lost)`,
       syncPaused: name => `Sync paused · ${name}`,
       syncReconnect: 'Reconnect',
+      syncRelinkNeeded: 'Sync link is no longer valid (file handle missing) — please re-select the file',
+      syncRelink: 'Re-select file',
       save: 'Save', update: 'Update', cancelEdit: 'Cancel',
       export: 'Export', import: 'Import', exportCsv: 'CSV', exportCsvTitle: 'Export as CSV spreadsheet (date × account)',
       balanceTrend: 'Balance Trend', totalLegend: 'Total', byAccount: 'By Account',
@@ -1901,6 +1905,8 @@
       syncPickHasData: (remote, local) => `このファイルには既に ${remote} 件、ローカルには ${local} 件あります。\n\nOK = ファイルから読み込む（ローカルは上書きされます）\nキャンセル = ローカルでファイルを上書き（ファイルの内容が失われます）`,
       syncPaused: name => `同期を一時停止中 · ${name}`,
       syncReconnect: '再認証',
+      syncRelinkNeeded: '同期リンクが無効です（ファイルハンドルが見つかりません）。ファイルを選び直してください',
+      syncRelink: 'ファイルを選び直す',
       save: '保存', update: '更新', cancelEdit: 'キャンセル',
       export: 'エクスポート', import: 'インポート', exportCsv: 'CSV', exportCsvTitle: 'CSV（日付 × 口座）として出力',
       balanceTrend: '残高推移', totalLegend: '総残高', byAccount: '口座別',
@@ -4009,6 +4015,11 @@
   let autoSyncTimer = null;
   let autoSyncing = false;
   let syncPermissionPaused = false;
+  // localStorage remembers the linked fileName, but the actual FileSystemFileHandle
+  // lives in IndexedDB. The two can drift apart (IDB evicted, profile copied, etc.),
+  // leaving us "linked" with no handle — every sync op then dead-ends. Track that so
+  // the UI can prompt a re-link instead of silently failing.
+  let syncHandleMissing = false;
   function scheduleAutoSync() {
     if (!SUPPORTS_FS || !state.sync || !state.sync.fileName) return;
     if (autoSyncTimer) clearTimeout(autoSyncTimer);
@@ -4018,7 +4029,10 @@
       if (autoSyncing) { scheduleAutoSync(); return; }
       try {
         const handle = await getSyncHandle();
-        if (!handle) return;
+        // Linked but the handle is gone — surface a re-link prompt instead of silently
+        // never syncing again (which is how a stale link goes unnoticed for weeks).
+        if (!handle) { syncHandleMissing = true; renderSync(); return; }
+        syncHandleMissing = false;
         // Only proceed if permission already granted (no prompt during background sync).
         const perm = await handle.queryPermission?.({ mode: 'readwrite' });
         if (perm !== 'granted') { syncPermissionPaused = true; renderSync(); return; }
@@ -4070,9 +4084,10 @@
   // Reflect whether the OS still grants us access to the linked file (Chrome revokes
   // readwrite grants across browser restarts), so the UI can show "sync paused".
   async function refreshSyncPermissionState() {
-    if (!SUPPORTS_FS || !state.sync || !state.sync.fileName) { syncPermissionPaused = false; return; }
+    if (!SUPPORTS_FS || !state.sync || !state.sync.fileName) { syncPermissionPaused = false; syncHandleMissing = false; return; }
     const handle = await getSyncHandle();
-    if (!handle) { syncPermissionPaused = false; return; }
+    if (!handle) { syncHandleMissing = true; syncPermissionPaused = false; renderSync(); return; }
+    syncHandleMissing = false;
     const perm = await handle.queryPermission?.({ mode: 'readwrite' });
     syncPermissionPaused = perm !== 'granted';
     renderSync();
@@ -4157,6 +4172,7 @@
       headerBtn.classList.toggle('linked', !!linked);
       let title;
       if (autoSyncing) title = t('autoSyncing');
+      else if (linked && syncHandleMissing) title = t('syncRelinkNeeded');
       else if (linked && syncPermissionPaused) title = t('syncPaused', state.sync.fileName);
       else if (linked) {
         const last = state.sync.lastSync ? ' ' + t('syncLastSync', new Date(state.sync.lastSync).toLocaleString()) : '';
@@ -4180,12 +4196,20 @@
     fsBlock.hidden = false;
     manualBlock.hidden = true;
     const linked = state.sync && state.sync.fileName;
-    document.getElementById('syncPickBtn').hidden = !!linked;
-    document.getElementById('syncPushBtn').hidden = !linked;
-    document.getElementById('syncPullBtn').hidden = !linked;
+    // Handle gone → the link is dead; surface "re-select file" (the pick button) and
+    // hide push/pull (they'd only error) until the user re-links.
+    const broken = linked && syncHandleMissing;
+    document.getElementById('syncPickBtn').hidden = !!linked && !broken;
+    document.getElementById('syncPushBtn').hidden = !linked || broken;
+    document.getElementById('syncPullBtn').hidden = !linked || broken;
     document.getElementById('syncUnlinkBtn').hidden = !linked;
     const status = document.getElementById('syncStatus');
-    if (linked && syncPermissionPaused) {
+    if (broken) {
+      status.innerHTML = escapeHtml(t('syncRelinkNeeded')) +
+        ` <button type="button" class="link" id="syncRelinkBtn">${escapeHtml(t('syncRelink'))}</button>`;
+      const rb = document.getElementById('syncRelinkBtn');
+      if (rb) rb.addEventListener('click', pickSyncFile);
+    } else if (linked && syncPermissionPaused) {
       status.innerHTML = escapeHtml(t('syncPaused', state.sync.fileName)) +
         ` <button type="button" class="link" id="syncReconnectBtn">${escapeHtml(t('syncReconnect'))}</button>`;
       const rb = document.getElementById('syncReconnectBtn');
@@ -4322,6 +4346,7 @@
       state.sync = { fileName: handle.name };
       save();
       syncPermissionPaused = false;
+      syncHandleMissing = false; // fresh handle just stored — link is live again
       renderSync();
 
       const remoteCount = remote && Array.isArray(remote.snapshots) ? remote.snapshots.length : 0;
@@ -4342,10 +4367,21 @@
     }
   }
 
+  // Linked-but-no-handle: the stored fileName outlived its IndexedDB handle. Flag it so
+  // the UI offers a re-link, and tell the user, instead of a cryptic "no file linked".
+  function reportMissingHandle() {
+    if (state.sync && state.sync.fileName) {
+      syncHandleMissing = true; renderSync();
+      showToast(t('syncRelinkNeeded'));
+    } else {
+      showToast(t('syncFail', 'no file linked'));
+    }
+  }
+
   async function syncPush() {
     if (!SUPPORTS_FS) return;
     const handle = await getSyncHandle();
-    if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
+    if (!handle) { reportMissingHandle(); return; }
     if (!(await verifyPermission(handle, true))) { showToast(t('syncFail', 'permission denied')); return; }
     try {
       await writeStateToFile(handle);
@@ -4359,7 +4395,7 @@
   async function syncPull() {
     if (!SUPPORTS_FS) return;
     const handle = await getSyncHandle();
-    if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
+    if (!handle) { reportMissingHandle(); return; }
     // readwrite: a merge writes the union back to the file.
     if (!(await verifyPermission(handle, true))) { showToast(t('syncFail', 'permission denied')); return; }
     try {
@@ -4376,6 +4412,7 @@
     if (!confirm(t('syncUnlinkConfirm'))) return;
     await idbDelete(IDB_HANDLE_KEY);
     state.sync = null;
+    syncHandleMissing = false;
     save();
     renderSync();
   }
