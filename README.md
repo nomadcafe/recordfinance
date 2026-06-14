@@ -11,7 +11,7 @@ Your data never leaves your device.
 
 ## Features
 
-- **Multi-currency** — CNY, USD, JPY, EUR, SGD, HKD with automatic exchange rates
+- **Multi-currency** — CNY, USD, JPY, EUR, GBP, HKD, SGD, TWD, KRW, AUD, CAD, CHF, INR, THB, MYR with automatic exchange rates
 - **Asset / liability accounts** with categories (cash, savings, investment, property, crypto, other)
 - **Net worth or total assets** — switch the entire app's basis with one toggle
 - **Goal tracking** with ETA estimation and milestone celebrations

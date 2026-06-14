@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <title>Record · Private Multi-Currency Net Worth Tracker</title>
-<meta name="description" content="Simple net worth tracking across CNY, USD, JPY, EUR, SGD, HKD with auto exchange rates. No complicated bookkeeping. Privacy-first, offline-capable PWA — your data never leaves your device. Free.">
+<meta name="description" content="Simple net worth tracking across CNY, USD, JPY, EUR, GBP and more with auto exchange rates. No complicated bookkeeping. Privacy-first, offline-capable PWA — your data never leaves your device. Free.">
 <meta name="keywords" content="net worth tracker, multi-currency, privacy, offline, PWA, personal finance, asset tracker, wealth tracker, 净资产, 记账, 多币种, 财富追踪, 家計簿, 純資産, foreign currency tracker">
 <meta name="author" content="Record Finance">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -15,7 +15,7 @@
 
 <!-- Open Graph -->
 <meta property="og:title" content="Record · Private Net Worth Tracker">
-<meta property="og:description" content="Simple multi-currency (CNY/USD/JPY/EUR/SGD/HKD) net worth tracking — no complicated bookkeeping. Privacy-first, offline-capable. Your data stays on your device.">
+<meta property="og:description" content="Simple multi-currency (CNY/USD/JPY/EUR/GBP+) net worth tracking — no complicated bookkeeping. Privacy-first, offline-capable. Your data stays on your device.">
 <meta property="og:url" content="https://record.finance/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Record">
@@ -58,7 +58,7 @@
   "name": "Record",
   "alternateName": ["Record Finance", "记账", "家計簿"],
   "url": "https://record.finance/",
-  "description": "Simple, privacy-first multi-currency net worth tracker. Track your assets and liabilities across CNY, USD, JPY, EUR, SGD, HKD with automatic exchange rates — no complicated bookkeeping. Offline-capable PWA — your data never leaves your device.",
+  "description": "Simple, privacy-first multi-currency net worth tracker. Track your assets and liabilities across CNY, USD, JPY, EUR, GBP and more with automatic exchange rates — no complicated bookkeeping. Offline-capable PWA — your data never leaves your device.",
   "applicationCategory": "FinanceApplication",
   "applicationSubCategory": "Net Worth Tracker",
   "operatingSystem": "Web Browser",
@@ -71,7 +71,7 @@
     "priceCurrency": "USD"
   },
   "featureList": [
-    "Multi-currency support (CNY, USD, JPY, EUR, SGD, HKD)",
+    "Multi-currency support (CNY, USD, JPY, EUR, GBP and more)",
     "Automatic exchange rates",
     "Offline-capable Progressive Web App",
     "Privacy-first — data stays on device",
@@ -1103,12 +1103,12 @@
   <noscript>
     <div style="max-width: 720px; margin: 60px auto; padding: 24px; color: #e9edf5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6;">
       <h1 style="color: #4ade80;">Record · Net Worth Tracker</h1>
-      <p>Record is a privacy-first multi-currency net worth tracker. Track assets and liabilities across CNY, USD, JPY, EUR, SGD, HKD with automatic exchange rates. Offline-capable PWA.</p>
+      <p>Record is a privacy-first multi-currency net worth tracker. Track assets and liabilities across CNY, USD, JPY, EUR, GBP and more with automatic exchange rates. Offline-capable PWA.</p>
       <p><strong>Your data never leaves your device.</strong> No accounts, no servers, no analytics.</p>
       <p style="color: #f87171;">This app requires JavaScript. Please enable JavaScript and reload the page.</p>
       <h2>Features</h2>
       <ul>
-        <li>Multi-currency: CNY, USD, JPY, EUR, SGD, HKD</li>
+        <li>Multi-currency: CNY, USD, JPY, EUR, GBP and more</li>
         <li>Asset / liability accounts with categories</li>
         <li>Net worth tracking with MTD / YTD / YoY views</li>
         <li>Net worth goal with ETA</li>
@@ -1286,13 +1286,13 @@
             <span class="preview-chip">CNY</span>
             <span class="preview-chip">USD</span>
             <span class="preview-chip">JPY</span>
-            <span class="preview-chip preview-chip-more">+3</span>
+            <span class="preview-chip preview-chip-more">+12</span>
           </div>
         </div>
       </div>
     </section>
 
-    <div class="welcome-trust" id="welcomeTrust">simple · 6 currencies · offline · private · open source</div>
+    <div class="welcome-trust" id="welcomeTrust">simple · multi-currency · offline · private · open source</div>
 
     <section class="welcome-features">
       <div class="welcome-card">
@@ -1314,8 +1314,8 @@
             <path d="M18 18l6 6M24 18l-6 6"/>
           </svg>
         </div>
-        <div class="welcome-card-title" id="featMcyT">Six currencies, live rates</div>
-        <div class="welcome-card-desc" id="featMcyD">CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.</div>
+        <div class="welcome-card-title" id="featMcyT">Many currencies, live rates</div>
+        <div class="welcome-card-desc" id="featMcyD">CNY, USD, JPY, EUR, GBP and more major currencies — exchange rates auto-fetched daily.</div>
       </div>
       <div class="welcome-card">
         <div class="welcome-card-icon">
@@ -1462,6 +1462,7 @@
         <button type="submit" id="saveBtn" disabled>保存</button>
         <button type="button" class="link" id="cancelEditBtn" hidden>取消编辑</button>
         <button type="button" class="ghost" id="exportBtn" style="margin-left: auto;">导出</button>
+        <button type="button" class="ghost" id="exportCsvBtn">CSV</button>
         <button type="button" class="ghost" id="importBtn">导入</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
       </div>
@@ -1528,7 +1529,7 @@
       chooseAccount: '— 选择账户 —', addAnotherAccount: '+ 添加另一个账户', remove: '移除',
       inflowAccount: '流向账户（可选）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: '类别构成', byCurrency: '币种', byCategory: '类别',
-      categories: { cash: '现金', savings: '储蓄', investment: '投资', property: '房产', crypto: '加密', other: '其他' },
+      categories: { cash: '现金', savings: '储蓄', investment: '投资', property: '房产', crypto: '加密', other: '其他', mortgage: '房贷', creditCard: '信用卡', loan: '贷款' },
       back: '← 返回',
       preferences: '偏好设置',
       theme: '切换主题',
@@ -1568,9 +1569,9 @@
       welcomeTagline: '多币种净资产追踪器，只活在你的设备上。无账号、无服务器、无追踪。',
       welcomePreviewLabel: '净资产',
       welcomePreviewChange: '今年至今',
-      welcomeTrust: '简单 · 6 种币种 · 离线可用 · 私密 · 开源',
+      welcomeTrust: '简单 · 多币种 · 离线可用 · 私密 · 开源',
       featSmpT: '简单，不复杂', featSmpD: '想记的时候更新一下余额就好 —— 没有流水、没有分类、不用每天记账。',
-      featMcyT: '六种币种，实时汇率', featMcyD: 'CNY、USD、JPY、EUR、SGD、HKD，每天自动同步最新外汇。',
+      featMcyT: '多种币种，实时汇率', featMcyD: 'CNY、USD、JPY、EUR、GBP 等主流币种，每天自动同步最新外汇。',
       featNwT: '净资产，看得清', featNwD: '资产 / 负债、月度 / 年度走势、目标、入金 vs 涨跌的清晰拆解。',
       featPrvT: '数据完全归你', featPrvD: '无后端，无账号。可选同步到 iCloud Drive / Dropbox 中你自己挑的文件。',
       welcomeStart: '开始记录',
@@ -1622,7 +1623,7 @@
       syncPaused: name => `同步已暂停 · ${name}`,
       syncReconnect: '重新授权',
       save: '保存', update: '更新', cancelEdit: '取消编辑',
-      export: '导出', import: '导入',
+      export: '导出', import: '导入', exportCsv: 'CSV', exportCsvTitle: '导出为 CSV 表格（按日期 × 账户）',
       balanceTrend: '余额走势', totalLegend: '总余额', byAccount: '各账户',
       history: '历史记录',
       historyDate: '日期', historyUpdates: '更新', historyTotal: '当日总余额', historyNote: '备注',
@@ -1639,7 +1640,7 @@
       liabBadge: '负债', deletedAccount: '(已删除)',
       original: text => `原 ${text}`,
       defaultAccountName: '余额',
-      currencies: { CNY: '人民币 CNY', USD: '美元 USD', JPY: '日元 JPY', EUR: '欧元 EUR', SGD: '新加坡元 SGD', HKD: '港元 HKD' },
+      currencies: { CNY: '人民币 CNY', USD: '美元 USD', JPY: '日元 JPY', EUR: '欧元 EUR', GBP: '英镑 GBP', HKD: '港元 HKD', SGD: '新加坡元 SGD', TWD: '新台币 TWD', KRW: '韩元 KRW', AUD: '澳元 AUD', CAD: '加元 CAD', CHF: '瑞士法郎 CHF', INR: '印度卢比 INR', THB: '泰铢 THB', MYR: '林吉特 MYR' },
     },
     en: {
       htmlLang: 'en',
@@ -1663,7 +1664,7 @@
       chooseAccount: '— Choose account —', addAnotherAccount: '+ Add another account', remove: 'Remove',
       inflowAccount: 'Inflow account (optional)', inflowAccountUnspecified: '— Unspecified —',
       categoryComposition: 'Category Mix', byCurrency: 'Currency', byCategory: 'Category',
-      categories: { cash: 'Cash', savings: 'Savings', investment: 'Investment', property: 'Property', crypto: 'Crypto', other: 'Other' },
+      categories: { cash: 'Cash', savings: 'Savings', investment: 'Investment', property: 'Property', crypto: 'Crypto', other: 'Other', mortgage: 'Mortgage', creditCard: 'Credit card', loan: 'Loan' },
       back: '← Back',
       preferences: 'Preferences',
       theme: 'Toggle theme',
@@ -1703,9 +1704,9 @@
       welcomeTagline: 'A multi-currency net worth tracker that lives on your device. No accounts, no servers, no tracking.',
       welcomePreviewLabel: 'Net worth',
       welcomePreviewChange: 'YTD',
-      welcomeTrust: 'simple · 6 currencies · offline · private · open source',
+      welcomeTrust: 'simple · multi-currency · offline · private · open source',
       featSmpT: 'Simple by design', featSmpD: 'Just update a balance when you want — no transactions, no categories, no daily bookkeeping.',
-      featMcyT: 'Six currencies, live rates', featMcyD: 'CNY, USD, JPY, EUR, SGD, HKD — exchange rates auto-fetched daily.',
+      featMcyT: 'Many currencies, live rates', featMcyD: 'CNY, USD, JPY, EUR, GBP and more major currencies — exchange rates auto-fetched daily.',
       featNwT: 'Net worth, decomposed', featNwD: 'Assets and liabilities, MTD / YTD trends, goals, and inflow-vs-market split.',
       featPrvT: 'Yours, fully', featPrvD: 'No backend. No account. Optional sync to a file in iCloud Drive / Dropbox / OneDrive.',
       welcomeStart: 'Start tracking',
@@ -1757,7 +1758,7 @@
       syncPaused: name => `Sync paused · ${name}`,
       syncReconnect: 'Reconnect',
       save: 'Save', update: 'Update', cancelEdit: 'Cancel',
-      export: 'Export', import: 'Import',
+      export: 'Export', import: 'Import', exportCsv: 'CSV', exportCsvTitle: 'Export as CSV spreadsheet (date × account)',
       balanceTrend: 'Balance Trend', totalLegend: 'Total', byAccount: 'By Account',
       history: 'History',
       historyDate: 'Date', historyUpdates: 'Updates', historyTotal: 'Total that day', historyNote: 'Note',
@@ -1774,7 +1775,7 @@
       liabBadge: 'Debt', deletedAccount: '(deleted)',
       original: text => `Orig. ${text}`,
       defaultAccountName: 'Balance',
-      currencies: { CNY: 'CNY · Yuan', USD: 'USD · Dollar', JPY: 'JPY · Yen', EUR: 'EUR · Euro', SGD: 'SGD · Sing. Dollar', HKD: 'HKD · HK Dollar' },
+      currencies: { CNY: 'CNY · Yuan', USD: 'USD · Dollar', JPY: 'JPY · Yen', EUR: 'EUR · Euro', GBP: 'GBP · Pound', HKD: 'HKD · HK Dollar', SGD: 'SGD · Sing. Dollar', TWD: 'TWD · Taiwan Dollar', KRW: 'KRW · Won', AUD: 'AUD · Aus. Dollar', CAD: 'CAD · Can. Dollar', CHF: 'CHF · Franc', INR: 'INR · Rupee', THB: 'THB · Baht', MYR: 'MYR · Ringgit' },
     },
     ja: {
       htmlLang: 'ja',
@@ -1798,7 +1799,7 @@
       chooseAccount: '— 口座を選択 —', addAnotherAccount: '+ 別の口座を追加', remove: '削除',
       inflowAccount: '入金先口座（任意）', inflowAccountUnspecified: '— 未指定 —',
       categoryComposition: 'カテゴリ構成', byCurrency: '通貨', byCategory: 'カテゴリ',
-      categories: { cash: '現金', savings: '預金', investment: '投資', property: '不動産', crypto: '仮想通貨', other: 'その他' },
+      categories: { cash: '現金', savings: '預金', investment: '投資', property: '不動産', crypto: '仮想通貨', other: 'その他', mortgage: '住宅ローン', creditCard: 'クレジット', loan: 'ローン' },
       back: '← 戻る',
       preferences: '設定',
       theme: 'テーマ切替',
@@ -1838,9 +1839,9 @@
       welcomeTagline: '端末だけで動く、多通貨対応の純資産トラッカー。アカウント不要・サーバー不要・トラッキングなし。',
       welcomePreviewLabel: '純資産',
       welcomePreviewChange: '年初来',
-      welcomeTrust: 'シンプル · 6 通貨 · オフライン · プライベート · オープンソース',
+      welcomeTrust: 'シンプル · マルチ通貨 · オフライン · プライベート · オープンソース',
       featSmpT: 'シンプル設計', featSmpD: '残高を好きなときに更新するだけ。取引入力もカテゴリ分けも、毎日の記帳も不要。',
-      featMcyT: '6 通貨、ライブレート', featMcyD: 'CNY · USD · JPY · EUR · SGD · HKD、毎日自動でレート取得。',
+      featMcyT: '多通貨、ライブレート', featMcyD: 'CNY · USD · JPY · EUR · GBP など主要通貨、毎日自動でレート取得。',
       featNwT: '純資産を分解', featNwD: '資産と負債、今月 / 年初来の推移、目標、入金 vs 市場変動の分解。',
       featPrvT: '完全に自分のもの', featPrvD: 'バックエンドなし、アカウント不要。iCloud Drive 等のファイルへ任意で同期。',
       welcomeStart: '記録を始める',
@@ -1892,7 +1893,7 @@
       syncPaused: name => `同期を一時停止中 · ${name}`,
       syncReconnect: '再認証',
       save: '保存', update: '更新', cancelEdit: 'キャンセル',
-      export: 'エクスポート', import: 'インポート',
+      export: 'エクスポート', import: 'インポート', exportCsv: 'CSV', exportCsvTitle: 'CSV（日付 × 口座）として出力',
       balanceTrend: '残高推移', totalLegend: '総残高', byAccount: '口座別',
       history: '履歴',
       historyDate: '日付', historyUpdates: '更新', historyTotal: '当日総残高', historyNote: 'メモ',
@@ -1909,7 +1910,7 @@
       liabBadge: '負債', deletedAccount: '(削除済)',
       original: text => `元 ${text}`,
       defaultAccountName: '残高',
-      currencies: { CNY: '人民元 CNY', USD: '米ドル USD', JPY: '日本円 JPY', EUR: 'ユーロ EUR', SGD: 'シンガポール・ドル SGD', HKD: '香港ドル HKD' },
+      currencies: { CNY: '人民元 CNY', USD: '米ドル USD', JPY: '日本円 JPY', EUR: 'ユーロ EUR', GBP: '英ポンド GBP', HKD: '香港ドル HKD', SGD: 'シンガポール・ドル SGD', TWD: '台湾ドル TWD', KRW: '韓国ウォン KRW', AUD: '豪ドル AUD', CAD: 'カナダドル CAD', CHF: 'スイスフラン CHF', INR: 'インドルピー INR', THB: 'タイバーツ THB', MYR: 'リンギット MYR' },
     },
   };
 
@@ -1936,15 +1937,34 @@
     { code: 'USD', label: '美元 USD',   symbol: '$' },
     { code: 'JPY', label: '日元 JPY',   symbol: 'JP¥' },
     { code: 'EUR', label: '欧元 EUR',   symbol: '€' },
-    { code: 'SGD', label: '新加坡元 SGD', symbol: 'S$' },
+    { code: 'GBP', label: '英镑 GBP',   symbol: '£' },
     { code: 'HKD', label: '港元 HKD',  symbol: 'HK$' },
+    { code: 'SGD', label: '新加坡元 SGD', symbol: 'S$' },
+    { code: 'TWD', label: '新台币 TWD', symbol: 'NT$' },
+    { code: 'KRW', label: '韩元 KRW',   symbol: '₩' },
+    { code: 'AUD', label: '澳元 AUD',   symbol: 'A$' },
+    { code: 'CAD', label: '加元 CAD',   symbol: 'C$' },
+    { code: 'CHF', label: '瑞士法郎 CHF', symbol: 'CHF' },
+    { code: 'INR', label: '印度卢比 INR', symbol: '₹' },
+    { code: 'THB', label: '泰铢 THB',   symbol: '฿' },
+    { code: 'MYR', label: '马来西亚林吉特 MYR', symbol: 'RM' },
   ];
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
-  const CURRENCY_COLORS = { CNY: '#f87171', USD: '#4ade80', JPY: '#f472b6', EUR: '#60a5fa', SGD: '#fbbf24', HKD: '#a78bfa' };
+  // Currencies conventionally shown without minor units.
+  const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
+  function decimalsFor(currency) { return ZERO_DECIMAL.has(currency) ? 0 : 2; }
+  const CURRENCY_COLORS = {
+    CNY: '#f87171', USD: '#4ade80', JPY: '#f472b6', EUR: '#60a5fa', GBP: '#818cf8',
+    HKD: '#a78bfa', SGD: '#fbbf24', TWD: '#2dd4bf', KRW: '#f0abfc', AUD: '#fb923c',
+    CAD: '#f43f5e', CHF: '#94a3b8', INR: '#fdba74', THB: '#22d3ee', MYR: '#a3e635',
+  };
   const CATEGORIES = ['cash', 'savings', 'investment', 'property', 'crypto', 'other'];
+  const LIABILITY_CATEGORIES = ['mortgage', 'creditCard', 'loan', 'other'];
+  function categoriesFor(type) { return type === 'liability' ? LIABILITY_CATEGORIES : CATEGORIES; }
   const CATEGORY_COLORS = {
     cash: '#60a5fa', savings: '#4ade80', investment: '#fbbf24',
     property: '#f472b6', crypto: '#a78bfa', other: '#8590a8',
+    mortgage: '#fb7185', creditCard: '#f97316', loan: '#facc15',
   };
   const BACKUP_THRESHOLD = 5; // 改动这么多次后提示导出
 
@@ -1954,7 +1974,7 @@
     if (amount == null || isNaN(amount)) return '—';
     const negative = Number(amount) < 0;
     const abs = Math.abs(Number(amount));
-    const decimals = currency === 'JPY' ? 0 : 2;
+    const decimals = decimalsFor(currency);
     const numStr = abs.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
     // Use proper Unicode minus (U+2212), placed BEFORE the currency symbol for readability
     return (negative ? '−' : '') + SYMBOLS[currency] + numStr;
@@ -2192,7 +2212,16 @@
       }
       if (!data || !data.usd) throw new Error('rates unavailable');
       const u = data.usd;
-      state.rates[date] = { USD: 1, CNY: u.cny, JPY: u.jpy, EUR: u.eur, SGD: u.sgd, HKD: u.hkd };
+      // USD-based: pull each supported currency's rate by its lowercase code. Merge into
+      // any existing entry so a previously-cached date keeps rates for currencies the API
+      // might momentarily omit, and so re-fetches (after the list grows) only fill gaps.
+      const entry = { ...(state.rates[date] || {}), USD: 1 };
+      CURRENCIES.forEach(c => {
+        if (c.code === 'USD') return;
+        const v = u[c.code.toLowerCase()];
+        if (typeof v === 'number') entry[c.code] = v;
+      });
+      state.rates[date] = entry;
       save();
     } catch (e) {
       console.warn('汇率获取失败', date, e);
@@ -2305,11 +2334,9 @@
       const row = document.createElement('div');
       row.className = 'account-row';
       row.dataset.accId = a.id;
-      const catSelect = a.type === 'asset'
-        ? `<select data-id="${a.id}" data-field="category" class="cat-sel">${CATEGORIES.map(c =>
-            `<option value="${c}" ${a.category === c ? 'selected' : ''}>${t('categories')[c]}</option>`
-          ).join('')}</select>`
-        : '';
+      const catSelect = `<select data-id="${a.id}" data-field="category" class="cat-sel">${categoriesFor(a.type).map(c =>
+          `<option value="${c}" ${a.category === c ? 'selected' : ''}>${t('categories')[c]}</option>`
+        ).join('')}</select>`;
       row.innerHTML = `
         <span class="drag-handle" title="拖拽排序" aria-label="Drag to reorder">⋮⋮</span>
         <span class="chip-dot" style="background:${a.color}"></span>
@@ -2341,7 +2368,12 @@
         if (!acc) return;
         const field = sel.dataset.field;
         if (field === 'currency') acc.currency = sel.value;
-        else if (field === 'type') acc.type = sel.value;
+        else if (field === 'type') {
+          acc.type = sel.value;
+          // Category lists differ by type — snap to a valid one so a liability
+          // doesn't keep an asset-only category (and vice versa).
+          if (!categoriesFor(acc.type).includes(acc.category)) acc.category = 'other';
+        }
         else if (field === 'category') acc.category = sel.value;
         markDirty(); renderAll();
       });
@@ -2372,6 +2404,18 @@
   document.getElementById('newAccountName').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addAccountBtn').click(); }
   });
+  // Keep the new-account category list in sync with the chosen type.
+  function populateNewAccountCategory() {
+    const ntype = document.getElementById('newAccountType');
+    const ncat = document.getElementById('newAccountCategory');
+    if (!ntype || !ncat) return;
+    const list = categoriesFor(ntype.value);
+    const cur = list.includes(ncat.value) ? ncat.value : list[0];
+    ncat.innerHTML = list.map(c =>
+      `<option value="${c}" ${c === cur ? 'selected' : ''}>${t('categories')[c]}</option>`
+    ).join('');
+  }
+  document.getElementById('newAccountType').addEventListener('change', populateNewAccountCategory);
 
   // ===== Entry form =====
   function getAmountPlaceholder(accountId) {
@@ -2379,7 +2423,7 @@
     const cur = currentSnapshot();
     const prev = cur && cur.balances[accountId];
     if (!prev) return '0';
-    return Number(prev.amount).toFixed(prev.currency === 'JPY' ? 0 : 2);
+    return Number(prev.amount).toFixed(decimalsFor(prev.currency));
   }
 
   // Rates for a given date, falling back to the most recent date we have — used by
@@ -2413,7 +2457,7 @@
         ? Number(prev.amount)
         : (convert(Number(prev.amount), prev.currency, row.currency, bestRatesForDate(document.getElementById('date').value)) ?? 0);
     }
-    row.amount = (base + inflowAmt).toFixed(row.currency === 'JPY' ? 0 : 2);
+    row.amount = (base + inflowAmt).toFixed(decimalsFor(row.currency));
     row.autoFilled = true;
     return true;
   }
@@ -2963,7 +3007,55 @@
     save();
     renderBackupBanner();
   }
+  // CSV: one row per snapshot date, each account's balance converted to the display
+  // currency (liabilities negative), plus net total and net inflow for that date.
+  // A spreadsheet-friendly view — the JSON export remains the canonical backup.
+  function csvCell(v) {
+    const s = v == null ? '' : String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function doExportCsv() {
+    const tl = computeTimeline();
+    const accs = state.accounts;
+    const dc = state.displayCurrency;
+    const round = n => n == null ? '' : (decimalsFor(dc) === 0 ? Math.round(n) : Math.round(n * 100) / 100);
+    const header = ['Date',
+      ...accs.map(a => a.name + (a.type === 'liability' ? ' (−)' : '')),
+      `Net total (${dc})`, `Net inflow (${dc})`, 'Note'];
+    const lines = [header.map(csvCell).join(',')];
+    tl.forEach(entry => {
+      const rates = state.rates[entry.snapshot.date];
+      let inflow = 0, hasInflow = false;
+      if (entry.snapshot.inflow) {
+        const inf = entry.snapshot.inflow;
+        const c = convert(inf.amount, inf.currency, dc, rates);
+        if (c != null) { inflow += c; hasInflow = true; }
+      }
+      Object.entries(entry.snapshot.updates).forEach(([accId, u]) => {
+        if (u.inflow != null) {
+          const acc = accountById(accId);
+          const sign = acc ? signFor(acc.type) : 1;
+          const c = convert(u.inflow, u.currency, dc, rates);
+          if (c != null) { inflow += c * sign; hasInflow = true; }
+        }
+      });
+      const row = [entry.snapshot.date,
+        ...accs.map(a => { const b = entry.balances[a.id]; return b && b.converted != null ? round(b.converted) : ''; }),
+        entry.total != null ? round(entry.total) : '',
+        hasInflow ? round(inflow) : '',
+        entry.snapshot.note || ''];
+      lines.push(row.map(csvCell).join(','));
+    });
+    // BOM so Excel reads UTF-8 (account names may be CJK); CRLF line endings.
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `record-finance-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   document.getElementById('exportBtn').addEventListener('click', doExport);
+  document.getElementById('exportCsvBtn').addEventListener('click', doExportCsv);
   document.getElementById('backupBannerExport').addEventListener('click', doExport);
   document.getElementById('backupBannerDismiss').addEventListener('click', () => {
     backupBannerDismissed = true;
@@ -4115,7 +4207,7 @@
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: 'record-finance.json',
-        types: [{ description: 'xFinance JSON', accept: { 'application/json': ['.json'] } }],
+        types: [{ description: 'Record Finance JSON', accept: { 'application/json': ['.json'] } }],
       });
       // Inspect the chosen file BEFORE writing — picking an existing file should not
       // silently destroy its contents (this is the "Load from sync file" entry point).
@@ -4226,6 +4318,8 @@
     setText('addAccountBtn', t('add'));
     setText('exportBtn', t('export'));
     setText('importBtn', t('import'));
+    const csvBtn = document.getElementById('exportCsvBtn');
+    if (csvBtn) { csvBtn.textContent = t('exportCsv'); csvBtn.title = t('exportCsvTitle'); }
     setText('backupBannerExport', t('exportBackup'));
     setText('backupBannerDismiss', t('later'));
 
@@ -4248,13 +4342,7 @@
     const ntype = document.getElementById('newAccountType');
     if (ntype) { ntype.options[0].textContent = t('asset'); ntype.options[1].textContent = t('liability'); }
 
-    const ncat = document.getElementById('newAccountCategory');
-    if (ncat) {
-      const cur = ncat.value || 'cash';
-      ncat.innerHTML = CATEGORIES.map(c =>
-        `<option value="${c}" ${c === cur ? 'selected' : ''}>${t('categories')[c]}</option>`
-      ).join('');
-    }
+    populateNewAccountCategory();
 
     ['displayCurrency', 'newAccountCurrency', 'goalCurrencySel'].forEach(id => {
       const sel = document.getElementById(id);
