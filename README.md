@@ -17,7 +17,7 @@ Your data never leaves your device.
 - **Goal tracking** with ETA estimation and milestone celebrations
 - **Charts** — balance trend, year-over-year, account drilldown, currency / category breakdown
 - **MTD / YTD / inflow vs market gain** decomposition
-- **Local file sync** via the File System Access API — point it at any cloud-synced folder (iCloud Drive, Dropbox, OneDrive); auto-syncs on change
+- **Local file sync** via the File System Access API — point it at any cloud-synced folder (iCloud Drive, Dropbox, OneDrive); auto-syncs on change, with lossless merge so edits from multiple devices never clobber each other
 - **Rolling local snapshots** (last 20 changes) for undo-safety
 - **PIN lock** with session unlock, privacy blur with press-and-hold to peek
 - **PWA** — install to home screen, works offline (Service Worker)

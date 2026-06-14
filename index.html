@@ -1597,8 +1597,8 @@
       cloudSync: '本地文件同步',
       cloudSyncHint: '推荐选 iCloud Drive / Dropbox / OneDrive 等同步盘里的文件，跨设备自动同步',
       autoSyncing: '同步中…',
-      syncRemoteNewer: '云端文件比本地更新，要从云端加载吗？',
-      syncRemoteNewerLoad: '加载',
+      syncRemoteNewer: '云端有新记录，要合并到本地吗？',
+      syncRemoteNewerLoad: '合并',
       syncRemoteNewerDismiss: '稍后',
       snapshots: '本地历史快照',
       snapshotsHint: '每次改动自动备份本地，最多保留 20 份。误操作时可恢复。',
@@ -1615,6 +1615,9 @@
       syncFsUnsupportedHint: 'iOS 用户：点右下"导出"→ 在弹出窗口选"存储到文件"→ 选 iCloud Drive 中的位置。下载时选同一文件即可。',
       syncPushSuccess: '✓ 已写入同步文件',
       syncPullSuccess: '✓ 已从文件加载',
+      syncMergeConfirm: (remote, local) => `合并：文件中有 ${remote} 条本地没有的记录，本地有 ${local} 条文件里没有的。\n合并后两边都会保留，并把结果写回文件。继续？`,
+      syncMergeSuccess: (remote, local) => `✓ 已合并（+${remote} 来自文件，↑${local} 已上传）`,
+      syncUpToDate: '✓ 已是最新，无需合并',
       syncFail: msg => `同步失败：${msg}`,
       syncPullConfirm: (remote, local) => `文件中有 ${remote} 条记录，本地 ${local} 条。\n用文件覆盖本地？（本地数据会丢失）`,
       syncUnlinkConfirm: '解除链接后将不再同步到此文件（文件本身不会删除）。继续？',
@@ -1732,8 +1735,8 @@
       cloudSync: 'Local File Sync',
       cloudSyncHint: 'Pick a file inside iCloud Drive / Dropbox / OneDrive — your sync engine handles cross-device propagation',
       autoSyncing: 'syncing…',
-      syncRemoteNewer: 'Sync file looks newer than your local data. Load it?',
-      syncRemoteNewerLoad: 'Load',
+      syncRemoteNewer: 'The sync file has new records. Merge them in?',
+      syncRemoteNewerLoad: 'Merge',
       syncRemoteNewerDismiss: 'Later',
       snapshots: 'Local snapshots',
       snapshotsHint: 'Auto-saved on every change, last 20 kept. Restore here after mistakes.',
@@ -1750,6 +1753,9 @@
       syncFsUnsupportedHint: 'iOS: tap Export → "Save to Files" → pick a location in iCloud Drive. On other devices, Import from the same file.',
       syncPushSuccess: '✓ Wrote to sync file',
       syncPullSuccess: '✓ Loaded from file',
+      syncMergeConfirm: (remote, local) => `Merge: ${remote} record(s) on the file aren't local, ${local} local record(s) aren't on the file.\nMerging keeps both sides and writes the result back. Continue?`,
+      syncMergeSuccess: (remote, local) => `✓ Merged (+${remote} from file, ↑${local} uploaded)`,
+      syncUpToDate: '✓ Already in sync',
       syncFail: msg => `Sync failed: ${msg}`,
       syncPullConfirm: (remote, local) => `File has ${remote} records, local has ${local}.\nOverwrite local with file? (Local will be lost.)`,
       syncUnlinkConfirm: 'Unlinking stops auto-sync to this file (the file itself stays). Continue?',
@@ -1867,8 +1873,8 @@
       cloudSync: 'ローカルファイル同期',
       cloudSyncHint: 'iCloud Drive / Dropbox / OneDrive 内のファイルを選ぶと、同期エンジンが端末間を繋ぎます',
       autoSyncing: '同期中…',
-      syncRemoteNewer: '同期ファイルがローカルより新しいようです。読み込みますか？',
-      syncRemoteNewerLoad: '読込',
+      syncRemoteNewer: '同期ファイルに新しい記録があります。マージしますか？',
+      syncRemoteNewerLoad: 'マージ',
       syncRemoteNewerDismiss: '後で',
       snapshots: 'ローカル履歴スナップショット',
       snapshotsHint: '変更毎に自動バックアップ、最新 20 件保持。誤操作時の復旧用。',
@@ -1885,6 +1891,9 @@
       syncFsUnsupportedHint: 'iOS：エクスポート → 「ファイルに保存」→ iCloud Drive の場所を選択。別デバイスでは同じファイルをインポート。',
       syncPushSuccess: '✓ ファイルに書き込みました',
       syncPullSuccess: '✓ ファイルから読み込みました',
+      syncMergeConfirm: (remote, local) => `マージ：ファイルにローカルにない記録が ${remote} 件、ローカルにファイルにない記録が ${local} 件あります。\n両方を保持してファイルに書き戻します。続行しますか？`,
+      syncMergeSuccess: (remote, local) => `✓ マージ完了（+${remote} 取得 / ↑${local} 送信）`,
+      syncUpToDate: '✓ 既に最新です',
       syncFail: msg => `同期失敗：${msg}`,
       syncPullConfirm: (remote, local) => `ファイル ${remote} 件、ローカル ${local} 件。\nファイルでローカルを上書きしますか？（ローカル消失）`,
       syncUnlinkConfirm: 'リンク解除するとこのファイルへの自動同期が止まります（ファイル自体は残ります）。続行？',
@@ -2102,12 +2111,17 @@
     data.accounts.forEach((a, i) => {
       if (!CUR_CODES.includes(a.currency)) a.currency = 'CNY';
       if (a.type !== 'asset' && a.type !== 'liability') a.type = 'asset';
-      if (!CATEGORIES.includes(a.category)) a.category = 'other';
+      // Validate against the category set for this account's type (liabilities have
+      // their own: mortgage/creditCard/loan/other) so a valid one isn't wiped to "other".
+      if (!categoriesFor(a.type).includes(a.category)) a.category = 'other';
       if (!isHexColor(a.color)) a.color = PALETTE[i % PALETTE.length];
       if (typeof a.name !== 'string') a.name = a.name == null ? '' : String(a.name);
     });
     data.snapshots.forEach(s => {
       if (typeof s.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) s.date = todayStr();
+      // updatedAt lets a lossless merge pick the newer of two edits to the same record.
+      // Backfill from createdAt for records written before this field existed.
+      if (typeof s.updatedAt !== 'number') s.updatedAt = typeof s.createdAt === 'number' ? s.createdAt : 0;
       if (typeof s.note !== 'string') s.note = s.note == null ? '' : String(s.note);
       if (!s.updates || typeof s.updates !== 'object') s.updates = {};
       Object.keys(s.updates).forEach(accId => {
@@ -2581,10 +2595,11 @@
     }
     if (editingId) {
       const snap = state.snapshots.find(s => s.id === editingId);
-      if (snap) { snap.date = date; snap.note = note; snap.updates = updates; }
+      if (snap) { snap.date = date; snap.note = note; snap.updates = updates; snap.updatedAt = Date.now(); }
       editingId = null;
     } else {
-      const snap = { id: crypto.randomUUID(), date, updates, note, createdAt: Date.now() };
+      const now = Date.now();
+      const snap = { id: crypto.randomUUID(), date, updates, note, createdAt: now, updatedAt: now };
       state.snapshots.push(snap);
     }
     markDirty();
@@ -4203,6 +4218,91 @@
     applyTheme(); applyI18n(); renderAll();
   }
 
+  // Lossless union merge of local + remote. Records (snapshots) and accounts carry
+  // stable ids, so combining by id never drops one that exists on either side — this
+  // kills the old replace-on-pull failure where two devices each add a record and the
+  // pull clobbers one. Scalar preferences stay LOCAL (pulling shouldn't change your
+  // theme / display currency / goal). Trade-off: without tombstones, a row deleted on
+  // one device but still present on the other reappears on merge — safe (just re-delete)
+  // and far better than silently losing records.
+  function mergeStates(local, remote) {
+    // Snapshots: union by id; a same-id edit conflict resolves to the newer updatedAt.
+    const snapMap = new Map(local.snapshots.map(s => [s.id, s]));
+    let remoteOnly = 0;
+    remote.snapshots.forEach(r => {
+      const l = snapMap.get(r.id);
+      if (!l) { snapMap.set(r.id, r); remoteOnly++; return; }
+      const lu = l.updatedAt || l.createdAt || 0;
+      const ru = r.updatedAt || r.createdAt || 0;
+      if (ru > lu) snapMap.set(r.id, r); // remote edit is newer
+    });
+    const remoteIds = new Set(remote.snapshots.map(s => s.id));
+    let localOnly = 0;
+    local.snapshots.forEach(s => { if (!remoteIds.has(s.id)) localOnly++; });
+    // Accounts: keep local order + local fields; append accounts only the remote has.
+    const accIds = new Set(local.accounts.map(a => a.id));
+    const mergedAccounts = local.accounts.slice();
+    remote.accounts.forEach(a => { if (!accIds.has(a.id)) mergedAccounts.push(a); });
+    // Rates + milestones: union — fills gaps, never loses a cached date or a shown badge.
+    const mergedRates = { ...(remote.rates || {}), ...(local.rates || {}) };
+    const mergedMilestones = [...new Set([...(local.milestonesShown || []), ...(remote.milestonesShown || [])])];
+    const merged = {
+      ...local,
+      accounts: mergedAccounts,
+      snapshots: [...snapMap.values()],
+      rates: mergedRates,
+      milestonesShown: mergedMilestones,
+    };
+    return { merged, summary: { remoteOnly, localOnly } };
+  }
+
+  // Write current state to the linked file (no toast). Shared by push + merge-pushback.
+  async function writeStateToFile(handle) {
+    const { sync: _, ...cleanState } = state;
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(cleanState, null, 2));
+    await writable.close();
+    state.sync = state.sync || { fileName: handle.name };
+    state.sync.lastSync = new Date().toISOString();
+    state.dirtySinceExport = 0; // synced counts as a backup
+    save();
+  }
+
+  // Merge a parsed remote payload into local state, then write the union back so the
+  // file (and other devices) gain our local-only records. Used by pull + the
+  // "remote newer" banner + linking to a file that already has data.
+  async function mergePull(remoteRaw, handle) {
+    const remote = migrate(remoteRaw);
+    const { merged, summary } = mergeStates(state, remote);
+    if (summary.remoteOnly === 0 && summary.localOnly === 0) {
+      // Already in sync — just stamp lastSync and clear the banner.
+      state.sync = state.sync || { fileName: handle.name };
+      state.sync.lastSync = new Date().toISOString();
+      save();
+      document.getElementById('remoteNewerBanner').hidden = true;
+      renderSync();
+      showToast(t('syncUpToDate'));
+      return;
+    }
+    if (!confirm(t('syncMergeConfirm', summary.remoteOnly, summary.localOnly))) return;
+    const keepSync = state.sync || { fileName: handle.name };
+    state = merged;
+    state.sync = keepSync;
+    state.dirtySinceExport = 0;
+    entryRows = [];
+    editingId = null;
+    historyQuery = '';
+    const hs = document.getElementById('historySearch');
+    if (hs) hs.value = '';
+    save();
+    await ensureRates(state.snapshots.map(s => s.date));
+    // Push the union back so the file gains records that were only local.
+    try { await writeStateToFile(handle); } catch (e) { console.warn('merge push-back failed', e); }
+    document.getElementById('remoteNewerBanner').hidden = true;
+    applyTheme(); applyI18n(); renderAll(); renderBackupBanner();
+    showToast(t('syncMergeSuccess', summary.remoteOnly, summary.localOnly));
+  }
+
   async function pickSyncFile() {
     try {
       const handle = await window.showSaveFilePicker({
@@ -4226,12 +4326,15 @@
 
       const remoteCount = remote && Array.isArray(remote.snapshots) ? remote.snapshots.length : 0;
       const localCount = state.snapshots.length;
-      if (remoteCount > 0 && (localCount === 0 || confirm(t('syncPickHasData', remoteCount, localCount)))) {
-        // Load the existing file instead of overwriting it.
+      if (remoteCount > 0 && localCount === 0) {
+        // Fresh device linking to an existing file → load it wholesale (incl. its prefs).
         await applyRemoteState(remote, handle);
         showToast(t('syncPullSuccess'));
+      } else if (remoteCount > 0) {
+        // Both sides have records → losslessly merge instead of forcing a destructive choice.
+        await mergePull(remote, handle);
       } else {
-        // Empty/new file, or the user explicitly chose to overwrite it with local data.
+        // Empty/new file → seed it with local data.
         await syncPush();
       }
     } catch (e) {
@@ -4245,14 +4348,7 @@
     if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
     if (!(await verifyPermission(handle, true))) { showToast(t('syncFail', 'permission denied')); return; }
     try {
-      const { sync: _, ...cleanState } = state;
-      const writable = await handle.createWritable();
-      await writable.write(JSON.stringify(cleanState, null, 2));
-      await writable.close();
-      state.sync = state.sync || { fileName: handle.name };
-      state.sync.lastSync = new Date().toISOString();
-      state.dirtySinceExport = 0; // synced counts as a backup
-      save();
+      await writeStateToFile(handle);
       renderSync(); renderBackupBanner();
       showToast(t('syncPushSuccess'));
     } catch (e) {
@@ -4264,14 +4360,13 @@
     if (!SUPPORTS_FS) return;
     const handle = await getSyncHandle();
     if (!handle) { showToast(t('syncFail', 'no file linked')); return; }
-    if (!(await verifyPermission(handle, false))) { showToast(t('syncFail', 'permission denied')); return; }
+    // readwrite: a merge writes the union back to the file.
+    if (!(await verifyPermission(handle, true))) { showToast(t('syncFail', 'permission denied')); return; }
     try {
       const file = await handle.getFile();
       const text = await file.text();
       const remote = JSON.parse(text);
-      if (!confirm(t('syncPullConfirm', remote.snapshots?.length || 0, state.snapshots.length))) return;
-      await applyRemoteState(remote, handle);
-      showToast(t('syncPullSuccess'));
+      await mergePull(remote, handle);
     } catch (e) {
       showToast(t('syncFail', e.message));
     }
