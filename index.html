@@ -115,13 +115,13 @@
     --warning-soft: rgba(251, 191, 36, 0.10);
     --info: #60a5fa;
     --grid: #262d44;
-    --radius: 18px;
-    --radius-sm: 12px;
+    --radius: 14px;
+    --radius-sm: 10px;
     --radius-pill: 999px;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
-    --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.28);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.36);
-    --shadow-hero: 0 0 80px rgba(74, 222, 128, 0.10);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.22);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.30);
+    --shadow-hero: 0 0 60px rgba(74, 222, 128, 0.06);
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
     color-scheme: dark;
   }
@@ -149,8 +149,8 @@
     --grid: #e6e8f0;
     --shadow-sm: 0 1px 2px rgba(15, 25, 50, 0.05);
     --shadow-md: 0 8px 32px rgba(15, 25, 50, 0.07);
-    --shadow-lg: 0 20px 60px rgba(15, 25, 50, 0.10);
-    --shadow-hero: 0 0 80px rgba(22, 163, 74, 0.05);
+    --shadow-lg: 0 16px 48px rgba(15, 25, 50, 0.10);
+    --shadow-hero: 0 0 60px rgba(22, 163, 74, 0.04);
     color-scheme: light;
   }
   body.light {
@@ -166,9 +166,9 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif;
     background: var(--bg);
     background-image:
-      radial-gradient(ellipse 720px 480px at 8% -8%, rgba(74, 222, 128, 0.10), transparent 60%),
-      radial-gradient(ellipse 720px 520px at 95% 5%, rgba(34, 211, 238, 0.08), transparent 60%),
-      radial-gradient(ellipse 800px 500px at 50% 115%, rgba(244, 114, 182, 0.05), transparent 60%);
+      radial-gradient(ellipse 720px 480px at 8% -8%, rgba(74, 222, 128, 0.06), transparent 60%),
+      radial-gradient(ellipse 720px 520px at 95% 5%, rgba(34, 211, 238, 0.05), transparent 60%),
+      radial-gradient(ellipse 800px 500px at 50% 115%, rgba(244, 114, 182, 0.03), transparent 60%);
     background-attachment: fixed;
     color: var(--text);
     font-size: 14px;
@@ -643,8 +643,8 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 28px;
-    margin-bottom: 18px;
+    padding: 24px;
+    margin-bottom: 16px;
     box-shadow: var(--shadow-sm);
     transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
   }
@@ -655,12 +655,36 @@
     box-shadow: var(--shadow-md), var(--shadow-hero);
     position: relative;
     overflow: hidden;
-    padding: 36px;
+    padding: 28px;
   }
   .panel.hero::before {
     content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
   }
+
+  /* Dashboard layout: responsive rows that pair related panels and collapse
+     to a single column on narrow screens. #mainView is a flex column so the
+     section order can be set independently of source order. */
+  #mainView { display: flex; flex-direction: column; }
+  #mainView > * { min-width: 0; }
+  #mainView > .banner          { order: 0; }
+  #mainView > .dash-row--top   { order: 1; }
+  #mainView > #accountChips    { order: 2; }
+  #mainView > #earlyHint       { order: 3; }
+  #mainView > .dash-row--mid   { order: 4; }
+  #mainView > #entryPanel      { order: 5; }
+  #mainView > #accountsPanel   { order: 6; }
+  #mainView > .panel:last-child { order: 7; }
+
+  .dash-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; margin-bottom: 16px; }
+  .dash-row > .panel { margin-bottom: 0; flex: 1 1 320px; min-width: 0; }
+  .dash-row--top > .panel.hero    { flex: 1.7 1 380px; }
+  .dash-row--top > #goalPanel     { flex: 1 1 260px; }
+  .dash-row--mid > .panel-trend   { flex: 1.8 1 420px; }
+  .dash-row--mid > #breakdownPanel { flex: 1.05 1 320px; }
+
+  .account-strip { margin-bottom: 16px; }
+  .account-strip:empty { display: none; margin: 0; }
 
   label {
     font-size: 12px;
@@ -767,7 +791,7 @@
     letter-spacing: 0;
   }
   .total .stat-value {
-    font-size: 52px; font-weight: 700; margin-top: 8px;
+    font-size: 42px; font-weight: 700; margin-top: 6px;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.035em;
     line-height: 1.05;
@@ -1028,11 +1052,13 @@
   .legend-row { display: flex; align-items: center; gap: 12px; font-size: 14px; }
   .legend-row .chip-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
   .legend-row .lr-cur {
-    color: var(--muted); width: 40px;
+    color: var(--muted);
+    flex: 0 0 auto; min-width: 44px; max-width: 96px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: 11px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.06em;
   }
-  .legend-row .lr-amt { font-variant-numeric: tabular-nums; flex: 1; font-weight: 500; }
+  .legend-row .lr-amt { font-variant-numeric: tabular-nums; flex: 1; min-width: 0; font-weight: 500; }
   .legend-row .lr-pct {
     font-variant-numeric: tabular-nums;
     color: var(--muted); font-size: 12px;
@@ -1372,50 +1398,39 @@
     </div>
   </div>
 
-  <div class="panel hero">
-    <div class="summary">
-      <div class="total">
-        <div class="stat-label" id="totalLabel">总余额</div>
-        <div class="stat-value" id="totalBalance">—</div>
-        <div class="stat-breakdown" id="statBreakdown" hidden></div>
-        <div class="stat-changes" id="periodChanges"></div>
-        <div class="stat-note" id="totalNote"></div>
+  <div class="dash-row dash-row--top">
+    <div class="panel hero">
+      <div class="summary">
+        <div class="total">
+          <div class="stat-label" id="totalLabel">总余额</div>
+          <div class="stat-value" id="totalBalance">—</div>
+          <div class="stat-breakdown" id="statBreakdown" hidden></div>
+          <div class="stat-changes" id="periodChanges"></div>
+          <div class="stat-note" id="totalNote"></div>
+        </div>
+        <div class="currency-control">
+          <label for="displayCurrency">显示币种</label>
+          <select id="displayCurrency"></select>
+        </div>
       </div>
-      <div class="account-chips" id="accountChips"></div>
-      <div class="currency-control">
-        <label for="displayCurrency">显示币种</label>
-        <select id="displayCurrency"></select>
+    </div>
+
+    <div class="panel" id="goalPanel" hidden>
+      <div class="toolbar"><h2 id="goalTitle">目标</h2></div>
+      <div class="goal-info">
+        <div class="goal-meta">
+          <div class="goal-headline" id="goalHeadline">—</div>
+          <div class="goal-sub" id="goalSub"></div>
+        </div>
+        <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill" style="width: 0%"></div></div>
       </div>
     </div>
   </div>
+
+  <div class="account-chips account-strip" id="accountChips"></div>
 
   <div class="early-hint" id="earlyHint" hidden>
     <span id="earlyHintText"></span>
-  </div>
-
-  <div class="panel" id="breakdownPanel" hidden>
-    <div class="toolbar">
-      <h2 id="breakdownTitle">构成</h2>
-      <div class="seg" id="breakdownMode" hidden>
-        <button data-mode="currency" class="active" id="bmodeCur">币种</button>
-        <button data-mode="category" id="bmodeCat">类别</button>
-      </div>
-    </div>
-    <div class="breakdown">
-      <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
-      <div class="breakdown-legend" id="breakdownLegend"></div>
-    </div>
-  </div>
-
-  <div class="panel" id="goalPanel" hidden>
-    <div class="toolbar"><h2 id="goalTitle">目标</h2></div>
-    <div class="goal-info">
-      <div class="goal-meta">
-        <div class="goal-headline" id="goalHeadline">—</div>
-        <div class="goal-sub" id="goalSub"></div>
-      </div>
-      <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill" style="width: 0%"></div></div>
-    </div>
   </div>
 
   <details class="panel" id="accountsPanel">
@@ -1471,16 +1486,32 @@
     </form>
   </div>
 
-  <div class="panel">
-    <div class="toolbar">
-      <h2 id="trendTitle">余额走势</h2>
-      <div class="seg" id="chartMode">
-        <button data-mode="total" class="active">总余额</button>
-        <button data-mode="accounts">各账户</button>
-        <button data-mode="yoy" id="chartYoyBtn">同期</button>
+  <div class="dash-row dash-row--mid">
+    <div class="panel panel-trend">
+      <div class="toolbar">
+        <h2 id="trendTitle">余额走势</h2>
+        <div class="seg" id="chartMode">
+          <button data-mode="total" class="active">总余额</button>
+          <button data-mode="accounts">各账户</button>
+          <button data-mode="yoy" id="chartYoyBtn">同期</button>
+        </div>
+      </div>
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="panel" id="breakdownPanel" hidden>
+      <div class="toolbar">
+        <h2 id="breakdownTitle">构成</h2>
+        <div class="seg" id="breakdownMode" hidden>
+          <button data-mode="currency" class="active" id="bmodeCur">币种</button>
+          <button data-mode="category" id="bmodeCat">类别</button>
+        </div>
+      </div>
+      <div class="breakdown">
+        <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
+        <div class="breakdown-legend" id="breakdownLegend"></div>
       </div>
     </div>
-    <canvas id="chart"></canvas>
   </div>
 
   <div class="panel">
