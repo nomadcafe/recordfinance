@@ -671,17 +671,16 @@
   #mainView > .dash-row--top   { order: 1; }
   #mainView > #accountChips    { order: 2; }
   #mainView > #earlyHint       { order: 3; }
-  #mainView > .dash-row--mid   { order: 4; }
-  #mainView > #entryPanel      { order: 5; }
-  #mainView > #accountsPanel   { order: 6; }
-  #mainView > .panel:last-child { order: 7; }
+  #mainView > .panel-trend     { order: 4; }
+  #mainView > #breakdownPanel  { order: 5; }
+  #mainView > #entryPanel      { order: 6; }
+  #mainView > #accountsPanel   { order: 7; }
+  #mainView > .panel:last-child { order: 8; }
 
   .dash-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; margin-bottom: 16px; }
   .dash-row > .panel { margin-bottom: 0; flex: 1 1 320px; min-width: 0; }
   .dash-row--top > .panel.hero    { flex: 1.7 1 380px; }
   .dash-row--top > #goalPanel     { flex: 1 1 260px; }
-  .dash-row--mid > .panel-trend   { flex: 1.8 1 420px; }
-  .dash-row--mid > #breakdownPanel { flex: 1.05 1 320px; }
 
   .account-strip { margin-bottom: 16px; }
   .account-strip:empty { display: none; margin: 0; }
@@ -1048,7 +1047,7 @@
   /* Breakdown panel */
   .breakdown { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
   .breakdown-chart { width: 200px; height: 200px; flex-shrink: 0; }
-  .breakdown-legend { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+  .breakdown-legend { flex: 1; min-width: 220px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px 32px; align-content: center; }
   .legend-row { display: flex; align-items: center; gap: 12px; font-size: 14px; }
   .legend-row .chip-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
   .legend-row .lr-cur {
@@ -1486,31 +1485,29 @@
     </form>
   </div>
 
-  <div class="dash-row dash-row--mid">
-    <div class="panel panel-trend">
-      <div class="toolbar">
-        <h2 id="trendTitle">余额走势</h2>
-        <div class="seg" id="chartMode">
-          <button data-mode="total" class="active">总余额</button>
-          <button data-mode="accounts">各账户</button>
-          <button data-mode="yoy" id="chartYoyBtn">同期</button>
-        </div>
+  <div class="panel panel-trend">
+    <div class="toolbar">
+      <h2 id="trendTitle">余额走势</h2>
+      <div class="seg" id="chartMode">
+        <button data-mode="total" class="active">总余额</button>
+        <button data-mode="accounts">各账户</button>
+        <button data-mode="yoy" id="chartYoyBtn">同期</button>
       </div>
-      <canvas id="chart"></canvas>
     </div>
+    <canvas id="chart"></canvas>
+  </div>
 
-    <div class="panel" id="breakdownPanel" hidden>
-      <div class="toolbar">
-        <h2 id="breakdownTitle">构成</h2>
-        <div class="seg" id="breakdownMode" hidden>
-          <button data-mode="currency" class="active" id="bmodeCur">币种</button>
-          <button data-mode="category" id="bmodeCat">类别</button>
-        </div>
+  <div class="panel" id="breakdownPanel" hidden>
+    <div class="toolbar">
+      <h2 id="breakdownTitle">构成</h2>
+      <div class="seg" id="breakdownMode" hidden>
+        <button data-mode="currency" class="active" id="bmodeCur">币种</button>
+        <button data-mode="category" id="bmodeCat">类别</button>
       </div>
-      <div class="breakdown">
-        <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
-        <div class="breakdown-legend" id="breakdownLegend"></div>
-      </div>
+    </div>
+    <div class="breakdown">
+      <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
+      <div class="breakdown-legend" id="breakdownLegend"></div>
     </div>
   </div>
 
