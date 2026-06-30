@@ -908,6 +908,8 @@
     width: 1%; white-space: nowrap;
   }
   #historyTable td:nth-child(4) { color: var(--muted); }
+  .history-more { display: flex; align-items: center; gap: 12px; padding: 12px 8px; }
+  .history-count { color: var(--muted); font-size: 13px; }
   th, td {
     text-align: left; padding: 12px 8px;
     border-bottom: 1px solid var(--border);
@@ -1498,6 +1500,10 @@
       </thead>
       <tbody></tbody>
     </table>
+    <div id="historyMore" class="history-more" style="display:none;">
+      <button class="link" id="historyMoreBtn">加载更多</button>
+      <span id="historyCount" class="history-count"></span>
+    </div>
     <div class="empty" id="emptyMsg">还没有记录。</div>
   </div>
   </div>
@@ -1634,6 +1640,7 @@
       historyDate: '日期', historyUpdates: '更新', historyTotal: '当日总余额', historyNote: '备注',
       edit: '编辑', del: '删除',
       noRecords: '还没有记录。',
+      loadMore: '加载更多', historyShown: (shown, total) => `显示 ${shown} / ${total} 条`,
       later: '稍后', exportBackup: '导出备份',
       backupMsg: n => `已有 ${n} 处改动未备份。LocalStorage 可能因清浏览器/换设备丢失，建议导出 JSON 存到云盘。`,
       confirmDeleteAccount: name => `删除账户「${name}」？将清除它在所有记录中的数据。`,
@@ -1642,7 +1649,7 @@
       confirmImport: (a, s) => `导入 ${a} 个账户、${s} 条记录，会替换当前数据，确认？`,
       importFailed: e => `导入失败：${e}`,
       invalidFormat: '格式不正确',
-      liabBadge: '负债', deletedAccount: '(已删除)',
+      liabBadge: '负债', deletedAccount: '(已删除)', dragReorder: '拖拽排序',
       original: text => `原 ${text}`,
       defaultAccountName: '余额',
       currencies: { CNY: '人民币 CNY', USD: '美元 USD', JPY: '日元 JPY', EUR: '欧元 EUR', GBP: '英镑 GBP', HKD: '港元 HKD', SGD: '新加坡元 SGD', TWD: '新台币 TWD', KRW: '韩元 KRW', AUD: '澳元 AUD', CAD: '加元 CAD', CHF: '瑞士法郎 CHF', INR: '印度卢比 INR', THB: '泰铢 THB', MYR: '林吉特 MYR' },
@@ -1774,6 +1781,7 @@
       historyDate: 'Date', historyUpdates: 'Updates', historyTotal: 'Total that day', historyNote: 'Note',
       edit: 'Edit', del: 'Delete',
       noRecords: 'No records yet.',
+      loadMore: 'Load more', historyShown: (shown, total) => `Showing ${shown} / ${total}`,
       later: 'Later', exportBackup: 'Export backup',
       backupMsg: n => `${n} change${n === 1 ? '' : 's'} since last export. LocalStorage can be wiped — export the JSON and store it in your cloud drive.`,
       confirmDeleteAccount: name => `Delete account "${name}"? This removes its data from all records.`,
@@ -1782,7 +1790,7 @@
       confirmImport: (a, s) => `Import ${a} account${a === 1 ? '' : 's'} and ${s} record${s === 1 ? '' : 's'}? This will replace current data.`,
       importFailed: e => `Import failed: ${e}`,
       invalidFormat: 'Invalid format',
-      liabBadge: 'Debt', deletedAccount: '(deleted)',
+      liabBadge: 'Debt', deletedAccount: '(deleted)', dragReorder: 'Drag to reorder',
       original: text => `Orig. ${text}`,
       defaultAccountName: 'Balance',
       currencies: { CNY: 'CNY · Yuan', USD: 'USD · Dollar', JPY: 'JPY · Yen', EUR: 'EUR · Euro', GBP: 'GBP · Pound', HKD: 'HKD · HK Dollar', SGD: 'SGD · Sing. Dollar', TWD: 'TWD · Taiwan Dollar', KRW: 'KRW · Won', AUD: 'AUD · Aus. Dollar', CAD: 'CAD · Can. Dollar', CHF: 'CHF · Franc', INR: 'INR · Rupee', THB: 'THB · Baht', MYR: 'MYR · Ringgit' },
@@ -1914,6 +1922,7 @@
       historyDate: '日付', historyUpdates: '更新', historyTotal: '当日総残高', historyNote: 'メモ',
       edit: '編集', del: '削除',
       noRecords: '記録はまだありません。',
+      loadMore: 'もっと見る', historyShown: (shown, total) => `${total} 件中 ${shown} 件を表示`,
       later: '後で', exportBackup: 'バックアップを出力',
       backupMsg: n => `エクスポート後 ${n} 件の変更があります。LocalStorage は消える可能性があるため、JSON をクラウドに保存してください。`,
       confirmDeleteAccount: name => `口座「${name}」を削除しますか？すべての記録から該当データが消えます。`,
@@ -1922,7 +1931,7 @@
       confirmImport: (a, s) => `${a} 個の口座、${s} 件の記録をインポートします。現在のデータを置き換えますがよろしいですか？`,
       importFailed: e => `インポート失敗：${e}`,
       invalidFormat: '形式が正しくありません',
-      liabBadge: '負債', deletedAccount: '(削除済)',
+      liabBadge: '負債', deletedAccount: '(削除済)', dragReorder: 'ドラッグで並べ替え',
       original: text => `元 ${text}`,
       defaultAccountName: '残高',
       currencies: { CNY: '人民元 CNY', USD: '米ドル USD', JPY: '日本円 JPY', EUR: 'ユーロ EUR', GBP: '英ポンド GBP', HKD: '香港ドル HKD', SGD: 'シンガポール・ドル SGD', TWD: '台湾ドル TWD', KRW: '韓国ウォン KRW', AUD: '豪ドル AUD', CAD: 'カナダドル CAD', CHF: 'スイスフラン CHF', INR: 'インドルピー INR', THB: 'タイバーツ THB', MYR: 'リンギット MYR' },
@@ -2280,6 +2289,28 @@
   function signFor(type) { return type === 'liability' ? -1 : 1; }
   function signedAmount(amount, type) { return amount * signFor(type); }
 
+  // Net inflow for a snapshot, converted to display currency. Combines the legacy
+  // snapshot-level inflow with per-row update inflows (each added in its account's
+  // own direction). Shared by history, the MTD/YTD split, and the CSV export so the
+  // three never disagree on what "inflow" means for a given record.
+  function snapshotInflowInDisplay(snapshot) {
+    const rates = state.rates[snapshot.date];
+    let total = 0, has = false;
+    if (snapshot.inflow) {
+      const c = convert(snapshot.inflow.amount, snapshot.inflow.currency, state.displayCurrency, rates);
+      if (c != null) { total += c; has = true; }
+    }
+    Object.entries(snapshot.updates).forEach(([accId, u]) => {
+      if (u.inflow != null) {
+        const acc = accountById(accId);
+        const sign = acc ? signFor(acc.type) : 1;
+        const c = convert(u.inflow, u.currency, state.displayCurrency, rates);
+        if (c != null) { total += c * sign; has = true; }
+      }
+    });
+    return { total, has };
+  }
+
   // ===== Timeline =====
   // Carry-forward per-account balances (in their stored currency).
   // For each snapshot date, convert each held balance to display currency using that date's rates.
@@ -2358,7 +2389,7 @@
           `<option value="${c}" ${a.category === c ? 'selected' : ''}>${t('categories')[c]}</option>`
         ).join('')}</select>`;
       row.innerHTML = `
-        <span class="drag-handle" title="拖拽排序" aria-label="Drag to reorder">⋮⋮</span>
+        <span class="drag-handle" title="${t('dragReorder')}" aria-label="${t('dragReorder')}">⋮⋮</span>
         <span class="chip-dot" style="background:${a.color}"></span>
         <input type="text" data-id="${a.id}" data-field="name" value="${escapeHtml(a.name)}">
         <select data-id="${a.id}" data-field="currency"></select>
@@ -2707,6 +2738,10 @@
   }
 
   // ===== History =====
+  // Render only the most-recent HISTORY_PAGE rows at a time so the table stays
+  // fast and short as years of snapshots accumulate; "load more" raises the cap.
+  const HISTORY_PAGE = 20;
+  let historyLimit = HISTORY_PAGE;
   function renderHistory() {
     const timeline = computeTimeline();
     const tbody = document.querySelector('#historyTable tbody');
@@ -2723,7 +2758,9 @@
         return false;
       });
     }
-    reversed.forEach(({ snapshot, total, ratesMissing }) => {
+    const totalMatches = reversed.length;
+    const visible = reversed.slice(0, historyLimit);
+    visible.forEach(({ snapshot, total, ratesMissing }) => {
       const updates = Object.entries(snapshot.updates).map(([id, v]) => {
         const acc = accountById(id);
         const name = acc ? acc.name : t('deletedAccount');
@@ -2734,11 +2771,9 @@
       }).join('');
       const tr = document.createElement('tr');
       let inflowLine = '';
-      if (snapshot.inflow) {
-        const inf = snapshot.inflow;
-        const acc = inf.accountId && accountById(inf.accountId);
-        const arrow = acc ? ` <span class="arrow">→</span> ${escapeHtml(acc.name)}` : '';
-        inflowLine = `<div class="inflow-line">${t('inflow')} ${fmt(inf.amount, inf.currency)}${arrow}</div>`;
+      const inf = snapshotInflowInDisplay(snapshot);
+      if (inf.has) {
+        inflowLine = `<div class="inflow-line">${t('inflow')} ${fmtSigned(inf.total, state.displayCurrency)}</div>`;
       }
       tr.innerHTML = `
         <td>${escapeHtml(snapshot.date)}</td>
@@ -2752,11 +2787,18 @@
       `;
       tbody.appendChild(tr);
     });
-    const hasRows = reversed.length > 0;
+    const hasRows = totalMatches > 0;
     const emptyEl = document.getElementById('emptyMsg');
     emptyEl.style.display = hasRows ? 'none' : 'block';
     emptyEl.textContent = (historyQuery && timeline.length) ? t('noMatch') : t('noRecords');
     document.getElementById('historyTable').style.display = hasRows ? '' : 'none';
+
+    // Footer: show count + a "load more" button only when rows are hidden below the cap.
+    const moreEl = document.getElementById('historyMore');
+    const hasMore = visible.length < totalMatches;
+    moreEl.style.display = (hasRows && (hasMore || totalMatches > HISTORY_PAGE)) ? 'flex' : 'none';
+    document.getElementById('historyMoreBtn').style.display = hasMore ? '' : 'none';
+    document.getElementById('historyCount').textContent = t('historyShown', visible.length, totalMatches);
   }
 
   document.querySelector('#historyTable tbody').addEventListener('click', e => {
@@ -2819,18 +2861,46 @@
       const rates = state.rates[tn.snapshot.date];
       const ratio = rates && rates[state.displayCurrency] ? rates[state.displayCurrency] : 1;
       const usd = v / ratio;
+      // A single jump can clear several thresholds at once (e.g. 0 → past 10k & 50k).
+      // Label only the highest one reached so the pills never stack and overlap.
+      let highest = null;
       for (const m of thresholds) {
-        if (prevUsd < m && usd >= m) {
-          crossings.push({ index: i, milestone: m, label: fmt(m * ratio, state.displayCurrency) });
-        }
+        if (prevUsd < m && usd >= m) highest = m;
+      }
+      if (highest != null) {
+        crossings.push({ index: i, milestone: highest, label: fmt(highest * ratio, state.displayCurrency) });
       }
       prevUsd = usd;
     }
     return crossings;
   }
 
+  // #rrggbb / #rgb -> rgba() string at the given alpha (for translucent fills/glows).
+  function hexToRgba(hex, a) {
+    let h = (hex || '').replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    if (isNaN(n)) return hex; // already rgb()/named — pass through
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+  }
+
+  // Scriptable backgroundColor: a soft vertical gradient under the line that fades to
+  // nothing at the baseline. Falls back to a flat tint before the chart area is laid out.
+  function areaFill(hex) {
+    return ctx2 => {
+      const { ctx: c, chartArea } = ctx2.chart;
+      if (!chartArea) return hexToRgba(hex, 0.14);
+      const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, hexToRgba(hex, 0.30));
+      g.addColorStop(0.55, hexToRgba(hex, 0.08));
+      g.addColorStop(1, hexToRgba(hex, 0));
+      return g;
+    };
+  }
+
   function renderChart() {
     const ctx = document.getElementById('chart');
+    const accent = cssVar('--accent');
 
     let labels, datasets;
     let crossings = [];
@@ -2842,11 +2912,16 @@
         {
           label: String(yoy.currentYear),
           data: yoy.current,
-          borderColor: '#4ade80',
-          backgroundColor: 'rgba(74, 222, 128, 0.12)',
+          borderColor: accent,
+          backgroundColor: areaFill(accent),
           fill: true,
-          tension: 0.25,
-          pointRadius: 4,
+          borderWidth: 2.5,
+          cubicInterpolationMode: 'monotone',
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointBackgroundColor: accent,
+          pointBorderColor: cssVar('--panel'),
+          pointBorderWidth: 2,
           spanGaps: false,
         },
         {
@@ -2855,9 +2930,14 @@
           borderColor: cssVar('--muted'),
           backgroundColor: 'transparent',
           fill: false,
+          borderWidth: 1.5,
           borderDash: [6, 4],
-          tension: 0.25,
-          pointRadius: 3,
+          cubicInterpolationMode: 'monotone',
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointBackgroundColor: cssVar('--muted'),
+          pointBorderColor: cssVar('--panel'),
+          pointBorderWidth: 2,
           spanGaps: false,
         },
       ];
@@ -2867,19 +2947,26 @@
       if (chartMode === 'total') {
         crossings = findMilestoneCrossings(timeline);
         const crossSet = new Set(crossings.map(c => c.index));
-        const radii = timeline.map((_, i) => crossSet.has(i) ? 7 : 4);
-        const pointColors = timeline.map((_, i) => crossSet.has(i) ? cssVar('--warning') : '#4ade80');
+        // Hide the dot on ordinary points (keeps a long timeline clean); only
+        // milestone crossings get a visible, highlighted marker.
+        const radii = timeline.map((_, i) => crossSet.has(i) ? 6 : 0);
+        const hoverRadii = timeline.map((_, i) => crossSet.has(i) ? 8 : 5);
+        const pointColors = timeline.map((_, i) => crossSet.has(i) ? cssVar('--warning') : accent);
         datasets = [{
           label: `${t('totalLegend')}（${state.displayCurrency}）`,
           data: timeline.map(t => totalForBasis(t)),
-          borderColor: '#4ade80',
-          backgroundColor: 'rgba(74, 222, 128, 0.12)',
+          borderColor: accent,
+          backgroundColor: areaFill(accent),
           fill: true,
-          tension: 0.25,
+          borderWidth: 2.5,
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
+          cubicInterpolationMode: 'monotone',
           pointRadius: radii,
-          pointHoverRadius: radii.map(r => r + 2),
+          pointHoverRadius: hoverRadii,
           pointBackgroundColor: pointColors,
-          pointBorderColor: pointColors,
+          pointBorderColor: cssVar('--panel'),
+          pointBorderWidth: 2,
           spanGaps: true,
         }];
       } else {
@@ -2890,9 +2977,14 @@
             return b ? b.converted : null;
           }),
           borderColor: a.color,
-          backgroundColor: a.color + '22',
-          tension: 0.25,
-          pointRadius: 3,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          cubicInterpolationMode: 'monotone',
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointBackgroundColor: a.color,
+          pointBorderColor: cssVar('--panel'),
+          pointBorderWidth: 2,
           spanGaps: true,
         }));
       }
@@ -2973,9 +3065,13 @@
       chart.options.plugins.legend.display = chartMode !== 'total';
       chart.options.plugins.legend.labels.color = cssVar('--text');
       chart.options.scales.x.ticks.color = cssVar('--muted');
-      chart.options.scales.x.grid.color = cssVar('--grid');
       chart.options.scales.y.ticks.color = cssVar('--muted');
       chart.options.scales.y.grid.color = cssVar('--grid');
+      const tt = chart.options.plugins.tooltip;
+      tt.backgroundColor = cssVar('--panel-elev');
+      tt.titleColor = cssVar('--muted');
+      tt.bodyColor = cssVar('--text');
+      tt.borderColor = cssVar('--border-strong');
       chart.update();
       return;
     }
@@ -2988,13 +3084,36 @@
         responsive: true,
         maintainAspectRatio: false,
         layout: { padding: { top: 24 } },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: chartMode !== 'total', labels: { color: cssVar('--text') } },
-          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` } }
+          legend: {
+            display: chartMode !== 'total',
+            labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16 }
+          },
+          tooltip: {
+            backgroundColor: cssVar('--panel-elev'),
+            titleColor: cssVar('--muted'),
+            bodyColor: cssVar('--text'),
+            borderColor: cssVar('--border-strong'),
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            usePointStyle: true,
+            boxPadding: 6,
+            callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` }
+          }
         },
         scales: {
-          x: { ticks: { color: cssVar('--muted') }, grid: { color: cssVar('--grid') } },
-          y: { ticks: { color: cssVar('--muted'), callback: v => fmt(v, state.displayCurrency) }, grid: { color: cssVar('--grid') } }
+          x: {
+            ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            grid: { display: false },
+            border: { display: false }
+          },
+          y: {
+            ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => fmt(v, state.displayCurrency) },
+            grid: { color: cssVar('--grid'), drawTicks: false },
+            border: { display: false }
+          }
         }
       }
     });
@@ -3045,25 +3164,11 @@
       `Net total (${dc})`, `Net inflow (${dc})`, 'Note'];
     const lines = [header.map(csvCell).join(',')];
     tl.forEach(entry => {
-      const rates = state.rates[entry.snapshot.date];
-      let inflow = 0, hasInflow = false;
-      if (entry.snapshot.inflow) {
-        const inf = entry.snapshot.inflow;
-        const c = convert(inf.amount, inf.currency, dc, rates);
-        if (c != null) { inflow += c; hasInflow = true; }
-      }
-      Object.entries(entry.snapshot.updates).forEach(([accId, u]) => {
-        if (u.inflow != null) {
-          const acc = accountById(accId);
-          const sign = acc ? signFor(acc.type) : 1;
-          const c = convert(u.inflow, u.currency, dc, rates);
-          if (c != null) { inflow += c * sign; hasInflow = true; }
-        }
-      });
+      const inf = snapshotInflowInDisplay(entry.snapshot);
       const row = [entry.snapshot.date,
         ...accs.map(a => { const b = entry.balances[a.id]; return b && b.converted != null ? round(b.converted) : ''; }),
         entry.total != null ? round(entry.total) : '',
-        hasInflow ? round(inflow) : '',
+        inf.has ? round(inf.total) : '',
         entry.snapshot.note || ''];
       lines.push(row.map(csvCell).join(','));
     });
@@ -3259,22 +3364,8 @@
     let inflowHas = false;
     for (const tn of tl) {
       if (tn.snapshot.date < startDateInclusive) continue;
-      const rates = state.rates[tn.snapshot.date];
-      // Snapshot-level inflow (legacy + still supported)
-      if (tn.snapshot.inflow) {
-        const inf = tn.snapshot.inflow;
-        const conv = convert(inf.amount, inf.currency, state.displayCurrency, rates);
-        if (conv != null) { inflowTotal += conv; inflowHas = true; }
-      }
-      // Per-update inflow
-      Object.entries(tn.snapshot.updates).forEach(([accId, u]) => {
-        if (u.inflow != null) {
-          const acc = accountById(accId);
-          const sign = acc ? signFor(acc.type) : 1;
-          const conv = convert(u.inflow, u.currency, state.displayCurrency, rates);
-          if (conv != null) { inflowTotal += conv * sign; inflowHas = true; }
-        }
-      });
+      const inf = snapshotInflowInDisplay(tn.snapshot);
+      if (inf.has) { inflowTotal += inf.total; inflowHas = true; }
     }
 
     const delta = currentVal - baselineVal;
@@ -4264,6 +4355,10 @@
     let localOnly = 0;
     local.snapshots.forEach(s => { if (!remoteIds.has(s.id)) localOnly++; });
     // Accounts: keep local order + local fields; append accounts only the remote has.
+    // Limitation: for an account that exists on both sides (same id), LOCAL fields win —
+    // a rename / currency / category / color change made on another device is NOT pulled
+    // in (accounts carry no updatedAt to arbitrate). Re-apply such edits on this device,
+    // or they take effect only when this device happens to be the one writing them.
     const accIds = new Set(local.accounts.map(a => a.id));
     const mergedAccounts = local.accounts.slice();
     remote.accounts.forEach(a => { if (!accIds.has(a.id)) mergedAccounts.push(a); });
@@ -4426,6 +4521,12 @@
   let historyQuery = '';
   document.getElementById('historySearch').addEventListener('input', e => {
     historyQuery = e.target.value.trim().toLowerCase();
+    historyLimit = HISTORY_PAGE;   // a new search starts back at the first page
+    renderHistory();
+  });
+
+  document.getElementById('historyMoreBtn').addEventListener('click', () => {
+    historyLimit += HISTORY_PAGE;
     renderHistory();
   });
 
@@ -4445,6 +4546,7 @@
     setText('thTotal', t('historyTotal'));
     setText('thNote', t('historyNote'));
     setText('emptyMsg', t('noRecords'));
+    setText('historyMoreBtn', t('loadMore'));
     setText('accountSettingsHint', t('accountSettingsHint'));
     setText('entryHint', t('entryHint'));
     setText('addAccountBtn', t('add'));
@@ -4744,7 +4846,7 @@
   populateCurrencySelect(document.getElementById('newAccountCurrency'), state.displayCurrency);
   populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
   document.getElementById('langSelect').value = state.language;
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = localDateStr();
   applyTheme();
   applyI18n();
 
