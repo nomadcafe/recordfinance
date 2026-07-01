@@ -1217,6 +1217,7 @@
             <div id="syncStatus" style="font-size: 13px; color: var(--muted); margin: 4px 0 10px;">未链接</div>
             <div class="goal-actions">
               <button id="syncPickBtn" type="button">选择同步文件</button>
+              <button id="syncLoadBtn" type="button" class="ghost" hidden>加载已有文件</button>
               <button id="syncPushBtn" type="button" hidden>保存到文件</button>
               <button id="syncPullBtn" type="button" class="ghost" hidden>从文件加载</button>
               <button id="syncUnlinkBtn" type="button" class="ghost" hidden>解除链接</button>
@@ -1640,11 +1641,12 @@
       snapshotConfirmRestore: ts => `恢复到 ${ts} 时的数据？当前数据会被覆盖（也会先存为一份新快照）。`,
       snapshotsNone: '还没有快照',
       syncPickFile: '选择同步文件',
+      syncLoadFile: '加载已有文件',
       syncPushFile: '保存到文件',
       syncPullFile: '从文件加载',
       syncUnlinkFile: '解除链接',
       syncFileLinked: name => `已链接 · ${name}`,
-      syncFileHint: '推荐：选择（或新建）一个放在 iCloud Drive 里的 record-finance.json。iCloud 会自动同步到所有 Apple 设备，其他设备打开页面后点"从文件加载"即可。',
+      syncFileHint: '推荐：选择（或新建）一个放在 iCloud Drive 里的 record-finance.json。iCloud 会自动同步到所有 Apple 设备，其他设备打开页面后点"加载已有文件"即可（只读取，不会覆盖）。',
       syncFsUnsupported: '本浏览器不支持自动文件同步（仅 Chrome/Edge 桌面版支持）。请用下方导出/导入按钮，把 JSON 保存到 Files App 的 iCloud Drive，在其他设备打开后导入。',
       syncFsUnsupportedHint: 'iOS 用户：点右下"导出"→ 在弹出窗口选"存储到文件"→ 选 iCloud Drive 中的位置。下载时选同一文件即可。',
       syncPushSuccess: '✓ 已写入同步文件',
@@ -1781,11 +1783,12 @@
       snapshotConfirmRestore: ts => `Restore to data from ${ts}? Current data will be overwritten (a new snapshot will be saved first).`,
       snapshotsNone: 'No snapshots yet',
       syncPickFile: 'Pick sync file',
+      syncLoadFile: 'Load existing file',
       syncPushFile: 'Save to file',
       syncPullFile: 'Load from file',
       syncUnlinkFile: 'Unlink',
       syncFileLinked: name => `Linked · ${name}`,
-      syncFileHint: 'Tip: pick (or create) a file inside your iCloud Drive folder (e.g., record-finance.json). iCloud syncs it across devices; on another device just hit "Load from file".',
+      syncFileHint: 'Tip: pick (or create) a file inside your iCloud Drive folder (e.g., record-finance.json). iCloud syncs it across devices; on another device just hit "Load existing file" (read-only, never overwrites).',
       syncFsUnsupported: 'This browser doesn\'t support direct file sync (Chrome/Edge desktop only). Use Export/Import below + save the JSON inside Files → iCloud Drive.',
       syncFsUnsupportedHint: 'iOS: tap Export → "Save to Files" → pick a location in iCloud Drive. On other devices, Import from the same file.',
       syncPushSuccess: '✓ Wrote to sync file',
@@ -1922,11 +1925,12 @@
       snapshotConfirmRestore: ts => `${ts} 時点のデータに復元しますか？現在のデータは上書きされます（先に新しいスナップショットを保存します）。`,
       snapshotsNone: 'スナップショットはまだありません',
       syncPickFile: '同期ファイルを選択',
+      syncLoadFile: '既存ファイルを読込',
       syncPushFile: 'ファイルへ書込',
       syncPullFile: 'ファイルから読込',
       syncUnlinkFile: 'リンク解除',
       syncFileLinked: name => `リンク済み · ${name}`,
-      syncFileHint: 'iCloud Drive 内のファイル（例：record-finance.json）を選択（または作成）してください。iCloud が全デバイスに同期し、別デバイスでは「ファイルから読込」で取得できます。',
+      syncFileHint: 'iCloud Drive 内のファイル（例：record-finance.json）を選択（または作成）してください。iCloud が全デバイスに同期し、別デバイスでは「既存ファイルを読込」で取得できます（読み取りのみ・上書きしません）。',
       syncFsUnsupported: 'このブラウザはファイル直接同期に未対応です（Chrome/Edge デスクトップのみ）。エクスポート/インポートで JSON を Files の iCloud Drive に保存・読込してください。',
       syncFsUnsupportedHint: 'iOS：エクスポート → 「ファイルに保存」→ iCloud Drive の場所を選択。別デバイスでは同じファイルをインポート。',
       syncPushSuccess: '✓ ファイルに書き込みました',
@@ -3485,12 +3489,14 @@
     // Open prefs panel softly so user discovers the gear / sync icons
     // Actually skip that — let them explore. They'll see ⚙ ☁ in header.
   });
-  document.getElementById('welcomeLoadBtn').addEventListener('click', () => {
+  document.getElementById('welcomeLoadBtn').addEventListener('click', async () => {
     state.welcomeDismissed = true;
     save();
     renderAll();
-    // Open sync modal so user can pick existing file
-    openSync();
+    // Go straight to the read-only loader (no scary "replace file?" prompt). Fall back to
+    // the sync modal on browsers without the File System Access API.
+    if (SUPPORTS_FS) await loadSyncFile();
+    else openSync();
   });
   document.getElementById('welcomeDemoBtn').addEventListener('click', async () => {
     await loadDemoData();
@@ -4319,6 +4325,9 @@
     // hide push/pull (they'd only error) until the user re-links.
     const broken = linked && syncHandleMissing;
     document.getElementById('syncPickBtn').hidden = !!linked && !broken;
+    // "Load existing file" shares the unlinked/broken state with Pick — it's the read-only
+    // way to attach an existing file without the Save picker's "replace?" warning.
+    document.getElementById('syncLoadBtn').hidden = !!linked && !broken;
     document.getElementById('syncPushBtn').hidden = !linked || broken;
     document.getElementById('syncPullBtn').hidden = !linked || broken;
     document.getElementById('syncUnlinkBtn').hidden = !linked;
@@ -4450,6 +4459,55 @@
     showToast(t('syncMergeSuccess', summary.remoteOnly, summary.localOnly));
   }
 
+  // Read-only entry point for "I already have data, just show it." Uses the OPEN picker
+  // (not the Save picker), so the browser never shows the alarming "record-finance.json
+  // already exists — replace it?" prompt that makes users fear their data is about to be
+  // wiped. We only ever read here; a write-back (if a merge is needed) happens after we
+  // upgrade the handle to readwrite in this same click gesture.
+  async function loadSyncFile() {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Record Finance JSON', accept: { 'application/json': ['.json'] } }],
+        multiple: false,
+      });
+      let remote = null;
+      try {
+        const file = await handle.getFile();
+        const text = (await file.text()).trim();
+        if (text) remote = JSON.parse(text);
+      } catch { /* unreadable → treat as invalid below */ }
+      if (!remote || !Array.isArray(remote.snapshots)) {
+        showToast(t('syncFail', 'empty or invalid file'));
+        return;
+      }
+
+      await idbSet(IDB_HANDLE_KEY, handle);
+      state.sync = { fileName: handle.name };
+      save();
+      // Upgrade to readwrite in the same gesture so ongoing auto-sync can push back.
+      // Declining is fine — the load below only needs read, and the "sync paused" UI
+      // will prompt for write access later.
+      try { await verifyPermission(handle, true); } catch { /* stay read-only */ }
+      syncPermissionPaused = false;
+      syncHandleMissing = false;
+      renderSync();
+
+      const remoteCount = remote.snapshots.length;
+      const localCount = state.snapshots.length;
+      if (remoteCount > 0 && localCount === 0) {
+        await applyRemoteState(remote, handle);
+        showToast(t('syncPullSuccess'));
+      } else if (remoteCount > 0) {
+        // Local already has data too → losslessly merge instead of clobbering either side.
+        await mergePull(remote, handle);
+      } else {
+        showToast(t('syncFail', 'empty file'));
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast(t('syncFail', e.message));
+    }
+  }
+
   async function pickSyncFile() {
     try {
       const handle = await window.showSaveFilePicker({
@@ -4541,6 +4599,7 @@
   }
 
   document.getElementById('syncPickBtn').addEventListener('click', pickSyncFile);
+  document.getElementById('syncLoadBtn').addEventListener('click', loadSyncFile);
   document.getElementById('syncPushBtn').addEventListener('click', syncPush);
   document.getElementById('syncPullBtn').addEventListener('click', syncPull);
   document.getElementById('syncUnlinkBtn').addEventListener('click', unlinkSync);
@@ -4629,6 +4688,7 @@
     const syncHeaderBtn = document.getElementById('syncBtn');
     if (syncHeaderBtn) syncHeaderBtn.setAttribute('aria-label', t('cloudSync'));
     setText('syncPickBtn', t('syncPickFile'));
+    setText('syncLoadBtn', t('syncLoadFile'));
     setText('syncPushBtn', t('syncPushFile'));
     setText('syncPullBtn', t('syncPullFile'));
     setText('syncUnlinkBtn', t('syncUnlinkFile'));
