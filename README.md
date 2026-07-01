@@ -28,7 +28,7 @@ Your data never leaves your device.
 
 Pure static site. No build step, no framework.
 
-- HTML / CSS / vanilla JS in a single `index.html`
+- HTML / CSS / vanilla JS in `index.html` (translations split into `i18n.js`)
 - [Chart.js](https://www.chartjs.org/) via jsDelivr CDN
 - [`@fawazahmed0/currency-api`](https://github.com/fawazahmed0/exchange-api) via jsDelivr CDN (free, no API key)
 - File System Access API + IndexedDB for sync handle persistence

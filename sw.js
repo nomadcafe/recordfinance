@@ -1,7 +1,8 @@
-const CACHE = 'record-v6';
+const CACHE = 'record-v7';
 const ASSETS = [
   './',
   './index.html',
+  './i18n.js',
   './manifest.json',
   './icon.svg',
   './og-image.jpg',
@@ -44,8 +45,11 @@ self.addEventListener('fetch', e => {
   // so a cache-first shell would strand users on a stale build (including stale
   // security fixes) until two reloads. Online → fetch fresh + update cache;
   // offline → fall back to the cached shell.
+  // i18n.js ships in lockstep with the shell (a fresh build may use new keys), so keep it
+  // network-first too — otherwise a cached dictionary could lag the updated index.html.
   const isShell = e.request.mode === 'navigate' ||
-    url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+    url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') ||
+    url.pathname.endsWith('/i18n.js');
   if (isShell) {
     e.respondWith(
       fetch(e.request)
