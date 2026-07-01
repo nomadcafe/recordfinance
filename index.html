@@ -1200,6 +1200,15 @@
           </div>
           <div class="hint" id="pinHint"></div>
         </div>
+        <div class="field">
+          <label id="encLabel">数据加密</label>
+          <div class="goal-actions">
+            <span id="encStatus" style="color: var(--muted); font-size: 13px; min-width: 80px;">未开启</span>
+            <button id="encSetBtn" type="button">开启</button>
+            <button id="encRemoveBtn" type="button" class="ghost" hidden>关闭</button>
+          </div>
+          <div class="hint" id="encHint">用口令加密本地数据与同步文件（AES-GCM）。忘记口令将无法恢复。</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1594,6 +1603,20 @@
       pinInvalid: '密码需为 4–8 位数字',
       pinPromptUnlock: '请输入密码',
       unlock: '解锁',
+      encLabel: '数据加密',
+      encHint: '用口令加密本地数据与同步文件（AES-GCM）。忘记口令将无法恢复。',
+      encOn: '已开启', encOff: '未开启', encTurnOn: '开启', encTurnOff: '关闭',
+      encPromptNew: '设置加密口令（至少 6 位）：',
+      encPromptConfirm: '再次输入口令确认：',
+      encTooShort: '口令至少 6 位',
+      encMismatch: '两次输入的口令不一致',
+      encWarnLoss: '重要：忘记口令将无法恢复数据，也没有找回途径。确定开启加密吗？',
+      encDisableConfirm: '关闭加密后，本地数据与同步文件将以明文保存。确定关闭吗？',
+      encPromptUnlockFile: '此文件已加密，请输入口令解锁：',
+      encWrongPass: '口令错误',
+      encUnlockTitle: '请输入加密口令',
+      encEnabled: '✓ 已开启加密',
+      encDisabled: '✓ 已关闭加密',
       milestone: amt => `🎉 净资产突破 ${amt}！`,
       perRowInflow: '其中入金',
       historySearch: '搜索备注 / 账户名',
@@ -1736,6 +1759,20 @@
       pinInvalid: 'PIN must be 4–8 digits',
       pinPromptUnlock: 'Enter PIN',
       unlock: 'Unlock',
+      encLabel: 'Encryption',
+      encHint: 'Encrypt local data and the sync file with a passphrase (AES-GCM). If you forget it, the data cannot be recovered.',
+      encOn: 'On', encOff: 'Off', encTurnOn: 'Turn on', encTurnOff: 'Turn off',
+      encPromptNew: 'Set an encryption passphrase (6+ characters):',
+      encPromptConfirm: 'Re-enter the passphrase to confirm:',
+      encTooShort: 'Passphrase must be at least 6 characters',
+      encMismatch: 'The passphrases do not match',
+      encWarnLoss: 'Important: if you forget this passphrase your data cannot be recovered — there is no reset. Turn on encryption?',
+      encDisableConfirm: 'Turning off encryption stores your local data and sync file as plaintext. Continue?',
+      encPromptUnlockFile: 'This file is encrypted. Enter its passphrase to unlock:',
+      encWrongPass: 'Wrong passphrase',
+      encUnlockTitle: 'Enter encryption passphrase',
+      encEnabled: '✓ Encryption on',
+      encDisabled: '✓ Encryption off',
       milestone: amt => `🎉 Net worth crossed ${amt}!`,
       perRowInflow: 'Of which inflow',
       historySearch: 'Search note / account',
@@ -1878,6 +1915,20 @@
       pinInvalid: 'PIN は 4〜8 桁の数字',
       pinPromptUnlock: 'PIN を入力',
       unlock: 'ロック解除',
+      encLabel: 'データ暗号化',
+      encHint: 'ローカルデータと同期ファイルをパスフレーズで暗号化（AES-GCM）。忘れると復元できません。',
+      encOn: 'オン', encOff: 'オフ', encTurnOn: 'オンにする', encTurnOff: 'オフにする',
+      encPromptNew: '暗号化パスフレーズを設定（6文字以上）：',
+      encPromptConfirm: '確認のためもう一度入力：',
+      encTooShort: 'パスフレーズは6文字以上必要です',
+      encMismatch: 'パスフレーズが一致しません',
+      encWarnLoss: '重要：パスフレーズを忘れるとデータは復元できません（リセット不可）。暗号化を有効にしますか？',
+      encDisableConfirm: '暗号化をオフにすると、ローカルデータと同期ファイルは平文で保存されます。続けますか？',
+      encPromptUnlockFile: 'このファイルは暗号化されています。パスフレーズを入力：',
+      encWrongPass: 'パスフレーズが違います',
+      encUnlockTitle: '暗号化パスフレーズを入力',
+      encEnabled: '✓ 暗号化オン',
+      encDisabled: '✓ 暗号化オフ',
       milestone: amt => `🎉 純資産が ${amt} を突破！`,
       perRowInflow: 'うち入金',
       historySearch: 'メモ / 口座を検索',
@@ -2036,6 +2087,63 @@
     return (negative ? '−' : '') + SYMBOLS[currency] + numStr;
   }
 
+  // ===== Encryption at rest (optional passphrase) =====
+  // When enabled, the state blob in localStorage, the rolling IndexedDB backups, and the
+  // linked sync file are all stored as an AES-GCM envelope keyed by PBKDF2(passphrase).
+  // The plaintext only ever lives in memory. Detection is by the envelope's __enc marker,
+  // so the salt/iter needed to re-derive the key travel with the ciphertext.
+  const ENC_ITER = 210000;
+  let encKey = null;            // CryptoKey once unlocked/enabled; null = plaintext mode
+  let encSalt = null;           // base64 salt bound to encKey
+  let pendingEnvelope = null;   // set by load() when localStorage holds an encrypted blob
+  let persistChain = Promise.resolve(); // serializes async encrypted writes in call order
+
+  function bytesToB64(bytes) { let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b)); return btoa(bin); }
+  function b64ToBytes(b64) { const bin = atob(b64); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+  function isEnvelope(o) { return !!o && o.__enc === 1 && typeof o.ct === 'string'; }
+
+  async function deriveEncKey(pass, saltBytes, iter) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: saltBytes, iterations: iter, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  // Encrypt a string with the active key; fresh IV per call (never reuse a GCM nonce).
+  async function encEnvelope(plainStr) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ctBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, encKey, new TextEncoder().encode(plainStr));
+    return { __enc: 1, v: 1, kdf: 'PBKDF2', hash: 'SHA-256', iter: ENC_ITER, salt: encSalt, iv: bytesToB64(iv), ct: bytesToB64(new Uint8Array(ctBuf)) };
+  }
+  async function decEnvelope(env, key) {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(env.iv) }, key, b64ToBytes(env.ct));
+    return new TextDecoder().decode(pt);
+  }
+
+  // Serialize a state object for on-disk storage — encrypted envelope if a key is active,
+  // else pretty plaintext (unchanged legacy behavior).
+  async function serializeForFile(obj) {
+    const str = JSON.stringify(obj, null, 2);
+    if (!encKey) return str;
+    return JSON.stringify(await encEnvelope(str), null, 2);
+  }
+  // Parse file/text that may be a plaintext state or an encrypted envelope. On encountering
+  // an envelope without an active key (e.g. a fresh device linking to an encrypted sync
+  // file), prompt for the passphrase and adopt the derived key so writes stay encrypted.
+  async function parseFileText(text) {
+    const parsed = JSON.parse(text);
+    if (!isEnvelope(parsed)) return parsed;
+    // Any failure past this point is on a file we KNOW is encrypted — tag it so callers
+    // never mistake it for an empty/new file and overwrite real (encrypted) data.
+    try {
+      if (!encKey) {
+        const key = await promptDecryptKey(parsed);
+        if (!key) throw new Error(t('encWrongPass'));
+        encKey = key; encSalt = parsed.salt;
+      }
+      return JSON.parse(await decEnvelope(parsed, encKey));
+    } catch (e) { e.encrypted = true; throw e; }
+  }
+
   // ===== State =====
   let state = load();
   let chart = null;
@@ -2182,9 +2290,16 @@
     return data;
   }
 
+  function defaultState() {
+    return { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+  }
+
   function load() {
     let data;
     try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch {}
+    // Encrypted blob → can't decrypt synchronously. Stash it; boot() will prompt for the
+    // passphrase and reassign `state` before anything renders.
+    if (isEnvelope(data)) { pendingEnvelope = data; return defaultState(); }
     // Walk legacy keys in order; first hit wins
     if (!data) {
       for (const key of LEGACY_KEYS) {
@@ -2200,7 +2315,7 @@
       }
     }
     if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.snapshots)) {
-      data = { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+      data = defaultState();
     } else {
       data = migrate(data);
     }
@@ -2213,7 +2328,17 @@
 
   // Bumped on every persisted mutation; used to invalidate the timeline memo below.
   let stateVersion = 0;
-  function save() { stateVersion++; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function save() {
+    stateVersion++;
+    const str = JSON.stringify(state);
+    if (!encKey) { localStorage.setItem(STORAGE_KEY, str); return; }
+    // Encrypted mode: capture the plaintext now (sync), then encrypt + write in call order
+    // so overlapping saves can't interleave and land out of sequence.
+    persistChain = persistChain.then(async () => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(await encEnvelope(str))); }
+      catch (e) { console.warn('encrypted save failed', e); }
+    });
+  }
 
   // Account lookup by id, memoized per stateVersion — avoids O(accounts) scans inside
   // loops over snapshots×updates (history, breakdown, period-change).
@@ -3224,7 +3349,8 @@
     const file = e.target.files[0];
     if (!file) return;
     try {
-      let data = JSON.parse(await file.text());
+      // Accepts a plaintext export or an encrypted envelope (prompts for its passphrase).
+      let data = await parseFileText(await file.text());
       if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.snapshots)) throw new Error(t('invalidFormat'));
       data = migrate(data);
       if (confirm(t('confirmImport', data.accounts.length, data.snapshots.length))) {
@@ -3994,6 +4120,119 @@
     }
   }
 
+  // ===== Encryption UI flows =====
+  async function enableEncryption() {
+    if (encKey) return;
+    const p1 = prompt(t('encPromptNew'));
+    if (p1 == null) return;
+    if (p1.length < 6) { alert(t('encTooShort')); return; }
+    const p2 = prompt(t('encPromptConfirm'));
+    if (p2 == null) return;
+    if (p2 !== p1) { alert(t('encMismatch')); return; }
+    if (!confirm(t('encWarnLoss'))) return;
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+    encSalt = bytesToB64(saltBytes);
+    encKey = await deriveEncKey(p1, saltBytes, ENC_ITER);
+    save(); // rewrites localStorage as an encrypted envelope
+    // Re-encrypt the linked sync file + start a fresh (encrypted) local snapshot.
+    if (state.sync && state.sync.fileName) {
+      try { const h = await getSyncHandle(); if (h && await verifyPermission(h, true)) await writeStateToFile(h); }
+      catch (e) { console.warn('re-encrypt sync file failed', e); }
+    }
+    await clearLocalSnapshots(); // drop the old plaintext backups
+    lastSnapshotMs = 0; saveLocalSnapshot();
+    renderEnc();
+    showToast(t('encEnabled'));
+  }
+
+  async function disableEncryption() {
+    if (!encKey) return;
+    if (!confirm(t('encDisableConfirm'))) return;
+    encKey = null; encSalt = null;
+    save(); // rewrites localStorage as plaintext
+    if (state.sync && state.sync.fileName) {
+      try { const h = await getSyncHandle(); if (h && await verifyPermission(h, true)) await writeStateToFile(h); }
+      catch (e) { console.warn('decrypt sync file failed', e); }
+    }
+    await clearLocalSnapshots(); // drop the old encrypted backups
+    lastSnapshotMs = 0; saveLocalSnapshot();
+    renderEnc();
+    showToast(t('encDisabled'));
+  }
+
+  // Prompt for a passphrase to decrypt a foreign envelope (encrypted sync/import file on a
+  // device that isn't itself encrypted). Returns a verified key or null.
+  async function promptDecryptKey(env) {
+    for (let i = 0; i < 3; i++) {
+      const pass = prompt(t('encPromptUnlockFile'));
+      if (pass == null) return null;
+      try {
+        const key = await deriveEncKey(pass, b64ToBytes(env.salt), env.iter || ENC_ITER);
+        await decEnvelope(env, key); // throws on wrong passphrase (GCM auth tag)
+        return key;
+      } catch { alert(t('encWrongPass')); }
+    }
+    return null;
+  }
+
+  // Boot-time gate: localStorage is encrypted, so block on the passphrase before rendering.
+  async function unlockEncryptedBoot(env) {
+    const overlay = document.getElementById('lockOverlay');
+    const input = document.getElementById('lockInput');
+    const err = document.getElementById('lockErr');
+    const btn = document.getElementById('lockUnlockBtn');
+    overlay.hidden = false;
+    document.getElementById('lockTitle').textContent = t('encUnlockTitle');
+    btn.textContent = t('unlock');
+    err.textContent = '';
+    input.value = '';
+    input.setAttribute('inputmode', 'text');
+    input.removeAttribute('pattern');
+    input.removeAttribute('maxlength');
+    setTimeout(() => input.focus(), 50);
+    await new Promise(resolve => {
+      const tryUnlock = async () => {
+        if (!input.value) return;
+        try {
+          const key = await deriveEncKey(input.value, b64ToBytes(env.salt), env.iter || ENC_ITER);
+          state = migrate(JSON.parse(await decEnvelope(env, key)));
+          encKey = key; encSalt = env.salt;
+          btn.removeEventListener('click', tryUnlock);
+          input.removeEventListener('keydown', onKey);
+          overlay.hidden = true;
+          resolve();
+        } catch {
+          err.textContent = t('encWrongPass');
+          input.select();
+        }
+      };
+      const onKey = e => { if (e.key === 'Enter') tryUnlock(); };
+      btn.addEventListener('click', tryUnlock);
+      input.addEventListener('keydown', onKey);
+    });
+  }
+
+  function renderEnc() {
+    const status = document.getElementById('encStatus');
+    const setBtn = document.getElementById('encSetBtn');
+    const removeBtn = document.getElementById('encRemoveBtn');
+    if (!status || !setBtn || !removeBtn) return;
+    if (encKey) {
+      status.textContent = t('encOn');
+      setBtn.hidden = true;
+      removeBtn.hidden = false;
+      removeBtn.textContent = t('encTurnOff');
+    } else {
+      status.textContent = t('encOff');
+      setBtn.hidden = false;
+      setBtn.textContent = t('encTurnOn');
+      removeBtn.hidden = true;
+    }
+  }
+
+  document.getElementById('encSetBtn').addEventListener('click', enableEncryption);
+  document.getElementById('encRemoveBtn').addEventListener('click', disableEncryption);
+
   const SESSION_UNLOCK_KEY = 'recordfinance.sessionUnlock';
   async function gateAccess() {
     if (!state.pin) return;
@@ -4009,6 +4248,10 @@
     btn.textContent = t('unlock');
     err.textContent = '';
     input.value = '';
+    // Restore numeric-PIN affordances (passphrase unlock may have relaxed them).
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('pattern', '[0-9]*');
+    input.setAttribute('maxlength', '8');
     setTimeout(() => input.focus(), 50);
     await new Promise(resolve => {
       const tryUnlock = async () => {
@@ -4055,12 +4298,15 @@
     if (Date.now() - lastSnapshotMs < 5 * 60 * 1000) return;
     lastSnapshotMs = Date.now();
     try {
+      // Strip sync metadata so restoring won't tamper with sync setup. Encrypt the payload
+      // (if a key is active) BEFORE opening the tx — encryption is async and can't run
+      // inside an IndexedDB transaction.
+      const { sync: _, ...clean } = state;
+      const payload = await serializeForFile(clean);
       const db = await idbOpen();
       const tx = db.transaction('snapshots', 'readwrite');
       const store = tx.objectStore('snapshots');
-      // Strip sync metadata so restoring won't tamper with sync setup
-      const { sync: _, ...clean } = state;
-      store.add({ timestamp: new Date().toISOString(), data: JSON.stringify(clean) });
+      store.add({ timestamp: new Date().toISOString(), data: payload });
       // Trim oldest beyond MAX_SNAPSHOTS
       const countReq = store.count();
       countReq.onsuccess = () => {
@@ -4086,6 +4332,20 @@
         req.onerror = () => reject(req.error);
       });
     } catch { return []; }
+  }
+
+  // Wipe the rolling snapshot store — used when toggling encryption so we never leave
+  // plaintext (or stale-key) backups behind at rest.
+  async function clearLocalSnapshots() {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('snapshots', 'readwrite');
+        tx.objectStore('snapshots').clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) { console.warn('clear snapshots failed', e); }
   }
 
   async function getLocalSnapshot(id) {
@@ -4174,8 +4434,9 @@
         } catch { /* getFile failed — fall through and attempt the write */ }
         autoSyncing = true; renderSync();
         const { sync: _, ...cleanState } = state;
+        const payload = await serializeForFile(cleanState);
         const writable = await handle.createWritable();
-        await writable.write(JSON.stringify(cleanState, null, 2));
+        await writable.write(payload);
         await writable.close();
         state.sync.lastSync = new Date().toISOString();
         state.dirtySinceExport = 0;
@@ -4272,7 +4533,7 @@
         await saveLocalSnapshot();
         // Restore
         const keepSync = state.sync;
-        const parsed = JSON.parse(snap.data);
+        const parsed = await parseFileText(snap.data);
         state = migrate(parsed);
         state.sync = keepSync;
         state.dirtySinceExport = 0;
@@ -4416,7 +4677,7 @@
   async function writeStateToFile(handle) {
     const { sync: _, ...cleanState } = state;
     const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(cleanState, null, 2));
+    await writable.write(await serializeForFile(cleanState));
     await writable.close();
     state.sync = state.sync || { fileName: handle.name };
     state.sync.lastSync = new Date().toISOString();
@@ -4474,8 +4735,8 @@
       try {
         const file = await handle.getFile();
         const text = (await file.text()).trim();
-        if (text) remote = JSON.parse(text);
-      } catch { /* unreadable → treat as invalid below */ }
+        if (text) remote = await parseFileText(text);
+      } catch (e) { if (e && e.encrypted) { showToast(t('encWrongPass')); return; } /* else unreadable → invalid below */ }
       if (!remote || !Array.isArray(remote.snapshots)) {
         showToast(t('syncFail', 'empty or invalid file'));
         return;
@@ -4520,8 +4781,13 @@
       try {
         const file = await handle.getFile();
         const text = (await file.text()).trim();
-        if (text) remote = JSON.parse(text);
-      } catch { /* unreadable or brand-new file → treat as empty */ }
+        if (text) remote = await parseFileText(text);
+      } catch (e) {
+        // A file we know is encrypted but couldn't decrypt must NOT fall through to a
+        // destructive push — that would wipe the other device's data. Abort instead.
+        if (e && e.encrypted) { showToast(t('encWrongPass')); return; }
+        /* else genuinely unreadable/new plaintext file → treat as empty below */
+      }
 
       await idbSet(IDB_HANDLE_KEY, handle);
       state.sync = { fileName: handle.name };
@@ -4582,7 +4848,7 @@
     try {
       const file = await handle.getFile();
       const text = await file.text();
-      const remote = JSON.parse(text);
+      const remote = await parseFileText(text);
       await mergePull(remote, handle);
     } catch (e) {
       showToast(t('syncFail', e.message));
@@ -4723,6 +4989,8 @@
     setText('remoteNewerDismiss', t('syncRemoteNewerDismiss'));
     setText('pinLabel', t('pin'));
     setText('pinHint', t('pinHint'));
+    setText('encLabel', t('encLabel'));
+    setText('encHint', t('encHint'));
     setText('lockTitle', t('pinPromptUnlock'));
     setText('lockUnlockBtn', t('unlock'));
     setText('dateToday', t('today'));
@@ -4921,6 +5189,7 @@
     renderPeriodChanges();
     renderGoal();
     renderPin();
+    renderEnc();
     renderSync();
     renderBreakdown();
     renderAccountList();
@@ -4930,15 +5199,23 @@
   }
 
   // ===== Init =====
-  populateCurrencySelect(document.getElementById('displayCurrency'), state.displayCurrency);
-  populateCurrencySelect(document.getElementById('newAccountCurrency'), state.displayCurrency);
-  populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
-  document.getElementById('langSelect').value = state.language;
-  document.getElementById('date').value = localDateStr();
+  function applyBootUI() {
+    populateCurrencySelect(document.getElementById('displayCurrency'), state.displayCurrency);
+    populateCurrencySelect(document.getElementById('newAccountCurrency'), state.displayCurrency);
+    populateCurrencySelect(document.getElementById('goalCurrencySel'), state.displayCurrency);
+    document.getElementById('langSelect').value = state.language;
+    document.getElementById('date').value = localDateStr();
+    applyTheme();
+    applyI18n();
+  }
+  // Style + localize the (placeholder) shell so the encryption lock screen isn't unstyled.
   applyTheme();
   applyI18n();
 
   (async () => {
+    // Encrypted localStorage → decrypt (blocks on passphrase) before any real UI renders.
+    if (pendingEnvelope) await unlockEncryptedBoot(pendingEnvelope);
+    applyBootUI();
     await gateAccess();
     renderAll();
     ensureRates(state.snapshots.map(s => s.date));
