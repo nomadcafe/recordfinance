@@ -3148,7 +3148,17 @@
       return `<div class="change-row ${cls}"><span class="change-label">${label}</span>${fmtSigned(info.delta, state.displayCurrency)}${pctStr}${split}</div>`;
     };
 
-    slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd);
+    // Average monthly net-worth change — the same regression trend that drives the goal
+    // projection (≈ last 6 months). Labeled distinctly so it isn't read as this month's
+    // actual change. It's a net-worth delta, not spending (the app can't see spending).
+    const avg = trailingMonthlyGrowth();
+    let avgRow = '';
+    if (avg != null) {
+      const cls = avg > 0 ? 'pos' : avg < 0 ? 'neg' : 'neutral';
+      avgRow = `<div class="change-row ${cls}"><span class="change-label">${t('avgMonthly')}</span>${fmtSigned(avg, state.displayCurrency)}<span class="split">${t('avgMonthlyHint')}</span></div>`;
+    }
+
+    slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd) + avgRow;
   }
 
   // ===== Theme =====
