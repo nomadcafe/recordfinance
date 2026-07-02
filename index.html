@@ -972,6 +972,14 @@
   .seg button:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; }
   .seg button.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0a0d1a; font-weight: 600; }
   .seg button.active:hover { transform: none; }
+  .chart-toggle {
+    background: var(--bg-soft); color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--radius-pill);
+    padding: 6px 12px; font-weight: 500; font-size: 13px;
+  }
+  .chart-toggle:hover { color: var(--text); transform: none; box-shadow: none; }
+  .chart-toggle.active { border-color: var(--warning); color: var(--warning); background: rgba(251, 191, 36, 0.12); font-weight: 600; }
+  .chart-toggle.active:hover { color: var(--warning); }
 
   canvas { max-height: 360px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.55; }
@@ -1489,10 +1497,13 @@
   <div class="panel panel-trend">
     <div class="toolbar">
       <h2 id="trendTitle">余额走势</h2>
-      <div class="seg" id="chartMode">
-        <button data-mode="total" class="active">总余额</button>
-        <button data-mode="accounts">各账户</button>
-        <button data-mode="yoy" id="chartYoyBtn">同期</button>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="seg" id="chartMode">
+          <button data-mode="total" class="active">总余额</button>
+          <button data-mode="accounts">各账户</button>
+          <button data-mode="yoy" id="chartYoyBtn">同期</button>
+        </div>
+        <button type="button" class="chart-toggle" id="forecastToggle" hidden>预测</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
@@ -2578,6 +2589,8 @@
   function renderChart() {
     const ctx = document.getElementById('chart');
     const accent = cssVar('--accent');
+    // Hidden by default; the total-mode branch re-shows it only when a projection exists.
+    { const fb = document.getElementById('forecastToggle'); if (fb) fb.hidden = true; }
 
     let labels, datasets;
     let crossings = [];
@@ -2648,8 +2661,15 @@
           spanGaps: true,
         }];
         // Goal projection: a dashed line extending from the last actual point toward the
-        // goal at the recent monthly pace, so the ETA isn't just a number in the panel.
-        const proj = computeGoalProjection(timeline);
+        // goal at the recent monthly pace. Opt-in (off by default) since it stretches the
+        // x-axis into the future; the toggle only shows when a projection is possible.
+        const projAvail = computeGoalProjection(timeline);
+        const fBtn = document.getElementById('forecastToggle');
+        if (fBtn) {
+          fBtn.hidden = !projAvail;
+          fBtn.classList.toggle('active', !!state.showForecast);
+        }
+        const proj = state.showForecast ? projAvail : null;
         if (proj) {
           datasets[0].data = datasets[0].data.concat(new Array(proj.futureLabels.length).fill(null));
           labels = labels.concat(proj.futureLabels);
@@ -2841,6 +2861,12 @@
       document.querySelectorAll('#chartMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === chartMode));
       renderChart();
     }
+  });
+
+  document.getElementById('forecastToggle').addEventListener('click', () => {
+    state.showForecast = !state.showForecast;
+    save();
+    renderChart();
   });
 
   // ===== Display currency =====
@@ -4408,6 +4434,7 @@
     setText('entryTitle', t('entry'));
     setText('editBadge', t('editing'));
     setText('trendTitle', t('balanceTrend'));
+    setText('forecastToggle', t('forecast'));
     setText('historyTitle', t('history'));
     setText('thDate', t('historyDate'));
     setText('thUpdates', t('historyUpdates'));
