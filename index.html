@@ -2591,6 +2591,7 @@
 
     let labels, datasets;
     let crossings = [];
+    let forecast = null; // goal-projection annotation for the overlay plugin
 
     if (chartMode === 'yoy') {
       const yoy = computeYoY();
@@ -2656,6 +2657,30 @@
           pointBorderWidth: 2,
           spanGaps: true,
         }];
+        // Goal projection: a dashed line extending from the last actual point toward the
+        // goal at the recent monthly pace, so the ETA isn't just a number in the panel.
+        const proj = computeGoalProjection(timeline);
+        if (proj) {
+          datasets[0].data = datasets[0].data.concat(new Array(proj.futureLabels.length).fill(null));
+          labels = labels.concat(proj.futureLabels);
+          datasets.push({
+            label: t('forecast'),
+            data: proj.data,
+            borderColor: cssVar('--warning'),
+            backgroundColor: 'transparent',
+            fill: false,
+            borderWidth: 1.5,
+            borderDash: [4, 4],
+            cubicInterpolationMode: 'monotone',
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointBackgroundColor: cssVar('--warning'),
+            pointBorderColor: cssVar('--panel'),
+            pointBorderWidth: 2,
+            spanGaps: false,
+          });
+          if (proj.reached) forecast = { index: labels.length - 1, etaLabel: proj.etaLabel };
+        }
       } else {
         datasets = state.accounts.map(a => ({
           label: a.name,
@@ -2739,11 +2764,25 @@
           c.fillText(`${t('goal')} ${fmt(goalInDisplay, state.displayCurrency)}`, area.right - 6, y - 4);
           c.restore();
         }
+        // Projected ETA label at the point where the forecast line meets the goal.
+        if (chartOverlay.forecast) {
+          const projMeta = chartInstance.getDatasetMeta(chartInstance.data.datasets.length - 1);
+          const pt = projMeta.data[chartOverlay.forecast.index];
+          if (pt) {
+            c.save();
+            c.fillStyle = cssVar('--warning');
+            c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
+            c.textAlign = 'right';
+            c.textBaseline = 'bottom';
+            c.fillText(`≈ ${chartOverlay.forecast.etaLabel}`, Math.min(pt.x, area.right - 6), pt.y - 8);
+            c.restore();
+          }
+        }
       }
     };
 
     // What the overlay plugin draws this pass.
-    chartOverlay = { crossings, mode: chartMode };
+    chartOverlay = { crossings, mode: chartMode, forecast };
 
     if (chart) {
       // Update in place — far cheaper than destroy()+new, and keeps the registered
@@ -3399,6 +3438,43 @@
     const months = (new Date(last.snapshot.date) - new Date(first.snapshot.date)) / (30.44 * 86400000);
     if (months < 0.5) return null;
     return (totalForBasis(last) - totalForBasis(first)) / months;
+  }
+
+  // Build the dashed goal-projection for the trend chart: month-by-month future points from
+  // the last actual value, rising at the recent pace until they hit the goal (capped at a
+  // 5-year horizon). Returns null when there's no goal, no positive growth, or it's reached.
+  const FORECAST_HORIZON_MONTHS = 60;
+  function computeGoalProjection(timeline) {
+    if (!state.goal || !timeline.length) return null;
+    const last = timeline[timeline.length - 1];
+    const current = totalForBasis(last);
+    if (current == null) return null;
+    const rates = state.rates[last.snapshot.date];
+    let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
+    if (goalInDisplay == null && state.goal.currency === state.displayCurrency) goalInDisplay = state.goal.amount;
+    if (goalInDisplay == null || goalInDisplay <= current) return null; // n/a or already reached
+    const growth = trailingMonthlyGrowth();
+    if (growth == null || growth <= 0) return null;
+    const monthsToGoal = Math.ceil((goalInDisplay - current) / growth);
+    if (monthsToGoal < 1) return null;
+    const reached = monthsToGoal <= FORECAST_HORIZON_MONTHS;
+    const N = Math.min(monthsToGoal, FORECAST_HORIZON_MONTHS);
+    // Month math via year*12+month avoids the setMonth day-overflow (Jan 31 + 1mo → Mar 3),
+    // which would otherwise skew the projected month labels and the ETA.
+    const base = new Date(last.snapshot.date);
+    const baseYM = base.getFullYear() * 12 + base.getMonth();
+    const ymLabel = ym => `${Math.floor(ym / 12)}-${String(ym % 12 + 1).padStart(2, '0')}`;
+    // Connect the dash to the real curve: null across history except the last actual point.
+    const data = new Array(timeline.length).fill(null);
+    data[timeline.length - 1] = current;
+    const futureLabels = [];
+    for (let k = 1; k <= N; k++) {
+      futureLabels.push(`${ymLabel(baseYM + k)}-01`);
+      const v = (reached && k === N) ? goalInDisplay : Math.min(current + growth * k, goalInDisplay);
+      data.push(v);
+    }
+    const etaLabel = reached ? ymLabel(baseYM + monthsToGoal) : null; // YYYY-MM
+    return { data, futureLabels, reached, etaLabel };
   }
 
   function renderGoal() {
