@@ -3443,17 +3443,27 @@
 
   // ===== Goal =====
   function trailingMonthlyGrowth() {
-    // Use snapshots within last 180 days, slope = (latest - oldest) / months_between
+    // Least-squares slope (per month) over snapshots in the last 180 days. A regression
+    // across every point is far less sensitive to a single outlier at the window edge (a
+    // one-off large deposit/withdrawal) than the old first-vs-last endpoint slope. With
+    // exactly two points it reduces to that endpoint slope, so short histories still work.
     const tl = computeTimeline().filter(t => totalForBasis(t) != null);
     if (tl.length < 2) return null;
     const lastDate = new Date(tl[tl.length - 1].snapshot.date);
     const cutoff = new Date(lastDate.getTime() - 180 * 86400000);
-    const window = tl.filter(t => new Date(t.snapshot.date) >= cutoff);
-    if (window.length < 2) return null;
-    const first = window[0], last = window[window.length - 1];
-    const months = (new Date(last.snapshot.date) - new Date(first.snapshot.date)) / (30.44 * 86400000);
-    if (months < 0.5) return null;
-    return (totalForBasis(last) - totalForBasis(first)) / months;
+    const win = tl.filter(t => new Date(t.snapshot.date) >= cutoff);
+    if (win.length < 2) return null;
+    const t0 = new Date(win[0].snapshot.date).getTime();
+    const xs = win.map(p => (new Date(p.snapshot.date).getTime() - t0) / (30.44 * 86400000)); // months since window start
+    const ys = win.map(p => totalForBasis(p));
+    if (xs[xs.length - 1] < 0.5) return null; // window too short to trust a slope
+    const n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) { const dx = xs[i] - mx; num += dx * (ys[i] - my); den += dx * dx; }
+    if (den === 0) return null; // all points on the same day
+    return num / den; // per-month slope of the best-fit line
   }
 
   // Build the dashed goal-projection for the trend chart: month-by-month future points from
