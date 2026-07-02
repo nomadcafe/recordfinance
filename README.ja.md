@@ -19,7 +19,7 @@
 - **今月 / 年初来 / 入金 vs 市場変動** の分解
 - **ローカルファイル同期** —— File System Access API を利用し、任意のクラウド同期フォルダ（iCloud Drive、Dropbox、OneDrive）を指定。変更時に自動同期
 - **ローリング・ローカルスナップショット**（直近 20 件の変更）でいつでも元に戻せる安心設計
-- **PIN ロック** —— セッション内アンロック対応。プライバシーぼかしは長押しで一時的に確認可能
+- **パスフレーズ暗号化**（AES-GCM）—— ローカルデータ・ローカルバックアップ・同期ファイルを対象。プライバシーぼかしは長押しで一時的に確認可能
 - **PWA** —— ホーム画面に追加可能、オフラインで動作（Service Worker）
 - **多言語対応** —— English / 中文 / 日本語
 - **ライト / ダークテーマ**、会計年度の開始月を設定可能
@@ -33,7 +33,7 @@
 - [`@fawazahmed0/currency-api`](https://github.com/fawazahmed0/exchange-api)（jsDelivr CDN 経由、無料・API キー不要）
 - File System Access API + IndexedDB（同期ハンドルの永続化用）
 - Service Worker（オフライン対応とアセットキャッシュ用）
-- Web Crypto API（SHA-256、PIN のハッシュ化用）
+- Web Crypto API（PBKDF2 + AES-GCM、任意の落盤暗号化用）
 
 ## プライバシー
 

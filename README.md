@@ -19,7 +19,7 @@ Your data never leaves your device.
 - **MTD / YTD / inflow vs market gain** decomposition
 - **Local file sync** via the File System Access API — point it at any cloud-synced folder (iCloud Drive, Dropbox, OneDrive); auto-syncs on change, with lossless merge so edits from multiple devices never clobber each other
 - **Rolling local snapshots** (last 20 changes) for undo-safety
-- **PIN lock** with session unlock, privacy blur with press-and-hold to peek
+- **Passphrase encryption** at rest (AES-GCM) — covers localStorage, local backups, and the sync file; privacy blur with press-and-hold to peek
 - **PWA** — install to home screen, works offline (Service Worker)
 - **i18n** — English / 中文 / 日本語
 - **Light / dark theme**, fiscal year start configuration
@@ -33,7 +33,7 @@ Pure static site. No build step, no framework.
 - [`@fawazahmed0/currency-api`](https://github.com/fawazahmed0/exchange-api) via jsDelivr CDN (free, no API key)
 - File System Access API + IndexedDB for sync handle persistence
 - Service Worker for offline + asset caching
-- Web Crypto API (SHA-256) for PIN hashing
+- Web Crypto API (PBKDF2 + AES-GCM) for optional at-rest encryption
 
 ## Privacy
 

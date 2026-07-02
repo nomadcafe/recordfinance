@@ -19,7 +19,7 @@
 - **本月至今 / 今年至今 / 入金 vs 市场涨跌** 拆解
 - **本地文件同步** —— 基于 File System Access API，指向任意云同步文件夹（iCloud Drive、Dropbox、OneDrive），变更时自动同步
 - **滚动本地快照**（最近 20 次变更），可安全撤销
-- **PIN 码锁定**，支持会话内解锁；隐私模糊，长按可临时查看
+- **口令加密**（AES-GCM）——覆盖本地数据、本地备份与同步文件；隐私模糊，长按可临时查看
 - **PWA** —— 可添加到主屏幕，离线可用（Service Worker）
 - **多语言** —— English / 中文 / 日本語
 - **浅色 / 深色主题**，可配置财年起始月
@@ -33,7 +33,7 @@
 - [`@fawazahmed0/currency-api`](https://github.com/fawazahmed0/exchange-api)，通过 jsDelivr CDN（免费，无需 API key）
 - File System Access API + IndexedDB，用于持久化同步句柄
 - Service Worker，用于离线和资源缓存
-- Web Crypto API（SHA-256），用于 PIN 码哈希
+- Web Crypto API（PBKDF2 + AES-GCM），用于可选的落盘加密
 
 ## 隐私
 

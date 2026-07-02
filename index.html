@@ -80,7 +80,7 @@
     "Category and currency composition breakdown",
     "Year-over-year comparison",
     "Local file sync (iCloud / Dropbox / OneDrive)",
-    "PIN lock with session unlock",
+    "Passphrase encryption at rest (AES-GCM)",
     "Light and dark themes",
     "i18n: English / 中文 / 日本語"
   ]
@@ -1142,7 +1142,7 @@
         <li>Currency and category breakdown charts</li>
         <li>Offline-capable PWA (works on planes!)</li>
         <li>Local file sync via iCloud Drive / Dropbox / OneDrive</li>
-        <li>PIN lock + privacy blur</li>
+        <li>Passphrase encryption + privacy blur</li>
         <li>i18n: English / 中文 / 日本語</li>
       </ul>
     </div>
@@ -1150,8 +1150,8 @@
 
   <div class="lock-overlay" id="lockOverlay" hidden>
     <div class="lock-icon">🔒</div>
-    <h2 id="lockTitle">请输入密码</h2>
-    <input type="password" inputmode="numeric" pattern="[0-9]*" id="lockInput" maxlength="8" autocomplete="off">
+    <h2 id="lockTitle">请输入加密口令</h2>
+    <input type="password" id="lockInput" autocomplete="off">
     <div class="err" id="lockErr"></div>
     <button id="lockUnlockBtn" type="button">解锁</button>
   </div>
@@ -1190,15 +1190,6 @@
             <button id="goalSetBtn" type="button">设置 / 修改</button>
             <button id="goalClearBtn" type="button" class="ghost" hidden>移除</button>
           </div>
-        </div>
-        <div class="field">
-          <label id="pinLabel">密码锁</label>
-          <div class="goal-actions">
-            <span id="pinStatus" style="color: var(--muted); font-size: 13px; min-width: 80px;">未设置</span>
-            <button id="pinSetBtn" type="button">设置</button>
-            <button id="pinRemoveBtn" type="button" class="ghost" hidden>关闭</button>
-          </div>
-          <div class="hint" id="pinHint"></div>
         </div>
         <div class="field">
           <label id="encLabel">数据加密</label>
@@ -1775,7 +1766,6 @@
       data.basis = (data.goalBasis === 'assets') ? 'assets' : 'net';
     }
     delete data.goalBasis;
-    if (!data.pin) data.pin = null;
     if (data.sync === undefined) data.sync = null;
     // Drop legacy Gist-shaped sync state (we now only use file-based sync)
     if (data.sync && (data.sync.token || data.sync.gistId) && !data.sync.fileName) data.sync = null;
@@ -1821,7 +1811,7 @@
   }
 
   function defaultState() {
-    return { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, pin: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+    return { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
   }
 
   function load() {
@@ -3682,60 +3672,6 @@
     }
   }
 
-  // ===== PIN =====
-  async function hashPin(pin, salt) {
-    const data = new TextEncoder().encode(pin + ':' + salt);
-    const buf = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
-  function validPinFormat(p) { return /^\d{4,8}$/.test(p); }
-
-  async function setPinFlow(currentRequired) {
-    if (currentRequired && state.pin) {
-      const cur = prompt(t('pinPromptChange'));
-      if (cur == null) return;
-      const h = await hashPin(cur, state.pin.salt);
-      if (h !== state.pin.hash) { alert(t('pinWrong')); return; }
-    }
-    const np = prompt(t('pinPromptNew'));
-    if (np == null) return;
-    if (!validPinFormat(np)) { alert(t('pinInvalid')); return; }
-    const salt = crypto.randomUUID();
-    const hash = await hashPin(np, salt);
-    state.pin = { hash, salt };
-    sessionStorage.setItem(SESSION_UNLOCK_KEY, hash); // remain unlocked in this session
-    markDirty(); renderPin();
-  }
-  async function removePinFlow() {
-    if (!state.pin) return;
-    const cur = prompt(t('pinPromptUnset'));
-    if (cur == null) return;
-    const h = await hashPin(cur, state.pin.salt);
-    if (h !== state.pin.hash) { alert(t('pinWrong')); return; }
-    state.pin = null;
-    sessionStorage.removeItem(SESSION_UNLOCK_KEY);
-    markDirty(); renderPin();
-  }
-
-  document.getElementById('pinSetBtn').addEventListener('click', () => setPinFlow(true));
-  document.getElementById('pinRemoveBtn').addEventListener('click', removePinFlow);
-
-  function renderPin() {
-    const status = document.getElementById('pinStatus');
-    const setBtn = document.getElementById('pinSetBtn');
-    const removeBtn = document.getElementById('pinRemoveBtn');
-    if (state.pin) {
-      status.textContent = t('pinSet');
-      setBtn.textContent = t('pinChange');
-      removeBtn.hidden = false;
-      removeBtn.textContent = t('pinRemove');
-    } else {
-      status.textContent = t('pinNotSet');
-      setBtn.textContent = state.language === 'en' ? 'Set' : (state.language === 'ja' ? '設定' : '设置');
-      removeBtn.hidden = true;
-    }
-  }
-
   // ===== Encryption UI flows =====
   async function enableEncryption() {
     if (encKey) return;
@@ -3848,43 +3784,6 @@
 
   document.getElementById('encSetBtn').addEventListener('click', enableEncryption);
   document.getElementById('encRemoveBtn').addEventListener('click', disableEncryption);
-
-  const SESSION_UNLOCK_KEY = 'recordfinance.sessionUnlock';
-  async function gateAccess() {
-    if (!state.pin) return;
-    // If already unlocked in this browser session with the current PIN, skip
-    if (sessionStorage.getItem(SESSION_UNLOCK_KEY) === state.pin.hash) return;
-
-    const overlay = document.getElementById('lockOverlay');
-    const input = document.getElementById('lockInput');
-    const err = document.getElementById('lockErr');
-    const btn = document.getElementById('lockUnlockBtn');
-    overlay.hidden = false;
-    document.getElementById('lockTitle').textContent = t('pinPromptUnlock');
-    btn.textContent = t('unlock');
-    err.textContent = '';
-    input.value = '';
-    // Restore numeric-PIN affordances (passphrase unlock may have relaxed them).
-    input.setAttribute('inputmode', 'numeric');
-    input.setAttribute('pattern', '[0-9]*');
-    input.setAttribute('maxlength', '8');
-    setTimeout(() => input.focus(), 50);
-    await new Promise(resolve => {
-      const tryUnlock = async () => {
-        const h = await hashPin(input.value, state.pin.salt);
-        if (h === state.pin.hash) {
-          sessionStorage.setItem(SESSION_UNLOCK_KEY, state.pin.hash);
-          overlay.hidden = true;
-          resolve();
-        } else {
-          err.textContent = t('pinWrong');
-          input.select();
-        }
-      };
-      btn.addEventListener('click', tryUnlock);
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-    });
-  }
 
   // ===== iCloud / File sync (File System Access API + IndexedDB for handle) =====
   const SUPPORTS_FS = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
@@ -4603,11 +4502,8 @@
     setText('remoteNewerMsg', t('syncRemoteNewer'));
     setText('remoteNewerLoad', t('syncRemoteNewerLoad'));
     setText('remoteNewerDismiss', t('syncRemoteNewerDismiss'));
-    setText('pinLabel', t('pin'));
-    setText('pinHint', t('pinHint'));
     setText('encLabel', t('encLabel'));
     setText('encHint', t('encHint'));
-    setText('lockTitle', t('pinPromptUnlock'));
     setText('lockUnlockBtn', t('unlock'));
     setText('dateToday', t('today'));
     setText('dateMonthEnd', t('monthEnd'));
@@ -4818,7 +4714,6 @@
     renderSummary();
     renderPeriodChanges();
     renderGoal();
-    renderPin();
     renderEnc();
     renderSync();
     renderBreakdown();
@@ -4846,7 +4741,6 @@
     // Encrypted localStorage → decrypt (blocks on passphrase) before any real UI renders.
     if (pendingEnvelope) await unlockEncryptedBoot(pendingEnvelope);
     applyBootUI();
-    await gateAccess();
     renderAll();
     ensureRates(state.snapshots.map(s => s.date));
     refreshSyncPermissionState();
