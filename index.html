@@ -1526,6 +1526,7 @@
           <button data-mode="total" class="active">总余额</button>
           <button data-mode="accounts">各账户</button>
           <button data-mode="stacked" id="chartStackedBtn">堆叠</button>
+          <button data-mode="goal" id="chartGoalBtn" hidden>目标</button>
           <button data-mode="yoy" id="chartYoyBtn">同期</button>
         </div>
         <button type="button" class="chart-toggle" id="forecastToggle" hidden>预测</button>
@@ -2876,10 +2877,18 @@
     const accent = cssVar('--accent');
     // Hidden by default; the total-mode branch re-shows it only when a projection exists.
     { const fb = document.getElementById('forecastToggle'); if (fb) fb.hidden = true; }
+    // The "goal" mode only makes sense with a goal set; hide its button otherwise and
+    // fall back to total if the goal was just cleared while that mode was active.
+    { const gb = document.getElementById('chartGoalBtn'); if (gb) gb.hidden = !state.goal; }
+    if (chartMode === 'goal' && !state.goal) {
+      chartMode = 'total';
+      document.querySelectorAll('#chartMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === 'total'));
+    }
 
     let labels, datasets;
     let crossings = [];
     let forecast = null; // goal-projection annotation for the overlay plugin
+    let goalReach = null; // first goal-reach marker for the overlay plugin (goal mode)
 
     if (chartMode === 'yoy') {
       const yoy = computeYoY();
@@ -3000,6 +3009,31 @@
             pointBorderColor: cssVar('--panel'),
             pointBorderWidth: 2,
           }));
+      } else if (chartMode === 'goal') {
+        // Goal progress: net worth as a % of the goal over time. The line's dips are the
+        // setbacks ("波折"); the 100% line and the first-reach marker (with elapsed time)
+        // are drawn by the overlay plugin. Denominator is fixed at the latest rate.
+        const gt = computeGoalTrend(timeline);
+        const pctData = gt ? gt.pct : timeline.map(() => null);
+        goalReach = gt ? gt.reach : null;
+        const reachSet = new Set(goalReach ? [goalReach.index] : []);
+        datasets = [{
+          label: t('goalRate'),
+          data: pctData,
+          borderColor: accent,
+          backgroundColor: areaFill(accent),
+          fill: true,
+          borderWidth: 2.5,
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
+          cubicInterpolationMode: 'monotone',
+          pointRadius: timeline.map((_, i) => reachSet.has(i) ? 6 : 0),
+          pointHoverRadius: timeline.map((_, i) => reachSet.has(i) ? 8 : 5),
+          pointBackgroundColor: timeline.map((_, i) => reachSet.has(i) ? cssVar('--warning') : accent),
+          pointBorderColor: cssVar('--panel'),
+          pointBorderWidth: 2,
+          spanGaps: true,
+        }];
       } else {
         datasets = state.accounts.map(a => ({
           label: a.name,
@@ -3026,9 +3060,48 @@
     const overlayPlugin = {
       id: 'goalAndMilestones',
       afterDatasetsDraw(chartInstance) {
-        if (chartOverlay.mode !== 'total') return;
         const c = chartInstance.ctx;
         const area = chartInstance.chartArea;
+        // Goal mode: a 100% reference line plus a marker (with elapsed time) at first reach.
+        if (chartOverlay.mode === 'goal') {
+          const yScale = chartInstance.scales.y;
+          const y100 = yScale.getPixelForValue(100);
+          if (y100 >= area.top && y100 <= area.bottom) {
+            c.save();
+            c.strokeStyle = cssVar('--warning');
+            c.lineWidth = 1.5;
+            c.setLineDash([6, 4]);
+            c.beginPath(); c.moveTo(area.left, y100); c.lineTo(area.right, y100); c.stroke();
+            c.setLineDash([]);
+            c.fillStyle = cssVar('--warning');
+            c.font = '11px Inter, -apple-system, system-ui, sans-serif';
+            c.textAlign = 'right'; c.textBaseline = 'bottom';
+            c.fillText('100%', area.right - 6, y100 - 4);
+            c.restore();
+          }
+          if (chartOverlay.goalReach) {
+            const pt = chartInstance.getDatasetMeta(0).data[chartOverlay.goalReach.index];
+            if (pt) {
+              const text = t('goalReachedIn', chartOverlay.goalReach.years, chartOverlay.goalReach.months);
+              c.save();
+              c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
+              c.textBaseline = 'bottom';
+              const w = c.measureText(text).width + 12, h = 16;
+              const cx = Math.max(area.left + w / 2, Math.min(pt.x, area.right - w / 2));
+              const y = pt.y - 14;
+              c.fillStyle = 'rgba(251, 191, 36, 0.18)';
+              c.beginPath();
+              c.roundRect ? c.roundRect(cx - w / 2, y - h, w, h, 4) : c.rect(cx - w / 2, y - h, w, h);
+              c.fill();
+              c.fillStyle = cssVar('--warning');
+              c.textAlign = 'center';
+              c.fillText(text, cx, y - 2);
+              c.restore();
+            }
+          }
+          return;
+        }
+        if (chartOverlay.mode !== 'total') return;
         // Milestone labels above their crossing points
         if (chartOverlay.crossings.length) {
           const meta = chartInstance.getDatasetMeta(0);
@@ -3101,8 +3174,10 @@
     };
 
     // What the overlay plugin draws this pass.
-    chartOverlay = { crossings, mode: chartMode, forecast };
+    chartOverlay = { crossings, mode: chartMode, forecast, goalReach };
     const stacked = chartMode === 'stacked';
+    // Legend only helps the multi-series modes; total and goal are single-series.
+    const showLegend = chartMode !== 'total' && chartMode !== 'goal';
 
     if (chart) {
       // Update in place — far cheaper than destroy()+new, and keeps the registered
@@ -3110,7 +3185,7 @@
       chart.data = { labels, datasets };
       chart.options.scales.x.stacked = stacked;
       chart.options.scales.y.stacked = stacked;
-      chart.options.plugins.legend.display = chartMode !== 'total';
+      chart.options.plugins.legend.display = showLegend;
       chart.options.plugins.legend.labels.color = cssVar('--text');
       chart.options.scales.x.ticks.color = cssVar('--muted');
       chart.options.scales.y.ticks.color = cssVar('--muted');
@@ -3135,7 +3210,7 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: {
-            display: chartMode !== 'total',
+            display: showLegend,
             labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16 }
           },
           tooltip: {
@@ -3148,7 +3223,9 @@
             cornerRadius: 8,
             usePointStyle: true,
             boxPadding: 6,
-            callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` }
+            callbacks: { label: ctx => chartMode === 'goal'
+              ? `${ctx.dataset.label}：${ctx.parsed.y == null ? '—' : ctx.parsed.y.toFixed(1) + '%'}`
+              : `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` }
           }
         },
         scales: {
@@ -3160,7 +3237,7 @@
           },
           y: {
             stacked,
-            ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => fmt(v, state.displayCurrency) },
+            ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => chartMode === 'goal' ? Math.round(v) + '%' : fmt(v, state.displayCurrency) },
             grid: { color: cssVar('--grid'), drawTicks: false },
             border: { display: false }
           }
@@ -3801,6 +3878,34 @@
   // Build the dashed goal-projection for the trend chart: month-by-month future points from
   // the last actual value, rising at the recent pace until they hit the goal (capped at a
   // 5-year horizon). Returns null when there's no goal, no positive growth, or it's reached.
+  // Goal-progress series: each snapshot's net worth as a % of the goal, plus the first
+  // date the goal was reached and the elapsed time to get there. Denominator = the goal
+  // converted at the latest rate (a fixed baseline), so the % line reflects real net-worth
+  // moves and their setbacks rather than FX wobble on the goal itself.
+  function computeGoalTrend(timeline) {
+    if (!state.goal || !timeline.length) return null;
+    const rates = state.rates[timeline[timeline.length - 1].snapshot.date];
+    let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
+    if (goalInDisplay == null && state.goal.currency === state.displayCurrency) goalInDisplay = state.goal.amount;
+    if (goalInDisplay == null || goalInDisplay <= 0) return null;
+    const pct = timeline.map(t => { const v = totalForBasis(t); return v == null ? null : v / goalInDisplay * 100; });
+    let reachIndex = -1;
+    for (let i = 0; i < timeline.length; i++) {
+      const v = totalForBasis(timeline[i]);
+      if (v != null && v >= goalInDisplay) { reachIndex = i; break; }
+    }
+    let reach = null;
+    if (reachIndex >= 0) {
+      const startD = new Date(timeline[0].snapshot.date);
+      const reachD = new Date(timeline[reachIndex].snapshot.date);
+      let months = (reachD.getFullYear() - startD.getFullYear()) * 12 + (reachD.getMonth() - startD.getMonth());
+      if (reachD.getDate() < startD.getDate()) months--; // partial final month doesn't count
+      if (months < 0) months = 0;
+      reach = { index: reachIndex, years: Math.floor(months / 12), months: months % 12 };
+    }
+    return { goalInDisplay, pct, reach };
+  }
+
   const FORECAST_HORIZON_MONTHS = 60;
   function computeGoalProjection(timeline) {
     if (!state.goal || !timeline.length) return null;
@@ -4806,10 +4911,12 @@
     const totalBtn = document.querySelector('#chartMode button[data-mode="total"]');
     const accBtn = document.querySelector('#chartMode button[data-mode="accounts"]');
     const stackedBtn = document.getElementById('chartStackedBtn');
+    const goalBtn = document.getElementById('chartGoalBtn');
     const yoyBtn = document.getElementById('chartYoyBtn');
     if (totalBtn) totalBtn.textContent = t('totalLegend');
     if (accBtn) accBtn.textContent = t('byAccount');
     if (stackedBtn) stackedBtn.textContent = t('stacked');
+    if (goalBtn) goalBtn.textContent = t('goal');
     if (yoyBtn) yoyBtn.textContent = t('yoy');
 
     const ntype = document.getElementById('newAccountType');
