@@ -1525,6 +1525,7 @@
         <div class="seg" id="chartMode">
           <button data-mode="total" class="active">总余额</button>
           <button data-mode="accounts">各账户</button>
+          <button data-mode="stacked" id="chartStackedBtn">堆叠</button>
           <button data-mode="yoy" id="chartYoyBtn">同期</button>
         </div>
         <button type="button" class="chart-toggle" id="forecastToggle" hidden>预测</button>
@@ -2975,6 +2976,30 @@
           });
           if (proj.reached) forecast = { index: labels.length - 1, etaLabel: proj.etaLabel };
         }
+      } else if (chartMode === 'stacked') {
+        // Stacked area: each account's band thickness = its value at that date, so the
+        // composition and the gaps between accounts are readable at a glance while the
+        // stack's outer edge tracks the net total. `converted` is already signed, so
+        // assets stack up from zero and liabilities stack down (Chart.js stacks each sign
+        // separately). Missing points count as 0 — an account contributes nothing before
+        // its first snapshot — which keeps every band continuous.
+        datasets = state.accounts
+          .map(a => ({ a, data: timeline.map(t => { const b = t.balances[a.id]; return b && b.converted != null ? b.converted : 0; }) }))
+          .filter(d => d.data.some(v => v !== 0))
+          .map(d => ({
+            label: d.a.name,
+            data: d.data,
+            borderColor: d.a.color,
+            backgroundColor: hexToRgba(d.a.color, 0.5),
+            fill: true,
+            borderWidth: 1.5,
+            cubicInterpolationMode: 'monotone',
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointBackgroundColor: d.a.color,
+            pointBorderColor: cssVar('--panel'),
+            pointBorderWidth: 2,
+          }));
       } else {
         datasets = state.accounts.map(a => ({
           label: a.name,
@@ -3077,11 +3102,14 @@
 
     // What the overlay plugin draws this pass.
     chartOverlay = { crossings, mode: chartMode, forecast };
+    const stacked = chartMode === 'stacked';
 
     if (chart) {
       // Update in place — far cheaper than destroy()+new, and keeps the registered
       // overlay plugin. Refresh data, legend state, and theme-derived colors.
       chart.data = { labels, datasets };
+      chart.options.scales.x.stacked = stacked;
+      chart.options.scales.y.stacked = stacked;
       chart.options.plugins.legend.display = chartMode !== 'total';
       chart.options.plugins.legend.labels.color = cssVar('--text');
       chart.options.scales.x.ticks.color = cssVar('--muted');
@@ -3125,11 +3153,13 @@
         },
         scales: {
           x: {
+            stacked,
             ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
             grid: { display: false },
             border: { display: false }
           },
           y: {
+            stacked,
             ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => fmt(v, state.displayCurrency) },
             grid: { color: cssVar('--grid'), drawTicks: false },
             border: { display: false }
@@ -4775,9 +4805,11 @@
 
     const totalBtn = document.querySelector('#chartMode button[data-mode="total"]');
     const accBtn = document.querySelector('#chartMode button[data-mode="accounts"]');
+    const stackedBtn = document.getElementById('chartStackedBtn');
     const yoyBtn = document.getElementById('chartYoyBtn');
     if (totalBtn) totalBtn.textContent = t('totalLegend');
     if (accBtn) accBtn.textContent = t('byAccount');
+    if (stackedBtn) stackedBtn.textContent = t('stacked');
     if (yoyBtn) yoyBtn.textContent = t('yoy');
 
     const ntype = document.getElementById('newAccountType');
