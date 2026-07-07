@@ -1525,9 +1525,12 @@
         <div class="seg" id="chartMode">
           <button data-mode="total" class="active">总余额</button>
           <button data-mode="accounts">各账户</button>
-          <button data-mode="stacked" id="chartStackedBtn">堆叠</button>
           <button data-mode="goal" id="chartGoalBtn" hidden>目标</button>
           <button data-mode="yoy" id="chartYoyBtn">同期</button>
+        </div>
+        <div class="seg" id="accountsSubMode" hidden>
+          <button data-mode="line" class="active" id="acctLineBtn">线</button>
+          <button data-mode="stacked" id="acctStackedBtn">堆叠</button>
         </div>
         <button type="button" class="chart-toggle" id="forecastToggle" hidden>预测</button>
       </div>
@@ -1717,6 +1720,7 @@
   let chart = null;
   let breakdownChart = null;
   let chartMode = 'total';
+  let accountsSubMode = 'line'; // 'line' | 'stacked' — sub-view within the "accounts" mode
   // Per-render inputs the trend overlay plugin reads — kept in module scope (not a
   // renderChart closure) so the chart can be updated in place instead of rebuilt.
   let chartOverlay = { crossings: [], mode: 'total' };
@@ -2884,6 +2888,8 @@
       chartMode = 'total';
       document.querySelectorAll('#chartMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === 'total'));
     }
+    // The line/stacked sub-toggle only applies to the "accounts" mode.
+    { const sub = document.getElementById('accountsSubMode'); if (sub) sub.hidden = chartMode !== 'accounts'; }
 
     let labels, datasets;
     let crossings = [];
@@ -2985,30 +2991,6 @@
           });
           if (proj.reached) forecast = { index: labels.length - 1, etaLabel: proj.etaLabel };
         }
-      } else if (chartMode === 'stacked') {
-        // Stacked area: each account's band thickness = its value at that date, so the
-        // composition and the gaps between accounts are readable at a glance while the
-        // stack's outer edge tracks the net total. `converted` is already signed, so
-        // assets stack up from zero and liabilities stack down (Chart.js stacks each sign
-        // separately). Missing points count as 0 — an account contributes nothing before
-        // its first snapshot — which keeps every band continuous.
-        datasets = state.accounts
-          .map(a => ({ a, data: timeline.map(t => { const b = t.balances[a.id]; return b && b.converted != null ? b.converted : 0; }) }))
-          .filter(d => d.data.some(v => v !== 0))
-          .map(d => ({
-            label: d.a.name,
-            data: d.data,
-            borderColor: d.a.color,
-            backgroundColor: hexToRgba(d.a.color, 0.5),
-            fill: true,
-            borderWidth: 1.5,
-            cubicInterpolationMode: 'monotone',
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            pointBackgroundColor: d.a.color,
-            pointBorderColor: cssVar('--panel'),
-            pointBorderWidth: 2,
-          }));
       } else if (chartMode === 'goal') {
         // Goal progress: net worth as a % of the goal over time. The line's dips are the
         // setbacks ("波折"); the 100% line and the first-reach marker (with elapsed time)
@@ -3034,7 +3016,32 @@
           pointBorderWidth: 2,
           spanGaps: true,
         }];
+      } else if (accountsSubMode === 'stacked') {
+        // Accounts → stacked area: each account's band thickness = its value at that date,
+        // so the composition and the gaps between accounts are readable at a glance while
+        // the stack's outer edge tracks the net total. `converted` is already signed, so
+        // assets stack up from zero and liabilities stack down (Chart.js stacks each sign
+        // separately). Missing points count as 0 — an account contributes nothing before
+        // its first snapshot — which keeps every band continuous.
+        datasets = state.accounts
+          .map(a => ({ a, data: timeline.map(t => { const b = t.balances[a.id]; return b && b.converted != null ? b.converted : 0; }) }))
+          .filter(d => d.data.some(v => v !== 0))
+          .map(d => ({
+            label: d.a.name,
+            data: d.data,
+            borderColor: d.a.color,
+            backgroundColor: hexToRgba(d.a.color, 0.5),
+            fill: true,
+            borderWidth: 1.5,
+            cubicInterpolationMode: 'monotone',
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointBackgroundColor: d.a.color,
+            pointBorderColor: cssVar('--panel'),
+            pointBorderWidth: 2,
+          }));
       } else {
+        // Accounts → line overlay: one independent line per account (absolute balance).
         datasets = state.accounts.map(a => ({
           label: a.name,
           data: timeline.map(t => {
@@ -3175,7 +3182,7 @@
 
     // What the overlay plugin draws this pass.
     chartOverlay = { crossings, mode: chartMode, forecast, goalReach };
-    const stacked = chartMode === 'stacked';
+    const stacked = chartMode === 'accounts' && accountsSubMode === 'stacked';
     // Legend only helps the multi-series modes; total and goal are single-series.
     const showLegend = chartMode !== 'total' && chartMode !== 'goal';
 
@@ -3250,6 +3257,14 @@
     if (e.target.matches('button[data-mode]')) {
       chartMode = e.target.dataset.mode;
       document.querySelectorAll('#chartMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === chartMode));
+      renderChart();
+    }
+  });
+
+  document.getElementById('accountsSubMode').addEventListener('click', e => {
+    if (e.target.matches('button[data-mode]')) {
+      accountsSubMode = e.target.dataset.mode;
+      document.querySelectorAll('#accountsSubMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === accountsSubMode));
       renderChart();
     }
   });
@@ -4910,12 +4925,14 @@
 
     const totalBtn = document.querySelector('#chartMode button[data-mode="total"]');
     const accBtn = document.querySelector('#chartMode button[data-mode="accounts"]');
-    const stackedBtn = document.getElementById('chartStackedBtn');
+    const lineBtn = document.getElementById('acctLineBtn');
+    const acctStackedBtn = document.getElementById('acctStackedBtn');
     const goalBtn = document.getElementById('chartGoalBtn');
     const yoyBtn = document.getElementById('chartYoyBtn');
     if (totalBtn) totalBtn.textContent = t('totalLegend');
     if (accBtn) accBtn.textContent = t('byAccount');
-    if (stackedBtn) stackedBtn.textContent = t('stacked');
+    if (lineBtn) lineBtn.textContent = t('lineView');
+    if (acctStackedBtn) acctStackedBtn.textContent = t('stacked');
     if (goalBtn) goalBtn.textContent = t('goal');
     if (yoyBtn) yoyBtn.textContent = t('yoy');
 
