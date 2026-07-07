@@ -365,6 +365,24 @@
   .row-inflow-mini input { font-size: 13px; padding: 5px 9px; width: 110px; }
   .balance-row-group { display: flex; flex-direction: column; }
   .balance-row-group .balance-row select.acc-sel { border-bottom-left-radius: 0; }
+  .balance-row.multi-head .acc-sel { flex: 1; }
+  .balance-legs { display: flex; flex-direction: column; }
+  .balance-leg {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; margin-left: 4px;
+    background: var(--bg-soft); border: 1px solid var(--border); border-top: 0;
+    font-size: 13px;
+  }
+  .balance-leg:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+  .balance-leg .leg-cur { width: 42px; font-weight: 600; color: var(--muted-strong); flex-shrink: 0; }
+  .balance-leg .leg-amt { flex: 1; min-width: 0; }
+  .balance-leg .leg-inflow-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0; }
+  .balance-leg .leg-inflow { width: 96px; flex-shrink: 0; font-size: 13px; padding: 5px 9px; }
+  @media (max-width: 560px) {
+    .balance-leg { flex-wrap: wrap; }
+    .balance-leg .leg-amt { flex: 1 1 60%; }
+    .balance-leg .leg-inflow { width: auto; flex: 1; }
+  }
 
   /* History search */
   .search-input { padding: 8px 12px; font-size: 13px; width: 260px; max-width: 100%; }
@@ -890,6 +908,12 @@
   .account-row.drag-over-top { box-shadow: inset 0 2px 0 var(--accent); }
   .account-row.drag-over-bottom { box-shadow: inset 0 -2px 0 var(--accent); }
   .account-row .chip-dot { flex-shrink: 0; width: 10px; height: 10px; }
+  .account-cur-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 10px 26px; margin-top: -2px; }
+  .account-cur-editor .cur-label { font-size: 11px; color: var(--muted); }
+  .account-cur-editor .cur-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; padding: 2px 2px 2px 8px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; color: var(--muted-strong); }
+  .account-cur-editor .cur-remove { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+  .account-cur-editor .cur-remove:hover { color: var(--danger); }
+  .account-cur-editor .cur-add { width: auto; font-size: 12px; padding: 3px 6px; }
 
   /* Form */
   .row { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -1592,6 +1616,16 @@
   // Currencies conventionally shown without minor units.
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
   function decimalsFor(currency) { return ZERO_DECIMAL.has(currency) ? 0 : 2; }
+  const CUR_CODES = CURRENCIES.map(c => c.code);
+  // All currencies an account holds. `currency` is the primary/default; the optional
+  // `currencies` array adds extra pockets (Wise-style multi-currency accounts). Returns
+  // the primary first, deduped. A single-currency account → just [primary].
+  function accountCurrencies(a) {
+    const extra = Array.isArray(a.currencies) ? a.currencies : [];
+    const all = [a.currency, ...extra].filter(c => CUR_CODES.includes(c));
+    return all.filter((c, i) => all.indexOf(c) === i);
+  }
+  function isMultiCurrency(a) { return accountCurrencies(a).length > 1; }
   const CURRENCY_COLORS = {
     CNY: '#f87171', USD: '#4ade80', JPY: '#f472b6', EUR: '#60a5fa', GBP: '#818cf8',
     HKD: '#a78bfa', SGD: '#fbbf24', TWD: '#2dd4bf', KRW: '#f0abfc', AUD: '#fb923c',
@@ -1796,6 +1830,18 @@
     const isHexColor = c => typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c);
     data.accounts.forEach((a, i) => {
       if (!CUR_CODES.includes(a.currency)) a.currency = 'CNY';
+      // Optional extra currency pockets. Keep only valid codes, dedupe, force the primary
+      // to be present and first. Collapse to single-currency (drop the field) if ≤1 remains.
+      if (a.currencies !== undefined) {
+        if (!Array.isArray(a.currencies)) { delete a.currencies; }
+        else {
+          const seen = new Set();
+          const cleaned = a.currencies.filter(c => CUR_CODES.includes(c) && !seen.has(c) && seen.add(c));
+          const ordered = [a.currency, ...cleaned.filter(c => c !== a.currency)];
+          if (ordered.length <= 1) delete a.currencies;
+          else a.currencies = ordered;
+        }
+      }
       if (a.type !== 'asset' && a.type !== 'liability') a.type = 'asset';
       // Validate against the category set for this account's type (liabilities have
       // their own: mortgage/creditCard/loan/other) so a valid one isn't wiped to "other".
@@ -1815,6 +1861,25 @@
         if (typeof v === 'number') {
           const acc = data.accounts.find(a => a.id === accId);
           s.updates[accId] = { amount: v, currency: (acc && acc.currency) || 'CNY' };
+        } else if (v && v.byCurrency && typeof v.byCurrency === 'object') {
+          // Multi-currency update: keep only valid currency legs with a numeric amount.
+          const clean = {};
+          Object.keys(v.byCurrency).forEach(code => {
+            if (!CUR_CODES.includes(code)) return;
+            const leg = v.byCurrency[code];
+            const amt = leg && Number(leg.amount);
+            if (leg && leg.amount != null && !isNaN(amt)) {
+              clean[code] = { amount: amt };
+              const inf = leg.inflow != null ? Number(leg.inflow) : null;
+              if (inf != null && !isNaN(inf)) clean[code].inflow = inf;
+            }
+          });
+          if (Object.keys(clean).length) {
+            v.byCurrency = clean;
+            if (!CUR_CODES.includes(v.currency)) v.currency = Object.keys(clean)[0];
+          } else {
+            delete s.updates[accId];
+          }
         }
       });
     });
@@ -1977,6 +2042,22 @@
   function signFor(type) { return type === 'liability' ? -1 : 1; }
   function signedAmount(amount, type) { return amount * signFor(type); }
 
+  // Normalize one snapshot update into currency legs: [{ currency, amount, inflow }].
+  // A single-currency update ({ amount, currency }) yields one leg; a multi-currency
+  // update ({ currency, byCurrency: { USD:{amount,inflow}, ... } }) yields one leg per
+  // held currency. Every engine/display site reads balances through this, so the two
+  // stored shapes never leak past here.
+  function updateLegs(u) {
+    if (!u) return [];
+    if (u.byCurrency) {
+      return Object.entries(u.byCurrency)
+        .filter(([, v]) => v && v.amount != null && !isNaN(v.amount))
+        .map(([currency, v]) => ({ currency, amount: v.amount, inflow: v.inflow }));
+    }
+    if (u.amount == null || isNaN(u.amount)) return [];
+    return [{ currency: u.currency, amount: u.amount, inflow: u.inflow }];
+  }
+
   // Net inflow for a snapshot, converted to display currency. Combines the legacy
   // snapshot-level inflow with per-row update inflows (each added in its account's
   // own direction). Shared by history, the MTD/YTD split, and the CSV export so the
@@ -1989,12 +2070,13 @@
       if (c != null) { total += c; has = true; }
     }
     Object.entries(snapshot.updates).forEach(([accId, u]) => {
-      if (u.inflow != null) {
-        const acc = accountById(accId);
-        const sign = acc ? signFor(acc.type) : 1;
-        const c = convert(u.inflow, u.currency, state.displayCurrency, rates);
+      const acc = accountById(accId);
+      const sign = acc ? signFor(acc.type) : 1;
+      updateLegs(u).forEach(leg => {
+        if (leg.inflow == null) return;
+        const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
         if (c != null) { total += c * sign; has = true; }
-      }
+      });
     });
     return { total, has };
   }
@@ -2026,10 +2108,26 @@
       state.accounts.forEach(a => {
         const r = running[a.id];
         if (!r) return;
-        const rawConverted = convert(r.amount, r.currency, state.displayCurrency, rates);
         const sign = signFor(a.type);
+        const legs = updateLegs(r);
+        // Sum the account's currency pockets, each converted at this date's rate. If ANY
+        // pocket is missing a rate the whole account total is unknown (never partial).
+        let rawSum = 0, known = true;
+        const legDetails = legs.map(leg => {
+          const rawC = convert(leg.amount, leg.currency, state.displayCurrency, rates);
+          if (rawC == null) known = false; else rawSum += rawC;
+          return { currency: leg.currency, amount: leg.amount, converted: rawC == null ? null : rawC * sign };
+        });
+        const rawConverted = known ? rawSum : null;
         const converted = rawConverted == null ? null : rawConverted * sign;
-        balances[a.id] = { amount: r.amount, currency: r.currency, converted, type: a.type };
+        // Keep the flat amount/currency for the single-currency case so the many display
+        // sites that read them are unaffected; multi-currency reads go through `legs`.
+        const primary = legs.length === 1 ? legs[0] : null;
+        balances[a.id] = {
+          amount: primary ? primary.amount : null,
+          currency: primary ? primary.currency : a.currency,
+          converted, type: a.type, legs: legDetails,
+        };
         if (converted == null) {
           totalKnown = false;
           if (a.type === 'asset') assetsKnown = false;
@@ -2066,6 +2164,57 @@
   }
 
   // ===== Account management =====
+  // Strip one currency pocket from an account: remove it from the held set and delete
+  // that currency's leg from every snapshot (dropping now-empty updates/snapshots).
+  function removeAccountCurrency(a, code) {
+    const remaining = accountCurrencies(a).filter(c => c !== code);
+    if (remaining.length <= 1) delete a.currencies; else a.currencies = remaining;
+    state.snapshots.forEach(s => {
+      const u = s.updates[a.id];
+      if (u && u.byCurrency) {
+        delete u.byCurrency[code];
+        if (!Object.keys(u.byCurrency).length) delete s.updates[a.id];
+      }
+    });
+    state.snapshots = state.snapshots.filter(s => Object.keys(s.updates).length > 0);
+  }
+
+  // Per-account pocket editor: removable chips for the extra currencies plus an "add"
+  // dropdown. Handlers are wired directly here (not via renderAccountList's blanket
+  // listeners) and controls carry no data-id so those blanket listeners skip them.
+  function buildCurrencyEditor(a) {
+    const editor = document.createElement('div');
+    editor.className = 'account-cur-editor';
+    const held = accountCurrencies(a);
+    const extras = held.slice(1); // primary lives in the row's currency <select>
+    const available = CUR_CODES.filter(c => !held.includes(c));
+    editor.innerHTML = `<span class="cur-label">${t('heldCurrencies')}</span>`;
+    extras.forEach(code => {
+      const chip = document.createElement('span');
+      chip.className = 'cur-chip';
+      chip.innerHTML = `${code} <button type="button" class="cur-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>`;
+      chip.querySelector('.cur-remove').addEventListener('click', () => {
+        if (!confirm(t('confirmRemoveCurrency', code))) return;
+        removeAccountCurrency(a, code);
+        markDirty(); renderAll();
+      });
+      editor.appendChild(chip);
+    });
+    if (available.length) {
+      const add = document.createElement('select');
+      add.className = 'cur-add';
+      add.innerHTML = `<option value="">${t('addCurrency')}</option>` +
+        available.map(c => `<option value="${c}">${(t('currencies')[c] || c)}</option>`).join('');
+      add.addEventListener('change', () => {
+        if (!add.value) return;
+        a.currencies = [...accountCurrencies(a), add.value];
+        markDirty(); renderAll();
+      });
+      editor.appendChild(add);
+    }
+    return editor;
+  }
+
   function renderAccountList() {
     const wrap = document.getElementById('accountList');
     wrap.innerHTML = '';
@@ -2094,6 +2243,7 @@
       const handle = row.querySelector('.drag-handle');
       handle.addEventListener('pointerdown', e => startAccountReorder(e, a.id));
       wrap.appendChild(row);
+      wrap.appendChild(buildCurrencyEditor(a));
     });
     wrap.querySelectorAll('input[type="text"]').forEach(inp => {
       inp.addEventListener('change', () => {
@@ -2157,11 +2307,17 @@
   document.getElementById('newAccountType').addEventListener('change', populateNewAccountCategory);
 
   // ===== Entry form =====
-  function getAmountPlaceholder(accountId) {
+  function getAmountPlaceholder(accountId, currency) {
     if (!accountId) return '0';
     const cur = currentSnapshot();
     const prev = cur && cur.balances[accountId];
     if (!prev) return '0';
+    // For a multi-currency account, find the pocket matching `currency`.
+    if (currency && prev.legs) {
+      const leg = prev.legs.find(l => l.currency === currency);
+      return leg ? Number(leg.amount).toFixed(decimalsFor(currency)) : '0';
+    }
+    if (prev.amount == null) return '0';
     return Number(prev.amount).toFixed(decimalsFor(prev.currency));
   }
 
@@ -2201,6 +2357,30 @@
     return true;
   }
 
+  // Per-currency variant of autofillRowBalance for a multi-currency account's pocket.
+  // Reads row.inflows[currency], writes row.amounts[currency] = last balance in that
+  // same currency + inflow. Returns true if the amount changed.
+  function autofillLegBalance(row, currency) {
+    const raw = row.inflows[currency];
+    const inflowAmt = parseFloat(raw);
+    if (raw === '' || raw == null || isNaN(inflowAmt) || inflowAmt === 0) {
+      if (row.autoFilledCur[currency]) { row.amounts[currency] = ''; row.autoFilledCur[currency] = false; return true; }
+      return false;
+    }
+    const existing = row.amounts[currency];
+    if (existing != null && existing !== '' && !row.autoFilledCur[currency]) return false;
+    const cur = currentSnapshot();
+    const prev = cur && cur.balances[row.accountId];
+    let base = 0;
+    if (prev && prev.legs) {
+      const leg = prev.legs.find(l => l.currency === currency);
+      if (leg) base = Number(leg.amount);
+    }
+    row.amounts[currency] = (base + inflowAmt).toFixed(decimalsFor(currency));
+    row.autoFilledCur[currency] = true;
+    return true;
+  }
+
   function renderEntryForm() {
     const wrap = document.getElementById('balanceRows');
     const addBtn = document.getElementById('addRowBtn');
@@ -2226,8 +2406,13 @@
     group.className = 'balance-row-group';
     group.dataset.rowId = row.rowId;
 
+    const acc = accountById(row.accountId);
+    // Multi-currency layout when the selected account holds >1 currency, or when the row
+    // already carries per-pocket maps (e.g. editing a record whose account was since changed).
+    const multi = !!(acc && (isMultiCurrency(acc) || row.amounts));
+
     const el = document.createElement('div');
-    el.className = 'balance-row';
+    el.className = 'balance-row' + (multi ? ' multi-head' : '');
 
     const usedAccIds = new Set(entryRows.filter(r => r.rowId !== row.rowId && r.accountId).map(r => r.accountId));
     const opts = [`<option value="">${t('chooseAccount')}</option>`]
@@ -2238,28 +2423,33 @@
         return `<option value="${a.id}" ${selected} ${disabled}>${escapeHtml(a.name + liab)}</option>`;
       })).join('');
 
-    el.innerHTML = `
+    // A single-currency row carries the amount + currency inline; a multi-currency account
+    // renders one pocket per currency below the account picker.
+    el.innerHTML = multi ? `
       <select class="acc-sel">${opts}</select>
-      <input class="amt-input" type="number" inputmode="decimal" step="any" value="${row.amount}" placeholder="${getAmountPlaceholder(row.accountId)}">
+      <button type="button" class="row-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>
+    ` : `
+      <select class="acc-sel">${opts}</select>
+      <input class="amt-input" type="number" inputmode="decimal" step="any" value="${row.amount}" placeholder="${getAmountPlaceholder(row.accountId, row.currency)}">
       <select class="cur-sel"></select>
       <button type="button" class="row-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>
     `;
-    populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
 
     el.querySelector('.acc-sel').addEventListener('change', e => {
       row.accountId = e.target.value;
-      const acc = accountById(row.accountId);
-      if (acc) row.currency = acc.currency;
+      const a2 = accountById(row.accountId);
+      if (a2 && isMultiCurrency(a2)) {
+        // Switch the row into multi-currency mode; seed the per-pocket maps.
+        row.currency = a2.currency;
+        row.amounts = row.amounts || {};
+        row.inflows = row.inflows || {};
+        row.autoFilledCur = row.autoFilledCur || {};
+        delete row.amount; delete row.inflow; delete row.autoFilled;
+      } else {
+        if (a2) row.currency = a2.currency;
+        delete row.amounts; delete row.inflows; delete row.autoFilledCur;
+      }
       renderEntryForm();
-    });
-    el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; row.autoFilled = false; });
-    el.querySelector('.cur-sel').addEventListener('change', e => {
-      row.currency = e.target.value;
-      // Re-derive an auto-filled balance in the new currency (and refresh the unit shown
-      // next to the per-row inflow). A manual balance is left untouched.
-      if (row.autoFilled) { autofillRowBalance(row); el.querySelector('.amt-input').value = row.amount; }
-      const unit = group.querySelector('.row-inflow-mini span');
-      if (unit) unit.textContent = row.currency;
     });
     el.querySelector('.row-remove').addEventListener('click', () => {
       entryRows = entryRows.filter(r => r.rowId !== row.rowId);
@@ -2270,22 +2460,68 @@
 
     group.appendChild(el);
 
-    if (row.accountId) {
-      const inflowMini = document.createElement('div');
-      inflowMini.className = 'row-inflow-mini';
-      inflowMini.innerHTML = `
-        <label>${t('perRowInflow')}</label>
-        <input type="number" inputmode="decimal" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
-        <span style="color: var(--muted);">${row.currency}</span>
-      `;
-      inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => {
-        row.inflow = e.target.value;
-        // Auto-fill this row's balance in place. Don't re-render the form (that would
-        // blur the inflow field the user is typing into) — just sync the amount input.
-        if (autofillRowBalance(row)) el.querySelector('.amt-input').value = row.amount;
+    if (!row.accountId) return group;
+
+    if (multi) {
+      const legsWrap = document.createElement('div');
+      legsWrap.className = 'balance-legs';
+      const codes = [...accountCurrencies(acc), ...Object.keys(row.amounts || {})].filter((c, i, arr) => arr.indexOf(c) === i);
+      codes.forEach(code => {
+        const leg = document.createElement('div');
+        leg.className = 'balance-leg';
+        const amtVal = (row.amounts && row.amounts[code] != null) ? row.amounts[code] : '';
+        const infVal = (row.inflows && row.inflows[code] != null) ? row.inflows[code] : '';
+        leg.innerHTML = `
+          <span class="leg-cur">${code}</span>
+          <input class="amt-input leg-amt" type="number" inputmode="decimal" step="any" value="${amtVal}" placeholder="${getAmountPlaceholder(row.accountId, code)}">
+          <label class="leg-inflow-label">${t('perRowInflow')}</label>
+          <input class="leg-inflow" type="number" inputmode="decimal" step="any" value="${infVal}" placeholder="0">
+        `;
+        const amtInput = leg.querySelector('.leg-amt');
+        amtInput.addEventListener('input', e => {
+          if (!row.amounts) row.amounts = {};
+          row.amounts[code] = e.target.value;
+          if (row.autoFilledCur) row.autoFilledCur[code] = false;
+        });
+        leg.querySelector('.leg-inflow').addEventListener('input', e => {
+          if (!row.inflows) row.inflows = {};
+          if (!row.autoFilledCur) row.autoFilledCur = {};
+          row.inflows[code] = e.target.value;
+          // Auto-fill this pocket's balance in place; don't re-render (would blur the field).
+          if (autofillLegBalance(row, code)) amtInput.value = row.amounts[code];
+        });
+        legsWrap.appendChild(leg);
       });
-      group.appendChild(inflowMini);
+      group.appendChild(legsWrap);
+      return group;
     }
+
+    // Single-currency: inline currency select + inflow mini (unchanged behavior).
+    populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
+    el.querySelector('.amt-input').addEventListener('input', e => { row.amount = e.target.value; row.autoFilled = false; });
+    el.querySelector('.cur-sel').addEventListener('change', e => {
+      row.currency = e.target.value;
+      // Re-derive an auto-filled balance in the new currency (and refresh the unit shown
+      // next to the per-row inflow). A manual balance is left untouched.
+      if (row.autoFilled) { autofillRowBalance(row); el.querySelector('.amt-input').value = row.amount; }
+      const unit = group.querySelector('.row-inflow-mini span');
+      if (unit) unit.textContent = row.currency;
+    });
+
+    const inflowMini = document.createElement('div');
+    inflowMini.className = 'row-inflow-mini';
+    inflowMini.innerHTML = `
+      <label>${t('perRowInflow')}</label>
+      <input type="number" inputmode="decimal" step="any" class="row-inflow-input" value="${row.inflow || ''}" placeholder="0">
+      <span style="color: var(--muted);">${row.currency}</span>
+    `;
+    inflowMini.querySelector('.row-inflow-input').addEventListener('input', e => {
+      row.inflow = e.target.value;
+      // Auto-fill this row's balance in place. Don't re-render the form (that would
+      // blur the inflow field the user is typing into) — just sync the amount input.
+      if (autofillRowBalance(row)) el.querySelector('.amt-input').value = row.amount;
+    });
+    group.appendChild(inflowMini);
 
     return group;
   }
@@ -2302,11 +2538,41 @@
     const note = document.getElementById('note').value.trim();
     const updates = {};
     entryRows.forEach(row => {
-      if (row.accountId && row.amount !== '') {
+      if (!row.accountId) return;
+      const acc = accountById(row.accountId);
+      if (acc && isMultiCurrency(acc)) {
+        const byCurrency = {};
+        // Previous balances (same source as the greyed placeholders) so a blank pocket
+        // can be carried forward rather than silently dropped.
+        const prevCur = currentSnapshot();
+        const prevBal = prevCur && prevCur.balances[row.accountId];
+        const codes = [...accountCurrencies(acc), ...Object.keys(row.amounts || {})].filter((c, i, arr) => arr.indexOf(c) === i);
+        codes.forEach(code => {
+          const amtStr = row.amounts ? row.amounts[code] : '';
+          if (amtStr == null || amtStr === '') {
+            // Blank = "unchanged": carry the pocket's last balance forward (the placeholder
+            // shows this value, so leaving it empty must not zero out the pocket). Nothing
+            // to carry for a pocket that has never had a balance → skip it.
+            const leg = prevBal && prevBal.legs && prevBal.legs.find(l => l.currency === code);
+            if (leg && leg.amount != null && !isNaN(leg.amount)) byCurrency[code] = { amount: Number(leg.amount) };
+            return;
+          }
+          const amt = parseFloat(amtStr);
+          if (isNaN(amt)) return;
+          const leg = { amount: amt };
+          const infStr = row.inflows ? row.inflows[code] : '';
+          if (infStr != null && infStr !== '') {
+            const infAmt = parseFloat(infStr);
+            if (!isNaN(infAmt) && infAmt !== 0) leg.inflow = infAmt;
+          }
+          byCurrency[code] = leg;
+        });
+        if (Object.keys(byCurrency).length) updates[row.accountId] = { currency: acc.currency, byCurrency };
+      } else if (row.amount != null && row.amount !== '') {
         const amt = parseFloat(row.amount);
         if (!isNaN(amt)) {
           const u = { amount: amt, currency: row.currency };
-          if (row.inflow !== '') {
+          if (row.inflow != null && row.inflow !== '') {
             const infAmt = parseFloat(row.inflow);
             if (!isNaN(infAmt) && infAmt !== 0) u.inflow = infAmt;
           }
@@ -2341,13 +2607,25 @@
     const snap = state.snapshots.find(s => s.id === id);
     if (!snap) return;
     editingId = id;
-    entryRows = Object.entries(snap.updates).map(([accId, v]) => ({
-      rowId: crypto.randomUUID(),
-      accountId: accId,
-      amount: String(v.amount),
-      currency: v.currency,
-      inflow: v.inflow != null ? String(v.inflow) : '',
-    }));
+    entryRows = Object.entries(snap.updates).map(([accId, v]) => {
+      if (v.byCurrency) {
+        // Multi-currency record → per-pocket maps keyed by currency.
+        const amounts = {}, inflows = {}, autoFilledCur = {};
+        Object.entries(v.byCurrency).forEach(([code, leg]) => {
+          amounts[code] = String(leg.amount);
+          inflows[code] = leg.inflow != null ? String(leg.inflow) : '';
+          autoFilledCur[code] = false;
+        });
+        return { rowId: crypto.randomUUID(), accountId: accId, currency: v.currency, amounts, inflows, autoFilledCur };
+      }
+      return {
+        rowId: crypto.randomUUID(),
+        accountId: accId,
+        amount: String(v.amount),
+        currency: v.currency,
+        inflow: v.inflow != null ? String(v.inflow) : '',
+      };
+    });
     if (entryRows.length === 0) entryRows = [newEmptyRow()];
     renderAll();
     document.getElementById('date').value = snap.date;
@@ -2413,13 +2691,18 @@
       chip.dataset.accId = a.id;
       chip.addEventListener('click', () => startDrilldown(a.id));
       const converted = b ? b.converted : null;
-      const showOriginal = b && b.currency !== state.displayCurrency;
+      const multi = b && b.legs && b.legs.length > 1;
+      // Multi-currency: list each pocket's original balance. Single: show the original
+      // only when it differs from the display currency.
+      const showOriginal = b && (multi || b.currency !== state.displayCurrency);
+      const originalStr = !b ? '' : (multi
+        ? b.legs.map(l => fmt(signedAmount(l.amount, a.type), l.currency)).join(' · ')
+        : t('original', fmt(signedAmount(b.amount, a.type), b.currency)));
       const liabBadge = a.type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
-      const originalSigned = b ? signedAmount(b.amount, a.type) : null;
       chip.innerHTML = `
         <div class="chip-name"><span class="chip-dot" style="background:${a.color}"></span>${escapeHtml(a.name)}${liabBadge}</div>
         <div class="chip-amount">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</div>
-        ${showOriginal ? `<div class="chip-original">${t('original', fmt(originalSigned, b.currency))}</div>` : ''}
+        ${showOriginal ? `<div class="chip-original">${originalStr}</div>` : ''}
       `;
       chips.appendChild(chip);
     });
@@ -2455,7 +2738,8 @@
         const color = acc ? acc.color : '#666';
         const type = acc ? acc.type : 'asset';
         const liabBadge = type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
-        return `<span><span class="acc" style="color:${color}">●</span>${escapeHtml(name)} ${fmt(signedAmount(v.amount, type), v.currency)}${liabBadge}</span>`;
+        const amtStr = updateLegs(v).map(leg => fmt(signedAmount(leg.amount, type), leg.currency)).join(' + ');
+        return `<span><span class="acc" style="color:${color}">●</span>${escapeHtml(name)} ${amtStr}${liabBadge}</span>`;
       }).join('');
       const tr = document.createElement('tr');
       let inflowLine = '';
@@ -2976,10 +3260,18 @@
     if (!cur) return [];
     const groups = {};
     Object.entries(cur.balances).forEach(([accId, b]) => {
-      if (b.converted == null || b.type === 'liability') return;
+      if (b.type === 'liability') return;
       const acc = accountById(accId);
-      const key = mode === 'category' ? (acc?.category || 'other') : b.currency;
-      groups[key] = (groups[key] || 0) + b.converted;
+      if (mode === 'category') {
+        if (b.converted == null) return;
+        groups[acc?.category || 'other'] = (groups[acc?.category || 'other'] || 0) + b.converted;
+      } else {
+        // Currency mode splits a multi-currency account across its pockets.
+        (b.legs || []).forEach(l => {
+          if (l.converted == null) return;
+          groups[l.currency] = (groups[l.currency] || 0) + l.converted;
+        });
+      }
     });
     const total = Object.values(groups).reduce((s, v) => s + v, 0);
     if (total <= 0) return [];
@@ -4613,7 +4905,10 @@
     nameEl.innerHTML = `<span class="chip-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${acc.color};margin-right:8px;vertical-align:middle;"></span>${escapeHtml(acc.name)}${liabBadge}`;
     document.getElementById('drillBalance').textContent = b && b.converted != null ? fmt(b.converted, state.displayCurrency) : '—';
     const origEl = document.getElementById('drillOriginal');
-    if (b && b.currency !== state.displayCurrency) {
+    if (b && b.legs && b.legs.length > 1) {
+      origEl.textContent = b.legs.map(l => fmt(signedAmount(l.amount, acc.type), l.currency)).join(' · ');
+      origEl.hidden = false;
+    } else if (b && b.currency !== state.displayCurrency) {
       const signedOrig = signedAmount(b.amount, acc.type);
       origEl.textContent = t('original', fmt(signedOrig, b.currency));
       origEl.hidden = false;
@@ -4698,12 +4993,15 @@
     rows.forEach(s => {
       const upd = s.updates[acc.id];
       const rates = state.rates[s.date];
-      const rawConverted = convert(upd.amount, upd.currency, state.displayCurrency, rates);
-      const converted = rawConverted == null ? null : rawConverted * signFor(acc.type);
+      const legs = updateLegs(upd);
+      let rawSum = 0, known = true;
+      legs.forEach(l => { const c = convert(l.amount, l.currency, state.displayCurrency, rates); if (c == null) known = false; else rawSum += c; });
+      const converted = known ? rawSum * signFor(acc.type) : null;
+      const amtStr = legs.map(l => fmt(signedAmount(l.amount, acc.type), l.currency)).join(' + ');
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(s.date)}</td>
-        <td class="num">${fmt(signedAmount(upd.amount, acc.type), upd.currency)}</td>
+        <td class="num">${amtStr}</td>
         <td class="num">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</td>
         <td>${s.note ? escapeHtml(s.note) : ''}</td>
       `;
