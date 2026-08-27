@@ -996,6 +996,10 @@
   .seg button:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; }
   .seg button.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0a0d1a; font-weight: 600; }
   .seg button.active:hover { transform: none; }
+
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .check-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .hint.warn { color: var(--danger); }
   .chart-toggle {
     background: var(--bg-soft); color: var(--muted);
     border: 1px solid var(--border); border-radius: var(--radius-pill);
@@ -1270,6 +1274,50 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="publicModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="publicModalTitle" tabindex="-1">
+      <div class="modal-header">
+        <h2 id="publicModalTitle">公开数据导出</h2>
+        <button class="icon-btn modal-close" id="publicCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="publicTitleInput" id="publicTitleLabel">标题</label>
+          <input type="text" id="publicTitleInput" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="publicSubtitleInput" id="publicSubtitleLabel">副标题（可选）</label>
+          <input type="text" id="publicSubtitleInput" maxlength="120">
+        </div>
+        <div class="field">
+          <label id="publicScaleLabel">金额</label>
+          <div class="seg" id="publicScaleSeg">
+            <button type="button" data-scale="indexed" class="active" id="publicScaleIndexedBtn">指数化</button>
+            <button type="button" data-scale="amount" id="publicScaleAmountBtn">真实金额</button>
+          </div>
+          <div class="hint" id="publicScaleHint"></div>
+        </div>
+        <div class="field">
+          <label id="publicGranLabel">粒度</label>
+          <div class="seg" id="publicGranSeg">
+            <button type="button" data-gran="month" class="active" id="publicGranMonthBtn">每月</button>
+            <button type="button" data-gran="record" id="publicGranRecordBtn">每次记录</button>
+          </div>
+        </div>
+        <div class="field">
+          <label id="publicIncludeLabel">包含</label>
+          <label class="check-row"><input type="checkbox" id="publicIncBreakdown" checked><span id="publicIncBreakdownLabel">构成占比（类别 / 币种）</span></label>
+          <label class="check-row" id="publicIncGoalRow"><input type="checkbox" id="publicIncGoal" checked><span id="publicIncGoalLabel">目标进度</span></label>
+          <div class="hint" id="publicNoteHint">导出的 public-data.json 永远不含账户名、备注、汇率明细与同步设置。</div>
+        </div>
+        <div class="actions" style="margin-top: 0; justify-content: flex-end;">
+          <button type="button" class="ghost" id="publicCancelBtn">取消</button>
+          <button type="button" id="publicExportBtn">导出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="drilldownView" hidden>
     <button class="link" id="drillBack" style="margin-bottom: 12px; padding: 6px 0;">← <span id="drillBackLabel">返回</span></button>
     <div class="panel hero">
@@ -1512,6 +1560,7 @@
         <button type="button" class="link" id="cancelEditBtn" hidden>取消编辑</button>
         <button type="button" class="ghost" id="exportBtn" style="margin-left: auto;">导出</button>
         <button type="button" class="ghost" id="exportCsvBtn">CSV</button>
+        <button type="button" class="ghost" id="exportPublicBtn">公开数据</button>
         <button type="button" class="ghost" id="importBtn">导入</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
       </div>
@@ -1826,6 +1875,7 @@
     if (typeof data.isDemo !== 'boolean') data.isDemo = false;
     if (!data.rates) data.rates = {};
     if (typeof data.dirtySinceExport !== 'number') data.dirtySinceExport = 0;
+    data.publicExport = sanitizePublicExport(data.publicExport);
     // Sanitize untrusted fields. migrate() is the single choke point for every
     // ingestion path (load, import, sync-pull, snapshot restore), so validating
     // here neutralizes injected values (e.g. a `color` crafted to break out of a
@@ -1892,8 +1942,23 @@
     return data;
   }
 
+  // Remembered choices for the public-data export. Defaults are the cautious ones:
+  // indexed (no real figures) and monthly. Sanitized here because this rides along in
+  // the JSON export and therefore comes back through import / sync-pull.
+  function sanitizePublicExport(o) {
+    const src = (o && typeof o === 'object') ? o : {};
+    return {
+      title: typeof src.title === 'string' ? src.title.slice(0, 60) : '',
+      subtitle: typeof src.subtitle === 'string' ? src.subtitle.slice(0, 120) : '',
+      scale: src.scale === 'amount' ? 'amount' : 'indexed',
+      granularity: src.granularity === 'record' ? 'record' : 'month',
+      includeBreakdown: src.includeBreakdown !== false,
+      includeGoal: src.includeGoal !== false,
+    };
+  }
+
   function defaultState() {
-    return { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, milestonesShown: [], rates: {}, dirtySinceExport: 0 };
+    return { accounts: [], snapshots: [], displayCurrency: 'CNY', language: detectLanguage(), theme: 'dark', privacyBlur: false, fiscalYearStartMonth: 1, goal: null, milestonesShown: [], rates: {}, dirtySinceExport: 0, publicExport: sanitizePublicExport(null) };
   }
 
   function load() {
@@ -3283,13 +3348,16 @@
   });
 
   // ===== Import / Export =====
-  function doExport() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  function downloadBlob(blob, filename) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `record-finance-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+  function doExport() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `record-finance-${localDateStr()}.json`);
     state.dirtySinceExport = 0;
     backupBannerDismissed = false;
     save();
@@ -3322,14 +3390,188 @@
     });
     // BOM so Excel reads UTF-8 (account names may be CJK); CRLF line endings.
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `record-finance-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadBlob(blob, `record-finance-${localDateStr()}.csv`);
   }
+  // ===== Public share export =====
+  // A pruned, display-ready projection for the read-only public page (record-me).
+  // It never carries account names, notes, per-date rates, sync handles or the
+  // encryption envelope — only category keys, currency codes and one series that
+  // follows the current basis (net worth / total assets). `scale: 'indexed'` rebases
+  // everything to 100 at the first point, so the shape of the curve and the holdings
+  // mix can be shared without publishing a single real figure; `scale: 'amount'`
+  // ships the real numbers in the display currency. The public renderer derives all
+  // stats (MTD/YTD/goal/ETA) from `timeline`, so we only ship the raw series.
+  const PUBLIC_EXPORT_FILENAME = 'public-data.json'; // fixed — the public page fetches it by name
+
+  // One row per calendar month (that month's last record), or one per record date.
+  // Several snapshots can share a date, so collapse those first — the same rule the
+  // trend chart uses, and the reason a raw timeline would emit duplicate months.
+  function publicSeries(granularity) {
+    const rows = collapseTimelineByDate(computeTimeline());
+    if (granularity === 'record') return rows;
+    const byMonth = new Map();
+    rows.forEach(e => byMonth.set(e.snapshot.date.slice(0, 7), e)); // date-sorted → last wins
+    return [...byMonth.values()];
+  }
+
+  // Returns { payload } or { error } (an i18n key) — never touches the DOM, so the
+  // shape can be reasoned about (and eventually tested) on its own.
+  function buildPublicPayload(opts) {
+    const dc = state.displayCurrency;
+    const all = publicSeries(opts.granularity);
+    // Trim leading/trailing points with no known total (a date whose rates are
+    // missing), but keep interior ones as null so the public chart can show the gap
+    // instead of drawing a straight line through it.
+    const first = all.findIndex(e => totalForBasis(e) != null);
+    if (first < 0) return { error: 'exportPublicEmpty' };
+    let lastIdx = all.length - 1;
+    while (totalForBasis(all[lastIdx]) == null) lastIdx--;
+    const series = all.slice(first, lastIdx + 1);
+
+    const indexed = opts.scale === 'indexed';
+    const base = totalForBasis(series[0]);
+    if (indexed && !(base > 0)) return { error: 'exportPublicNoIndex' };
+    const factor = indexed ? 100 / base : 1;
+    // A public page never needs sub-unit precision; index values keep one decimal.
+    const round = n => indexed ? Math.round(n * 10) / 10 : Math.round(n);
+    const out = n => n == null ? null : round(n * factor);
+
+    const timeline = series.map(e => ({
+      date: opts.granularity === 'month' ? e.snapshot.date.slice(0, 7) : e.snapshot.date,
+      total: out(totalForBasis(e)),
+    }));
+    const last = series[series.length - 1];
+
+    // Composition of the latest snapshot's ASSETS (a holdings mix; a liability is not
+    // a holding). Category keys travel untranslated so the public page can label them
+    // in its own language — `label` is only a fallback for a renderer without a
+    // dictionary. Indexed mode ships shares instead of amounts, since an absolute
+    // holdings mix would hand the scale straight back.
+    let breakdown = null;
+    if (opts.includeBreakdown) {
+      const catMap = {}, curMap = {};
+      state.accounts.forEach(a => {
+        if (a.type !== 'asset') return;
+        const b = last.balances[a.id];
+        if (!b || b.converted == null) return;
+        catMap[a.category] = (catMap[a.category] || 0) + b.converted;
+        (b.legs || []).forEach(leg => {
+          if (leg.converted == null) return;
+          curMap[leg.currency] = (curMap[leg.currency] || 0) + leg.converted;
+        });
+      });
+      const catLabels = t('categories');
+      // Slices are non-negative by definition; a pocket that happens to sit negative
+      // is dropped rather than flipped, so shares can sum to slightly under 100%.
+      const slice = (map, keyName, extra) => {
+        const total = Object.values(map).reduce((sum, v) => sum + v, 0);
+        return Object.entries(map).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => Object.assign(
+            { [keyName]: k },
+            extra(k),
+            { value: indexed ? (total > 0 ? Math.round(v / total * 1000) / 10 : 0) : out(v) }
+          ));
+      };
+      breakdown = {
+        unit: indexed ? 'percent' : 'amount',
+        category: slice(catMap, 'key', k => ({ label: catLabels[k] || k })),
+        currency: slice(curMap, 'code', () => ({})),
+      };
+    }
+
+    // Goal target converted into the display currency at the latest date's rates,
+    // then put on the same scale as the series.
+    let goal = null;
+    if (opts.includeGoal && state.goal && state.goal.amount) {
+      const gt = convert(state.goal.amount, state.goal.currency, dc, state.rates[last.snapshot.date]);
+      if (gt != null) goal = { target: out(gt) };
+    }
+
+    return {
+      payload: {
+        meta: {
+          title: opts.title || t('exportPublicDefaultTitle'),
+          subtitle: opts.subtitle || '',
+          generatedAt: localDateStr(),
+          basis: state.basis === 'assets' ? 'assets' : 'netWorth',
+          scale: indexed ? 'indexed' : 'amount',
+          indexBase: indexed ? 100 : null,
+          currency: indexed ? null : dc,
+          currencySymbol: indexed ? '' : (SYMBOLS[dc] || ''),
+          granularity: opts.granularity,
+          seriesStart: timeline[0].date,
+        },
+        timeline,
+        goal,
+        breakdown,
+        milestones: [],
+      },
+    };
+  }
+
+  function doExportPublic() {
+    const built = buildPublicPayload(state.publicExport);
+    if (built.error) { alert(t(built.error)); return; }
+    downloadBlob(new Blob([JSON.stringify(built.payload, null, 2)], { type: 'application/json' }),
+      PUBLIC_EXPORT_FILENAME);
+  }
+
+  // Publishing real figures is a one-way door, so this gets a modal with the
+  // indexed/real choice up front rather than a confirm() next to the backup buttons.
+  const publicModal = document.getElementById('publicModal');
+  function renderPublicOpts() {
+    const o = state.publicExport;
+    publicModal.querySelectorAll('#publicScaleSeg button')
+      .forEach(b => b.classList.toggle('active', b.dataset.scale === o.scale));
+    publicModal.querySelectorAll('#publicGranSeg button')
+      .forEach(b => b.classList.toggle('active', b.dataset.gran === o.granularity));
+    const hint = document.getElementById('publicScaleHint');
+    const real = o.scale === 'amount';
+    hint.textContent = t(real ? 'exportPublicScaleAmountHint' : 'exportPublicScaleIndexedHint');
+    hint.classList.toggle('warn', real);
+  }
+  function openPublicExport() {
+    const o = state.publicExport;
+    const titleInput = document.getElementById('publicTitleInput');
+    titleInput.value = o.title;
+    titleInput.placeholder = t('exportPublicDefaultTitle');
+    document.getElementById('publicSubtitleInput').value = o.subtitle;
+    document.getElementById('publicIncBreakdown').checked = o.includeBreakdown;
+    document.getElementById('publicIncGoal').checked = o.includeGoal;
+    document.getElementById('publicIncGoalRow').hidden = !state.goal;
+    renderPublicOpts();
+    openModal(publicModal);
+  }
+  function closePublicExport() { closeModal(publicModal); }
+
   document.getElementById('exportBtn').addEventListener('click', doExport);
   document.getElementById('exportCsvBtn').addEventListener('click', doExportCsv);
+  document.getElementById('exportPublicBtn').addEventListener('click', openPublicExport);
+  document.getElementById('publicCloseBtn').addEventListener('click', closePublicExport);
+  document.getElementById('publicCancelBtn').addEventListener('click', closePublicExport);
+  publicModal.addEventListener('click', e => { if (e.target === publicModal) closePublicExport(); });
+  document.getElementById('publicScaleSeg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-scale]');
+    if (!btn) return;
+    state.publicExport.scale = btn.dataset.scale;
+    save(); renderPublicOpts();
+  });
+  document.getElementById('publicGranSeg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-gran]');
+    if (!btn) return;
+    state.publicExport.granularity = btn.dataset.gran;
+    save(); renderPublicOpts();
+  });
+  document.getElementById('publicExportBtn').addEventListener('click', () => {
+    const o = state.publicExport;
+    o.title = document.getElementById('publicTitleInput').value.trim().slice(0, 60);
+    o.subtitle = document.getElementById('publicSubtitleInput').value.trim().slice(0, 120);
+    o.includeBreakdown = document.getElementById('publicIncBreakdown').checked;
+    o.includeGoal = document.getElementById('publicIncGoal').checked;
+    save();
+    closePublicExport();
+    doExportPublic();
+  });
   document.getElementById('backupBannerExport').addEventListener('click', doExport);
   document.getElementById('backupBannerDismiss').addEventListener('click', () => {
     backupBannerDismissed = true;
@@ -3765,6 +4007,7 @@
     if (e.key === 'Escape') {
       if (!prefsModal.hidden) closePrefs();
       if (!syncModal.hidden) closeSync();
+      if (!publicModal.hidden) closePublicExport();
     }
   });
 
@@ -4911,6 +5154,24 @@
     setText('importBtn', t('import'));
     const csvBtn = document.getElementById('exportCsvBtn');
     if (csvBtn) { csvBtn.textContent = t('exportCsv'); csvBtn.title = t('exportCsvTitle'); }
+    const pubBtn = document.getElementById('exportPublicBtn');
+    if (pubBtn) { pubBtn.textContent = t('exportPublic'); pubBtn.title = t('exportPublicTitle'); }
+    setText('publicModalTitle', t('exportPublicHeading'));
+    setText('publicTitleLabel', t('exportPublicLabelTitle'));
+    setText('publicSubtitleLabel', t('exportPublicLabelSubtitle'));
+    setText('publicScaleLabel', t('exportPublicScale'));
+    setText('publicScaleIndexedBtn', t('exportPublicScaleIndexed'));
+    setText('publicScaleAmountBtn', t('exportPublicScaleAmount'));
+    setText('publicGranLabel', t('exportPublicGranularity'));
+    setText('publicGranMonthBtn', t('exportPublicGranMonth'));
+    setText('publicGranRecordBtn', t('exportPublicGranRecord'));
+    setText('publicIncludeLabel', t('exportPublicInclude'));
+    setText('publicIncBreakdownLabel', t('exportPublicIncBreakdown'));
+    setText('publicIncGoalLabel', t('exportPublicIncGoal'));
+    setText('publicNoteHint', t('exportPublicNote'));
+    setText('publicCancelBtn', t('exportPublicCancel'));
+    setText('publicExportBtn', t('exportPublicDo'));
+    if (!publicModal.hidden) renderPublicOpts();
     setText('backupBannerExport', t('exportBackup'));
     setText('backupBannerDismiss', t('later'));
 
