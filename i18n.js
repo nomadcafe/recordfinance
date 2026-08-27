@@ -5,6 +5,7 @@
     zh: {
       htmlLang: 'zh-CN',
       title: 'Record',
+      logoHome: '首页',
       netWorth: '净资产', totalBalance: '总余额', currentBalance: '当前余额',
       asOf: d => `截至 ${d}`, ratesLoading: '汇率加载中…', ratesShort: '汇率…',
       assets: '资产', liabilities: '负债',
@@ -174,6 +175,7 @@
     en: {
       htmlLang: 'en',
       title: 'Record',
+      logoHome: 'Home',
       netWorth: 'Net Worth', totalBalance: 'Total Balance', currentBalance: 'Current Balance',
       asOf: d => `As of ${d}`, ratesLoading: 'Loading rates…', ratesShort: 'Rates…',
       assets: 'Assets', liabilities: 'Liabilities',
@@ -343,6 +345,7 @@
     ja: {
       htmlLang: 'ja',
       title: 'Record',
+      logoHome: 'ホーム',
       netWorth: '純資産', totalBalance: '総残高', currentBalance: '現在残高',
       asOf: d => `${d} 時点`, ratesLoading: '為替レート読込中…', ratesShort: 'レート…',
       assets: '資産', liabilities: '負債',

@@ -1,10 +1,11 @@
-const CACHE = 'record-v11';
+const CACHE = 'record-v12';
 const ASSETS = [
   './',
   './index.html',
   './i18n.js',
   './manifest.json',
   './icon.svg',
+  './icon-maskable.svg',
   './og-image.jpg',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
 ];
