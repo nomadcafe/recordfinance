@@ -4120,11 +4120,17 @@
   });
 
   // ===== Goal =====
-  function trailingMonthlyGrowth() {
-    // Least-squares slope (per month) over snapshots in the last 180 days. A regression
-    // across every point is far less sensitive to a single outlier at the window edge (a
-    // one-off large deposit/withdrawal) than the old first-vs-last endpoint slope. With
-    // exactly two points it reduces to that endpoint slope, so short histories still work.
+  // Monthly pace over the last 180 days, plus the split that lets the goal forecast
+  // compound. Memoized per stateVersion: three render sites ask for it and the
+  // Theil-Sen pass is O(n^2).
+  let _paceCache = null, _paceCacheVersion = -1;
+  function trailingPace() {
+    if (_paceCacheVersion === stateVersion) return _paceCache;
+    _paceCache = _trailingPace();
+    _paceCacheVersion = stateVersion;
+    return _paceCache;
+  }
+  function _trailingPace() {
     const tl = computeTimeline().filter(t => totalForBasis(t) != null);
     if (tl.length < 2) return null;
     const lastDate = new Date(tl[tl.length - 1].snapshot.date);
@@ -4134,14 +4140,73 @@
     const t0 = new Date(win[0].snapshot.date).getTime();
     const xs = win.map(p => (new Date(p.snapshot.date).getTime() - t0) / (30.44 * 86400000)); // months since window start
     const ys = win.map(p => totalForBasis(p));
-    if (xs[xs.length - 1] < 0.5) return null; // window too short to trust a slope
-    const n = xs.length;
-    const mx = xs.reduce((a, b) => a + b, 0) / n;
-    const my = ys.reduce((a, b) => a + b, 0) / n;
-    let num = 0, den = 0;
-    for (let i = 0; i < n; i++) { const dx = xs[i] - mx; num += dx * (ys[i] - my); den += dx * dx; }
-    if (den === 0) return null; // all points on the same day
-    return num / den; // per-month slope of the best-fit line
+    const span = xs[xs.length - 1];
+    if (span < 0.5) return null; // window too short to trust a slope
+
+    // Theil-Sen: the median of every pairwise slope. Least squares only *dilutes* a
+    // one-off large deposit/withdrawal; a median ignores it outright, so long as such
+    // jumps are the minority of the window. With two points both reduce to the plain
+    // endpoint slope, so short histories behave as before.
+    const slopes = [];
+    for (let i = 0; i < xs.length; i++) {
+      for (let j = i + 1; j < xs.length; j++) {
+        const dx = xs[j] - xs[i];
+        if (dx > 0) slopes.push((ys[j] - ys[i]) / dx);
+      }
+    }
+    if (!slopes.length) return null; // all points on the same day
+    slopes.sort((a, b) => a - b);
+    const mid = slopes.length >> 1;
+    const slope = slopes.length % 2 ? slopes[mid] : (slopes[mid - 1] + slopes[mid]) / 2;
+
+    // How much of the window's growth was market return rather than money paid in?
+    // Returns compound; contributions don't, so the forecast has to treat them
+    // differently. Only knowable when inflows were actually recorded.
+    let inflowSum = 0, hasSplit = false;
+    for (let i = 1; i < win.length; i++) {
+      const inf = snapshotInflowInDisplay(win[i].snapshot);
+      if (inf.has) { inflowSum += inf.total; hasSplit = true; }
+    }
+    const change = ys[ys.length - 1] - ys[0];
+    let gainShare = 0;
+    if (hasSplit && change > 0) gainShare = Math.min(1, Math.max(0, (change - inflowSum) / change));
+    return { slope, gainShare, hasSplit };
+  }
+
+  // Back-compat shim: the "avg / month" row wants the plain observed slope, which is a
+  // description of the past and should stay linear.
+  function trailingMonthlyGrowth() {
+    const p = trailingPace();
+    return p ? p.slope : null;
+  }
+
+  // Forecast model: next month adds `contrib` (flat, from deposits) and `rate` of the
+  // running balance (compounding, from returns). Calibrated so month one grows by
+  // exactly the observed slope — with no recorded inflows rate is 0 and the whole thing
+  // collapses to the straight line it used to be; the two only diverge further out.
+  const MAX_MONTHLY_RATE = 0.02; // ~27%/yr — a 6-month bull run must not extrapolate forever
+  function paceModel(current) {
+    const p = trailingPace();
+    if (!p || p.slope <= 0) return null;
+    let rate = 0;
+    if (p.hasSplit && p.gainShare > 0 && current > 0) {
+      rate = Math.min(p.slope * p.gainShare / current, MAX_MONTHLY_RATE);
+    }
+    return { rate, contrib: p.slope - rate * current, slope: p.slope };
+  }
+
+  // Step the model forward a month at a time. Iterating (rather than solving for n)
+  // keeps the ETA and the dashed chart line reading off the exact same series.
+  const MAX_FORECAST_MONTHS = 600; // 50 years; past this we decline to guess
+  function monthsToGoal(current, goal) {
+    const m = paceModel(current);
+    if (!m) return null;
+    let v = current;
+    for (let k = 1; k <= MAX_FORECAST_MONTHS; k++) {
+      v = v * (1 + m.rate) + m.contrib;
+      if (v >= goal) return k;
+    }
+    return null;
   }
 
   // Build the dashed goal-projection for the trend chart: month-by-month future points from
@@ -4176,6 +4241,18 @@
   }
 
   const FORECAST_HORIZON_MONTHS = 60;
+  // Month math via year*12+month avoids the setMonth day-overflow (Jan 31 + 1mo → Mar 3),
+  // which would otherwise skew the projected month labels and the ETA.
+  const ymLabel = ym => `${Math.floor(ym / 12)}-${String(ym % 12 + 1).padStart(2, '0')}`;
+  // The calendar month `months` from the latest record — "2034-12". Shared by the ETA
+  // line and the chart's forecast marker so they can't name different months.
+  function etaMonthLabel(months) {
+    const cur = currentSnapshot();
+    if (!cur || months == null) return null;
+    const base = new Date(cur.snapshot.date);
+    return ymLabel(base.getFullYear() * 12 + base.getMonth() + months);
+  }
+
   function computeGoalProjection(timeline) {
     if (!state.goal || !timeline.length) return null;
     const last = timeline[timeline.length - 1];
@@ -4185,28 +4262,26 @@
     let goalInDisplay = convert(state.goal.amount, state.goal.currency, state.displayCurrency, rates);
     if (goalInDisplay == null && state.goal.currency === state.displayCurrency) goalInDisplay = state.goal.amount;
     if (goalInDisplay == null || goalInDisplay <= current) return null; // n/a or already reached
-    const growth = trailingMonthlyGrowth();
-    if (growth == null || growth <= 0) return null;
-    const monthsToGoal = Math.ceil((goalInDisplay - current) / growth);
-    if (monthsToGoal < 1) return null;
-    const reached = monthsToGoal <= FORECAST_HORIZON_MONTHS;
-    const N = Math.min(monthsToGoal, FORECAST_HORIZON_MONTHS);
-    // Month math via year*12+month avoids the setMonth day-overflow (Jan 31 + 1mo → Mar 3),
-    // which would otherwise skew the projected month labels and the ETA.
+    const model = paceModel(current);
+    if (!model) return null;
+    const etaMonths = monthsToGoal(current, goalInDisplay);
+    // Curve, not ray: with a return component the dash bends upward, which is the whole
+    // point of the compounding model — draw the same series the ETA was read off.
+    const reached = etaMonths != null && etaMonths <= FORECAST_HORIZON_MONTHS;
+    const N = reached ? etaMonths : FORECAST_HORIZON_MONTHS;
     const base = new Date(last.snapshot.date);
     const baseYM = base.getFullYear() * 12 + base.getMonth();
-    const ymLabel = ym => `${Math.floor(ym / 12)}-${String(ym % 12 + 1).padStart(2, '0')}`;
     // Connect the dash to the real curve: null across history except the last actual point.
     const data = new Array(timeline.length).fill(null);
     data[timeline.length - 1] = current;
     const futureLabels = [];
+    let v = current;
     for (let k = 1; k <= N; k++) {
       futureLabels.push(`${ymLabel(baseYM + k)}-01`);
-      const v = (reached && k === N) ? goalInDisplay : Math.min(current + growth * k, goalInDisplay);
-      data.push(v);
+      v = v * (1 + model.rate) + model.contrib;
+      data.push((reached && k === N) ? goalInDisplay : Math.min(v, goalInDisplay));
     }
-    const etaLabel = reached ? ymLabel(baseYM + monthsToGoal) : null; // YYYY-MM
-    return { data, futureLabels, reached, etaLabel };
+    return { data, futureLabels, reached, etaLabel: reached ? ymLabel(baseYM + etaMonths) : null };
   }
 
   function renderGoal() {
@@ -4273,14 +4348,20 @@
     } else {
       document.getElementById('goalHeadline').innerHTML = `<span class="goal-progress-text">${t('goalProgress', fmt(progressTotal, state.displayCurrency), fmt(goalInDisplay, state.displayCurrency), pct.toFixed(1))}</span>`;
       const remain = goalInDisplay - progressTotal;
-      const growth = trailingMonthlyGrowth();
-      let eta;
-      if (growth == null || growth <= 0) eta = t('goalETAStalled');
+      const model = paceModel(progressTotal);
+      const months = model ? monthsToGoal(progressTotal, goalInDisplay) : null;
+      let eta, hint = '';
+      if (!model) eta = t('goalETAStalled');
+      else if (months == null) eta = t('goalETAFar');
       else {
-        const months = Math.ceil(remain / growth);
-        eta = t('goalETA', months);
+        eta = t('goalETA', t('fmtDur', Math.floor(months / 12), months % 12), etaMonthLabel(months));
+        // Compounding only kicks in once we can tell deposits from returns; say so
+        // quietly rather than letting a straight-line number look more certain than it is.
+        hint = model.rate > 0 ? t('goalETAHintCompound') : t('goalETAHintLinear');
       }
-      document.getElementById('goalSub').textContent = `${t('goalRemain', fmt(remain, state.displayCurrency))} · ${eta}`;
+      const sub = document.getElementById('goalSub');
+      sub.textContent = `${t('goalRemain', fmt(remain, state.displayCurrency))} · ${eta}`;
+      sub.title = hint;
     }
   }
 
