@@ -275,6 +275,13 @@
     max-height: 85vh; overflow-y: auto;
     box-shadow: var(--shadow-lg);
     animation: modalIn 0.22s var(--ease);
+    position: relative;
+  }
+  .modal::after {
+    content: ''; position: absolute; inset: 0 0 auto; height: 1px;
+    border-radius: 20px 20px 0 0;
+    background: linear-gradient(90deg, transparent, var(--hairline) 22%, var(--hairline) 78%, transparent);
+    pointer-events: none;
   }
   .modal:focus { outline: none; } /* container is focused programmatically on open */
   @keyframes modalIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
@@ -283,8 +290,8 @@
     margin-bottom: 20px; gap: 10px;
   }
   .modal-header h2 {
-    font-size: 16px; margin: 0; font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 18px; margin: 0; font-weight: 650;
+    letter-spacing: -0.022em;
   }
   .modal-close { font-size: 20px; line-height: 1; }
   .modal-body { display: flex; flex-direction: column; gap: 20px; }
@@ -358,10 +365,37 @@
     box-shadow: 0 0 16px var(--accent-glow);
     transition: width 0.45s var(--ease);
   }
-  .goal-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
-  .goal-input-row { display: flex; gap: 6px; flex-wrap: wrap; }
-  .goal-input-row input { width: 140px; }
-  .goal-input-row select { width: 90px; }
+  /* Shared by every field whose controls sit in a row: goal, encryption, sync. */
+  .field-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  /* The amount flexes so the secondary button stays on the row instead of being
+     pushed onto a line of its own by a fixed-width input. */
+  .goal-input-row { display: flex; gap: 6px; flex: 1 1 200px; min-width: 0; }
+  .goal-input-row input { flex: 1; min-width: 0; }
+  .goal-input-row select { width: 90px; flex-shrink: 0; }
+
+  /* Label on the left, current state on the right — so a setting reads as a state
+     you can change, not as a button with a word floating beside it. */
+  .field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  /* A segmented control hugs its options; .field is a column, which would stretch it. */
+  .field > .seg { align-self: flex-start; }
+  .state-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--muted);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 3px 10px 3px 8px;
+    white-space: nowrap;
+  }
+  .state-badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .state-badge.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-glow); }
+  .state-badge.on::before { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+  /* Free-form status text (a filename, a last-sync time, an inline relink action). */
+  .status-line { font-size: 13px; color: var(--muted); margin: 2px 0 10px; }
 
   /* Milestone toast */
   .toast {
@@ -1325,17 +1359,15 @@
         </div>
         <div class="field">
           <label id="basisLabel">显示口径</label>
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <div class="seg" id="basisSeg">
-              <button type="button" data-basis="net" class="active" id="basisNetBtn">净资产</button>
-              <button type="button" data-basis="assets" id="basisAssetsBtn">总资产</button>
-            </div>
+          <div class="seg" id="basisSeg">
+            <button type="button" data-basis="net" class="active" id="basisNetBtn">净资产</button>
+            <button type="button" data-basis="assets" id="basisAssetsBtn">总资产</button>
           </div>
           <div class="hint" id="basisHint">顶部 / 目标 / 图表都按此口径展示</div>
         </div>
         <div class="field">
           <label id="goalLabel">目标金额</label>
-          <div class="goal-actions">
+          <div class="field-actions">
             <div class="goal-input-row">
               <input type="number" inputmode="decimal" step="any" id="goalInput" placeholder="目标金额">
               <select id="goalCurrencySel"></select>
@@ -1345,9 +1377,11 @@
           </div>
         </div>
         <div class="field">
-          <label id="encLabel">数据加密</label>
-          <div class="goal-actions">
-            <span id="encStatus" style="color: var(--muted); font-size: 13px; min-width: 80px;">未开启</span>
+          <div class="field-head">
+            <label id="encLabel">数据加密</label>
+            <span class="state-badge" id="encStatus">未开启</span>
+          </div>
+          <div class="field-actions">
             <button id="encSetBtn" type="button">开启</button>
             <button id="encRemoveBtn" type="button" class="ghost" hidden>关闭</button>
           </div>
@@ -1365,10 +1399,9 @@
       </div>
       <div class="modal-body">
         <div class="field">
-          <label id="syncLabel">本地文件同步</label>
           <div id="syncFsBlock" hidden>
-            <div id="syncStatus" style="font-size: 13px; color: var(--muted); margin: 4px 0 10px;">未链接</div>
-            <div class="goal-actions">
+            <div id="syncStatus" class="status-line">未链接</div>
+            <div class="field-actions">
               <button id="syncPickBtn" type="button">选择同步文件</button>
               <button id="syncLoadBtn" type="button" class="ghost" hidden>加载已有文件</button>
               <button id="syncPushBtn" type="button" hidden>保存到文件</button>
@@ -4707,11 +4740,13 @@
     if (!status || !setBtn || !removeBtn) return;
     if (encKey) {
       status.textContent = t('encOn');
+      status.classList.add('on');
       setBtn.hidden = true;
       removeBtn.hidden = false;
       removeBtn.textContent = t('encTurnOff');
     } else {
       status.textContent = t('encOff');
+      status.classList.remove('on');
       setBtn.hidden = false;
       setBtn.textContent = t('encTurnOn');
       removeBtn.hidden = true;
@@ -4727,9 +4762,22 @@
   const IDB_STORE = 'meta';
   const IDB_HANDLE_KEY = 'syncFileHandle';
 
+  // One connection for the page, shared by all seven callers. Opening a fresh one per
+  // call leaked a connection each time, and a leaked connection at an older version is
+  // exactly what makes a later upgrade fire `blocked` instead of `success`.
+  let _idbPromise = null;
   function idbOpen() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(IDB_DB, 2);
+    if (_idbPromise) return _idbPromise;
+    _idbPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      const done = fn => (...a) => { if (!settled) { settled = true; fn(...a); } };
+      const ok = done(resolve), fail = done(reject);
+      // Every path out of an IndexedDB open must settle the promise. `blocked` has no
+      // success or error event after it, so without this the await below hangs forever
+      // and the caller's UI sits blank with nothing to show and nothing to report.
+      const timer = setTimeout(() => fail(new Error('indexedDB open timed out')), 8000);
+      let req;
+      try { req = indexedDB.open(IDB_DB, 2); } catch (e) { clearTimeout(timer); fail(e); return; }
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
@@ -4737,9 +4785,14 @@
           db.createObjectStore('snapshots', { keyPath: 'id', autoIncrement: true });
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = () => { clearTimeout(timer); ok(req.result); };
+      req.onerror = () => { clearTimeout(timer); fail(req.error); };
+      req.onblocked = () => { clearTimeout(timer); fail(new Error('indexedDB open blocked')); };
     });
+    // A cached rejection would break IndexedDB for the rest of the session; let the next
+    // caller try again instead.
+    _idbPromise.catch(() => { _idbPromise = null; });
+    return _idbPromise;
   }
 
   const MAX_SNAPSHOTS = 20;
@@ -5060,7 +5113,7 @@
         : '';
       status.innerHTML = escapeHtml(t('syncFileLinked', state.sync.fileName) + last) + (autoSyncing ? ` <span class="syncing-dot" title="${escapeHtml(t('autoSyncing'))}"></span>` : '');
     } else {
-      status.textContent = '—';
+      status.innerHTML = `<span class="state-badge">${escapeHtml(t('syncNotLinked'))}</span>`;
     }
   }
 
@@ -5426,7 +5479,6 @@
     setText('basisHint', t('displayBasisHint'));
     setText('basisNetBtn', t('basisNet'));
     setText('basisAssetsBtn', t('basisAssets'));
-    setText('syncLabel', t('cloudSync'));
     setText('syncModalTitle', t('cloudSync'));
     const syncHeaderBtn = document.getElementById('syncBtn');
     if (syncHeaderBtn) syncHeaderBtn.setAttribute('aria-label', t('cloudSync'));
