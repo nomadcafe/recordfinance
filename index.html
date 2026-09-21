@@ -115,12 +115,15 @@
     --warning-soft: rgba(251, 191, 36, 0.10);
     --info: #60a5fa;
     --grid: #262d44;
-    --radius: 14px;
-    --radius-sm: 10px;
+    --radius: 18px;
+    --radius-sm: 12px;
     --radius-pill: 999px;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.22);
-    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.30);
+    /* Layered rather than single-drop: a tight contact shadow plus a wide soft one
+       reads as depth instead of a dark halo. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20), 0 6px 20px -8px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.22), 0 14px 40px -12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.24), 0 32px 72px -16px rgba(0, 0, 0, 0.55);
+    --hairline: rgba(255, 255, 255, 0.06);
     --shadow-hero: 0 0 60px rgba(74, 222, 128, 0.06);
     --logo-shadow: rgba(34, 211, 238, 0.26);
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -149,9 +152,10 @@
     --info: #2563eb;
     --grid: #e6e8f0;
     --logo-shadow: rgba(15, 25, 50, 0.16);
-    --shadow-sm: 0 1px 2px rgba(15, 25, 50, 0.05);
-    --shadow-md: 0 8px 32px rgba(15, 25, 50, 0.07);
-    --shadow-lg: 0 16px 48px rgba(15, 25, 50, 0.10);
+    --shadow-sm: 0 1px 2px rgba(15, 25, 50, 0.05), 0 6px 20px -8px rgba(15, 25, 50, 0.10);
+    --shadow-md: 0 2px 6px rgba(15, 25, 50, 0.06), 0 14px 40px -12px rgba(15, 25, 50, 0.14);
+    --shadow-lg: 0 4px 12px rgba(15, 25, 50, 0.07), 0 32px 72px -16px rgba(15, 25, 50, 0.18);
+    --hairline: rgba(255, 255, 255, 0.9);
     --shadow-hero: 0 0 60px rgba(22, 163, 74, 0.04);
     color-scheme: light;
   }
@@ -174,14 +178,14 @@
     background-attachment: fixed;
     color: var(--text);
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
     letter-spacing: -0.005em;
-    padding: 32px 28px;
-    padding-top: max(32px, env(safe-area-inset-top));
-    padding-left: max(28px, env(safe-area-inset-left));
-    padding-right: max(28px, env(safe-area-inset-right));
-    padding-bottom: max(32px, env(safe-area-inset-bottom));
-    max-width: 1080px;
+    padding: 44px 32px 64px;
+    padding-top: max(44px, env(safe-area-inset-top));
+    padding-left: max(32px, env(safe-area-inset-left));
+    padding-right: max(32px, env(safe-area-inset-right));
+    padding-bottom: max(64px, env(safe-area-inset-bottom));
+    max-width: 1160px;
     margin-inline: auto;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -217,9 +221,9 @@
   }
   .logo-word { transition: opacity 0.18s var(--ease); }
   .logo-btn:hover .logo-word { opacity: 0.86; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; gap: 12px; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; gap: 12px; flex-wrap: wrap; }
   .lang-select { padding: 9px 14px; font-size: 13px; min-width: 116px; border-radius: var(--radius-pill); }
-  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .icon-btn {
     background: transparent; color: var(--muted-strong);
     border: 1px solid var(--border); border-radius: var(--radius-pill);
@@ -311,16 +315,48 @@
   }
   .date-chip:hover { background: var(--panel-elev); color: var(--text); transform: none; box-shadow: none; border-color: var(--border-strong); }
 
-  /* Goal panel */
-  .goal-info { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
-  .goal-meta { flex: 1; min-width: 200px; }
-  .goal-headline { font-size: 14px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
-  .goal-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .goal-bar { flex: 1.5; min-width: 200px; height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; position: relative; }
+  /* Goal panel. It sits beside a 56px hero figure, so it needs a figure of its own:
+     the percentage leads, the amounts and ETA support it, the bar anchors the bottom. */
+  #goalPanel { display: flex; flex-direction: column; }
+  .goal-info { display: flex; flex-direction: column; gap: 20px; flex: 1; }
+  .goal-info .goal-meta { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .goal-foot { display: flex; flex-direction: column; gap: 10px; }
+  .goal-scale {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .goal-scale .goal-scale-goal { color: var(--muted-strong); font-weight: 500; }
+  .goal-meta { min-width: 0; }
+  .goal-headline { color: var(--text); font-variant-numeric: tabular-nums; }
+  .goal-pct {
+    font-size: 46px; font-weight: 700; line-height: 1;
+    letter-spacing: -0.04em;
+    background: linear-gradient(100deg, var(--accent) 10%, var(--accent2) 92%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    width: fit-content;
+  }
+  .goal-pct-unit { font-size: 24px; font-weight: 600; margin-left: 3px; letter-spacing: -0.02em; }
+  .goal-progress-text { display: block; font-size: 13px; color: var(--muted-strong); margin-top: 10px; }
+  .goal-sub { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .goal-sub .goal-remain { color: var(--muted-strong); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .goal-bar {
+    height: 12px; border-radius: var(--radius-pill);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    overflow: hidden; position: relative;
+  }
+  /* Quarter ticks: they turn a bare progress bar into a scale you can read a value off. */
+  .goal-bar::after {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), var(--border-strong) calc(25% - 1px) 25%);
+    pointer-events: none;
+  }
   .goal-bar-fill {
-    height: 100%; border-radius: 6px;
-    background: linear-gradient(90deg, var(--accent) 0%, #22d3ee 100%);
-    transition: width 0.3s ease;
+    height: 100%; border-radius: var(--radius-pill);
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+    box-shadow: 0 0 16px var(--accent-glow);
+    transition: width 0.45s var(--ease);
   }
   .goal-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
   .goal-input-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -438,16 +474,17 @@
   }
   .welcome-hero-text { text-align: left; }
   .welcome-logo {
-    width: 64px; height: 64px;
+    width: 68px; height: 68px;
     margin: 0 0 28px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-    box-shadow:
-      0 0 60px var(--accent-glow),
-      0 12px 32px rgba(34, 211, 238, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    display: block;
+    filter:
+      drop-shadow(0 0 60px var(--accent-glow))
+      drop-shadow(0 12px 32px rgba(34, 211, 238, 0.22));
     animation: logoFloat 6s ease-in-out infinite;
   }
+  .welcome-logo .logo-a { stop-color: var(--accent); }
+  .welcome-logo .logo-b { stop-color: var(--accent2); }
+  .welcome-logo .logo-dot { fill: var(--warning); }
   @keyframes logoFloat {
     0%, 100% { transform: translateY(0) rotate(0deg); }
     50% { transform: translateY(-5px) rotate(-1deg); }
@@ -636,7 +673,7 @@
     .welcome-view { padding: 4px 4px 40px; margin-top: 8px; }
     .welcome-features { grid-template-columns: 1fr; }
     .welcome-title { font-size: 36px; }
-    .welcome-logo { width: 56px; height: 56px; border-radius: 18px; margin-bottom: 20px; }
+    .welcome-logo { width: 56px; height: 56px; margin-bottom: 20px; }
     .welcome-card { padding: 22px 20px; border-radius: 16px; }
     .welcome-actions button.primary,
     .welcome-actions button.ghost { padding: 12px 26px; font-size: 14px; }
@@ -663,26 +700,35 @@
   }
 
   .panel {
-    background: var(--panel);
+    position: relative;
+    background: linear-gradient(180deg, var(--panel-elev) 0%, var(--panel) 46%);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 24px;
-    margin-bottom: 16px;
+    padding: 30px 32px;
+    margin-bottom: 20px;
     box-shadow: var(--shadow-sm);
     transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
   }
+  /* A 1px lit edge along the top of every surface. Cheap, and it's what separates a
+     panel that sits ON the page from one that looks printed onto it. */
+  .panel::after {
+    content: ''; position: absolute; inset: 0 0 auto; height: 1px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: linear-gradient(90deg, transparent, var(--hairline) 22%, var(--hairline) 78%, transparent);
+    pointer-events: none;
+  }
   .panel.hero {
     background:
-      radial-gradient(ellipse 600px 240px at 50% -10%, var(--accent-soft), transparent 70%),
-      linear-gradient(180deg, var(--panel) 0%, var(--panel-elev) 100%);
+      radial-gradient(ellipse 700px 280px at 30% -20%, var(--accent-soft), transparent 68%),
+      linear-gradient(180deg, var(--panel-elev) 0%, var(--panel) 55%);
     box-shadow: var(--shadow-md), var(--shadow-hero);
-    position: relative;
     overflow: hidden;
-    padding: 28px;
+    padding: 34px 36px;
   }
   .panel.hero::before {
-    content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+    content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+    z-index: 1;
   }
 
   /* Dashboard layout: responsive rows that pair related panels and collapse
@@ -700,12 +746,12 @@
   #mainView > #accountsPanel   { order: 7; }
   #mainView > .panel:last-child { order: 8; }
 
-  .dash-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; margin-bottom: 16px; }
+  .dash-row { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; margin-bottom: 20px; }
   .dash-row > .panel { margin-bottom: 0; flex: 1 1 320px; min-width: 0; }
   .dash-row--top > .panel.hero    { flex: 1.7 1 380px; }
   .dash-row--top > #goalPanel     { flex: 1 1 260px; }
 
-  .account-strip { margin-bottom: 16px; }
+  .account-strip { margin-bottom: 20px; }
   .account-strip:empty { display: none; margin: 0; }
 
   label {
@@ -790,8 +836,8 @@
   .summary {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 24px 32px;
-    align-items: end;
+    gap: 0 32px;
+    align-items: start;
   }
   .summary > .total { grid-column: 1; grid-row: 1; min-width: 0; }
   .summary > .currency-control { grid-column: 2; grid-row: 1; }
@@ -808,38 +854,52 @@
     .summary > .currency-control { grid-column: 1; grid-row: auto; }
   }
   .total .stat-label {
-    font-size: 13px; color: var(--muted);
-    font-weight: 500;
-    letter-spacing: 0;
+    font-size: 11px; color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
   }
   .total .stat-value {
-    font-size: 42px; font-weight: 700; margin-top: 6px;
+    font-size: 56px; font-weight: 700; margin-top: 10px;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.035em;
-    line-height: 1.05;
+    letter-spacing: -0.04em;
+    line-height: 1;
   }
   .total .stat-note {
-    font-size: 12px; color: var(--muted); margin-top: 8px;
+    font-size: 12px; color: var(--muted); margin-top: 12px;
   }
-  .stat-breakdown { font-size: 12px; color: var(--muted-strong); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .stat-breakdown { font-size: 13px; color: var(--muted-strong); margin-top: 12px; font-variant-numeric: tabular-nums; }
   .stat-breakdown .liab { color: var(--danger); }
 
+  /* Period changes as a measured band across the hero's full width: three equal
+     columns, label over value over detail. Filling this row is what stops the
+     hero from being one huge number and a lot of empty panel. */
   .stat-changes {
-    display: flex; flex-direction: column; gap: 6px;
-    margin-top: 12px; font-size: 13px;
+    grid-column: 1 / -1; grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 20px 26px;
+    margin-top: 30px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
     font-variant-numeric: tabular-nums;
   }
-  .change-row { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; }
-  .change-row.pos { color: var(--accent); }
-  .change-row.neg { color: var(--danger); }
-  .change-row.neutral { color: var(--muted); }
+  .stat-changes:empty { display: none; }
+  .change-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+  .change-row.pos .change-value { color: var(--accent); }
+  .change-row.neg .change-value { color: var(--danger); }
+  .change-row.neutral .change-value { color: var(--muted-strong); }
   .change-row .change-label {
     color: var(--muted); font-weight: 600; font-size: 10px;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    min-width: 38px;
+    text-transform: uppercase; letter-spacing: 0.12em;
   }
-  .change-row .pct { opacity: 0.7; font-size: 11px; }
-  .change-row .split { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .nb { white-space: nowrap; }
+  .change-row .change-value {
+    display: flex; align-items: baseline; gap: 2px 8px; flex-wrap: wrap;
+    font-size: 21px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.1;
+  }
+  .change-row .pct { opacity: 0.7; font-size: 12px; font-weight: 500; letter-spacing: 0; }
+  .change-row .split { color: var(--muted); font-size: 12px; line-height: 1.45; }
 
   .liab-tag {
     display: inline-block; color: var(--danger);
@@ -876,7 +936,7 @@
   }
   .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
   .chip-amount {
-    font-size: 17px;
+    font-size: 19px; white-space: nowrap;
     font-variant-numeric: tabular-nums;
     font-weight: 600;
     letter-spacing: -0.015em;
@@ -890,7 +950,13 @@
   }
   .chip.liability:hover { border-color: rgba(248, 113, 113, 0.36); }
   .chip.liability .chip-amount { color: var(--danger); }
-  .currency-control { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+  .currency-control { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 150px; }
+  .currency-control label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; }
+  .currency-control select {
+    padding: 7px 30px 7px 12px; font-size: 13px;
+    background-color: transparent; border-color: var(--border);
+  }
+  .currency-control select:hover { background-color: var(--panel-elev-2); }
 
   /* Account list rows */
   .account-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
@@ -949,6 +1015,8 @@
   .inflow-line .arrow { color: var(--muted); margin: 0 4px; }
 
   /* Tables */
+  /* Only the table scrolls; the page itself must never move sideways. */
+  .table-scroll { overflow-x: auto; margin-inline: -4px; padding-inline: 4px; }
   table { width: 100%; border-collapse: collapse; }
   /* History table: let Date / Total / actions shrink, Updates / Note fill */
   #historyTable th:nth-child(1),
@@ -963,30 +1031,34 @@
   .history-more { display: flex; align-items: center; gap: 12px; padding: 12px 8px; }
   .history-count { color: var(--muted); font-size: 13px; }
   th, td {
-    text-align: left; padding: 12px 8px;
+    text-align: left; padding: 15px 10px;
     border-bottom: 1px solid var(--border);
     font-size: 14px; vertical-align: top;
   }
   th {
-    color: var(--muted); font-weight: 500;
-    font-size: 12px;
-    letter-spacing: 0;
+    color: var(--muted); font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    white-space: nowrap;
     border-bottom-color: var(--border-strong);
-    padding-top: 8px; padding-bottom: 12px;
+    padding-top: 6px; padding-bottom: 12px;
   }
-  tbody tr { transition: background 0.1s ease; }
-  tbody tr:hover { background: rgba(255, 255, 255, 0.015); }
+  tbody tr { transition: background 0.12s ease; }
+  tbody tr:hover { background: rgba(255, 255, 255, 0.022); }
+  /* Delete is destructive but it repeats on every row — keep it quiet until aimed at. */
+  #historyTable button.danger { color: var(--muted); }
+  #historyTable button.danger:hover { color: var(--danger); }
   td.num { font-variant-numeric: tabular-nums; }
   .update-list { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
   .update-list span .acc { color: var(--muted); margin-right: 4px; }
   .empty { text-align: center; color: var(--muted); padding: 48px 20px; font-size: 14px; }
 
   /* Toolbar */
-  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
   .toolbar h2 {
-    font-size: 15px; margin: 0;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 18px; margin: 0;
+    font-weight: 650;
+    letter-spacing: -0.022em;
     color: var(--text);
     display: flex; align-items: center;
   }
@@ -1015,7 +1087,18 @@
   .chart-toggle.active:hover { color: var(--warning); }
 
   canvas { max-height: 360px; }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.55; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
+  /* The two long "how this works" blocks read as a wall of grey mid-form. Setting them
+     into their own surface with a marker rule makes them skippable. */
+  .hint--note {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    margin-top: 18px;
+    max-width: 74ch;
+  }
 
   /* Collapsible */
   details.panel > summary {
@@ -1086,10 +1169,14 @@
   }
 
   /* Breakdown panel */
-  .breakdown { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
-  .breakdown-chart { width: 200px; height: 200px; flex-shrink: 0; }
-  .breakdown-legend { flex: 1; min-width: 220px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px 32px; align-content: center; }
-  .legend-row { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .breakdown { display: flex; align-items: center; gap: 48px; flex-wrap: wrap; }
+  .breakdown-chart { width: 224px; height: 224px; flex-shrink: 0; }
+  .breakdown-legend { flex: 1; min-width: 280px; display: flex; flex-direction: column; }
+  .legend-row {
+    display: flex; align-items: center; gap: 14px; font-size: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .legend-row:last-child { border-bottom: none; }
   .legend-row .chip-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
   .legend-row .lr-cur {
     color: var(--muted);
@@ -1105,7 +1192,7 @@
     min-width: 52px; text-align: right;
   }
   .legend-row .lr-bar {
-    flex: 0 0 100px; height: 5px;
+    flex: 0 0 120px; height: 5px;
     background: var(--border); border-radius: 3px; overflow: hidden;
   }
   .legend-row .lr-bar-fill { height: 100%; border-radius: 3px; }
@@ -1119,13 +1206,22 @@
     }
     h1 { font-size: 18px; }
     h1::before { width: 22px; height: 22px; border-radius: 6px; }
-    .page-header { margin-bottom: 16px; }
-    .panel { padding: 18px; margin-bottom: 12px; border-radius: 12px; }
-    .panel.hero { padding: 22px; }
-    details.panel > summary { margin: -18px; padding: 18px; }
-    .summary { gap: 18px 28px; }
-    .total .stat-value { font-size: 32px; }
-    .currency-control { flex: 1; min-width: 100%; }
+    .page-header { margin-bottom: 20px; }
+    .lang-select { min-width: 0; flex: 0 1 auto; max-width: 104px; padding: 8px 10px; }
+    .icon-btn { width: 36px; height: 36px; }
+    .table-scroll { margin-inline: -18px; padding-inline: 18px; }
+    .panel { padding: 20px 18px; margin-bottom: 14px; border-radius: 14px; }
+    .panel::after { border-radius: 14px 14px 0 0; }
+    .panel.hero { padding: 24px 20px; }
+    details.panel > summary { margin: -20px -18px; padding: 20px 18px; }
+    .summary { gap: 20px 28px; }
+    .total .stat-value { font-size: 38px; }
+    .stat-changes { margin-top: 12px; padding-top: 20px; gap: 18px 20px; }
+    .change-row .change-value { font-size: 19px; }
+    .goal-pct { font-size: 40px; }
+    .goal-pct-unit { font-size: 21px; }
+    .hint--note { padding: 12px 14px; }
+    .currency-control { flex: 1; min-width: 100%; align-items: flex-start; }
     .balance-grid { grid-template-columns: 1fr; gap: 10px; }
     .balance-row { flex-wrap: wrap; gap: 6px; }
     .balance-row .acc-sel { flex: 1 1 100%; min-width: 0; }
@@ -1144,7 +1240,7 @@
     .breakdown-chart { width: 160px; height: 160px; margin-inline: auto; }
     .breakdown-legend { min-width: 100%; }
     canvas { max-height: 280px; }
-    .toolbar h2 { font-size: 11px; }
+    .toolbar h2 { font-size: 16px; }
   }
 </style>
 </head>
@@ -1376,7 +1472,18 @@
   <div class="welcome-view" id="welcomeView" hidden>
     <section class="welcome-hero">
       <div class="welcome-hero-text">
-        <div class="welcome-logo"></div>
+        <svg class="welcome-logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="welcomeLogoGradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" class="logo-a"/>
+              <stop offset="1" class="logo-b"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="10" fill="url(#welcomeLogoGradient)"/>
+          <path d="M7 21.6 L12.7 16 L17.3 19.1 L23.6 11.2" fill="none" stroke="#0b1220"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="logo-dot" cx="23.6" cy="11.2" r="3" stroke="#0b1220" stroke-width="1.4"/>
+        </svg>
         <h2 class="welcome-title">
           <span id="welcomeHeadline1">Your wealth,</span><br>
           <span class="welcome-title-em" id="welcomeHeadline2">quietly tracked.</span>
@@ -1506,13 +1613,13 @@
           <div class="stat-label" id="totalLabel">总余额</div>
           <div class="stat-value" id="totalBalance">—</div>
           <div class="stat-breakdown" id="statBreakdown" hidden></div>
-          <div class="stat-changes" id="periodChanges"></div>
           <div class="stat-note" id="totalNote"></div>
         </div>
         <div class="currency-control">
           <label for="displayCurrency">显示币种</label>
           <select id="displayCurrency"></select>
         </div>
+        <div class="stat-changes" id="periodChanges"></div>
       </div>
     </div>
 
@@ -1521,9 +1628,12 @@
       <div class="goal-info">
         <div class="goal-meta">
           <div class="goal-headline" id="goalHeadline">—</div>
+        </div>
+        <div class="goal-foot">
+          <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill" style="width: 0%"></div></div>
+          <div class="goal-scale" id="goalScale" hidden><span>0</span><span class="goal-scale-goal" id="goalScaleGoal"></span></div>
           <div class="goal-sub" id="goalSub"></div>
         </div>
-        <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill" style="width: 0%"></div></div>
       </div>
     </div>
   </div>
@@ -1550,7 +1660,7 @@
         <select id="newAccountCategory" class="cat-sel"></select>
         <button id="addAccountBtn">添加</button>
       </div>
-      <div class="hint" id="accountSettingsHint">账户类型可选"资产"或"负债"。负债账户填的是欠款金额（正数），系统会自动从净资产中扣减。每个账户的"原生币种"只是录入时的默认值，每笔可单独换。</div>
+      <div class="hint hint--note" id="accountSettingsHint">账户类型可选"资产"或"负债"。负债账户填的是欠款金额（正数），系统会自动从净资产中扣减。每个账户的"原生币种"只是录入时的默认值，每笔可单独换。</div>
     </div>
   </details>
 
@@ -1575,7 +1685,7 @@
       </div>
       <div class="balance-rows" id="balanceRows"></div>
       <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
-      <div class="hint" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
+      <div class="hint hint--note" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
       <div class="actions">
         <button type="submit" id="saveBtn" disabled>保存</button>
         <button type="button" class="link" id="cancelEditBtn" hidden>取消编辑</button>
@@ -1627,6 +1737,7 @@
       <h2 id="historyTitle">历史记录</h2>
       <input type="search" id="historySearch" class="search-input" placeholder="搜索备注 / 账户名">
     </div>
+    <div class="table-scroll">
     <table id="historyTable">
       <thead>
         <tr>
@@ -1639,6 +1750,7 @@
       </thead>
       <tbody></tbody>
     </table>
+    </div>
     <div id="historyMore" class="history-more" style="display:none;">
       <button class="link" id="historyMoreBtn">加载更多</button>
       <span id="historyCount" class="history-count"></span>
@@ -2979,6 +3091,28 @@
 
     let labels, datasets;
     let crossings = [];
+    // Every annotation the chart draws is the same chip: opaque backing so it stays
+    // readable over gridlines and the series itself, a warning tint, a hairline edge.
+    // `anchor` places it left of / right of / centred on x; it is then clamped inside
+    // the plot area so a chip near an edge can't spill out.
+    const drawChartPill = (c, area, text, x, yBottom, anchor) => {
+      c.save();
+      c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
+      c.textBaseline = 'bottom';
+      const w = c.measureText(text).width + 14, h = 18;
+      let left = anchor === 'left' ? x : anchor === 'right' ? x - w : x - w / 2;
+      left = Math.max(area.left, Math.min(left, area.right - w));
+      const top = yBottom - h;
+      const round = () => { c.beginPath(); c.roundRect ? c.roundRect(left, top, w, h, 5) : c.rect(left, top, w, h); };
+      c.fillStyle = cssVar('--panel'); round(); c.fill();
+      c.fillStyle = 'rgba(251, 191, 36, 0.16)'; round(); c.fill();
+      c.strokeStyle = 'rgba(251, 191, 36, 0.32)'; c.lineWidth = 1; round(); c.stroke();
+      c.fillStyle = cssVar('--warning');
+      c.textAlign = 'center';
+      c.fillText(text, left + w / 2, yBottom - 5);
+      c.restore();
+    };
+
     let forecast = null; // goal-projection annotation for the overlay plugin
     let goalReach = null; // first goal-reach marker for the overlay plugin (goal mode)
 
@@ -3175,21 +3309,7 @@
           if (chartOverlay.goalReach) {
             const pt = chartInstance.getDatasetMeta(0).data[chartOverlay.goalReach.index];
             if (pt) {
-              const text = t('goalReachedIn', chartOverlay.goalReach.years, chartOverlay.goalReach.months);
-              c.save();
-              c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
-              c.textBaseline = 'bottom';
-              const w = c.measureText(text).width + 12, h = 16;
-              const cx = Math.max(area.left + w / 2, Math.min(pt.x, area.right - w / 2));
-              const y = pt.y - 14;
-              c.fillStyle = 'rgba(251, 191, 36, 0.18)';
-              c.beginPath();
-              c.roundRect ? c.roundRect(cx - w / 2, y - h, w, h, 4) : c.rect(cx - w / 2, y - h, w, h);
-              c.fill();
-              c.fillStyle = cssVar('--warning');
-              c.textAlign = 'center';
-              c.fillText(text, cx, y - 2);
-              c.restore();
+              drawChartPill(c, area, t('goalReachedIn', chartOverlay.goalReach.years, chartOverlay.goalReach.months), pt.x, pt.y - 14, 'center');
             }
           }
           return;
@@ -3201,25 +3321,7 @@
           chartOverlay.crossings.forEach(cr => {
             const pt = meta.data[cr.index];
             if (!pt) return;
-            c.save();
-            c.fillStyle = cssVar('--warning');
-            c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
-            c.textAlign = 'center';
-            c.textBaseline = 'bottom';
-            const text = `🎉 ${cr.label}`;
-            // background pill
-            const metrics = c.measureText(text);
-            const padX = 6, padY = 3;
-            const x = pt.x, y = pt.y - 14;
-            c.fillStyle = 'rgba(251, 191, 36, 0.18)';
-            c.beginPath();
-            const w = metrics.width + padX * 2, h = 16;
-            const rx = x - w / 2, ry = y - h;
-            c.roundRect ? c.roundRect(rx, ry, w, h, 4) : c.rect(rx, ry, w, h);
-            c.fill();
-            c.fillStyle = cssVar('--warning');
-            c.fillText(text, x, y - 2);
-            c.restore();
+            drawChartPill(c, area, `🎉 ${cr.label}`, pt.x, pt.y - 14, 'center');
           });
         }
         // Goal line
@@ -3242,26 +3344,14 @@
           c.lineTo(area.right, y);
           c.stroke();
           c.setLineDash([]);
-          c.fillStyle = cssVar('--warning');
-          c.font = '11px Inter, -apple-system, system-ui, sans-serif';
-          c.textAlign = 'right';
-          c.textBaseline = 'bottom';
-          c.fillText(`${t('goal')} ${fmt(goalInDisplay, state.displayCurrency)}`, area.right - 6, y - 4);
           c.restore();
+          drawChartPill(c, area, `${t('goal')} ${fmt(goalInDisplay, state.displayCurrency)}`, area.left + 4, y - 5, 'left');
         }
         // Projected ETA label at the point where the forecast line meets the goal.
         if (chartOverlay.forecast) {
           const projMeta = chartInstance.getDatasetMeta(chartInstance.data.datasets.length - 1);
           const pt = projMeta.data[chartOverlay.forecast.index];
-          if (pt) {
-            c.save();
-            c.fillStyle = cssVar('--warning');
-            c.font = '600 11px Inter, -apple-system, system-ui, sans-serif';
-            c.textAlign = 'right';
-            c.textBaseline = 'bottom';
-            c.fillText(`≈ ${chartOverlay.forecast.etaLabel}`, Math.min(pt.x, area.right - 6), pt.y - 8);
-            c.restore();
-          }
+          if (pt) drawChartPill(c, area, `≈ ${chartOverlay.forecast.etaLabel}`, Math.min(pt.x, area.right - 4), pt.y - 10, 'right');
         }
       }
     };
@@ -3330,6 +3420,11 @@
           },
           y: {
             stacked,
+            // Chart.js extends the axis past the data to land on round ticks, which for a
+            // balance that never goes negative means a wide empty band under the series.
+            // Pin the floor at zero unless something genuinely dips below it.
+            beginAtZero: true,
+            ...(datasets.some(d => (d.data || []).some(v => typeof v === 'number' && v < 0)) ? {} : { min: 0 }),
             ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => chartMode === 'goal' ? Math.round(v) + '%' : fmt(v, state.displayCurrency) },
             grid: { color: cssVar('--grid'), drawTicks: false },
             border: { display: false }
@@ -3820,9 +3915,9 @@
       let split = '';
       if (info.inflowHas) {
         const market = info.delta - info.inflowTotal;
-        split = `<span class="split">${t('inflow')} ${fmtSigned(info.inflowTotal, state.displayCurrency)} · ${t('gain')} ${fmtSigned(market, state.displayCurrency)}</span>`;
+        split = `<span class="split"><span class="nb">${t('inflow')} ${fmtSigned(info.inflowTotal, state.displayCurrency)}</span> · <span class="nb">${t('gain')} ${fmtSigned(market, state.displayCurrency)}</span></span>`;
       }
-      return `<div class="change-row ${cls}"><span class="change-label">${label}</span>${fmtSigned(info.delta, state.displayCurrency)}${pctStr}${split}</div>`;
+      return `<div class="change-row ${cls}"><span class="change-label">${label}</span><span class="change-value">${fmtSigned(info.delta, state.displayCurrency)}${pctStr}</span>${split}</div>`;
     };
 
     // Average monthly net-worth change — the same regression trend that drives the goal
@@ -3832,7 +3927,7 @@
     let avgRow = '';
     if (avg != null) {
       const cls = avg > 0 ? 'pos' : avg < 0 ? 'neg' : 'neutral';
-      avgRow = `<div class="change-row ${cls}"><span class="change-label">${t('avgMonthly')}</span>${fmtSigned(avg, state.displayCurrency)}<span class="split">${t('avgMonthlyHint')}</span></div>`;
+      avgRow = `<div class="change-row ${cls}"><span class="change-label">${t('avgMonthly')}</span><span class="change-value">${fmtSigned(avg, state.displayCurrency)}</span><span class="split">${t('avgMonthlyHint')}</span></div>`;
     }
 
     slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd) + avgRow;
@@ -4284,6 +4379,13 @@
     return { data, futureLabels, reached, etaLabel: reached ? ymLabel(baseYM + etaMonths) : null };
   }
 
+  // Headline for the goal panel: the percentage as the lead figure, the two amounts
+  // underneath it. Split out so the reached / in-progress branches can't drift apart.
+  function goalFigure(pctStr, current, goal) {
+    return `<div class="goal-pct">${pctStr}<span class="goal-pct-unit">%</span></div>`
+      + `<span class="goal-progress-text">${t('goalProgress', fmt(current, state.displayCurrency), fmt(goal, state.displayCurrency))}</span>`;
+  }
+
   function renderGoal() {
     const panel = document.getElementById('goalPanel');
     const clearBtn = document.getElementById('goalClearBtn');
@@ -4317,6 +4419,12 @@
       goalInDisplay = state.goal.amount;
     }
 
+    const scale = document.getElementById('goalScale');
+    const setScale = goalTxt => {
+      scale.hidden = goalTxt == null;
+      if (goalTxt != null) document.getElementById('goalScaleGoal').textContent = goalTxt;
+    };
+
     // No data yet: show 0%, prompt user to add a record
     if (!cur || progressTotal == null) {
       document.getElementById('goalBarFill').style.width = '0%';
@@ -4324,7 +4432,9 @@
         ? fmt(goalInDisplay, state.displayCurrency)
         : fmt(state.goal.amount, state.goal.currency);
       document.getElementById('goalHeadline').innerHTML =
-        `<span class="goal-progress-text">${fmt(0, state.displayCurrency)} / ${goalShown} · 0%</span>`;
+        `<div class="goal-pct">0<span class="goal-pct-unit">%</span></div>`
+        + `<span class="goal-progress-text">${fmt(0, state.displayCurrency)} / ${goalShown}</span>`;
+      setScale(goalShown);
       document.getElementById('goalSub').textContent = t('goalNoRecord');
       return;
     }
@@ -4334,6 +4444,7 @@
       document.getElementById('goalBarFill').style.width = '0%';
       document.getElementById('goalHeadline').innerHTML =
         `<span class="goal-progress-text">${fmt(progressTotal, state.displayCurrency)} / ${fmt(state.goal.amount, state.goal.currency)}</span>`;
+      setScale(null);
       document.getElementById('goalSub').textContent = t('goalRatesPending');
       return;
     }
@@ -4341,12 +4452,13 @@
 
     const pct = Math.min(100, Math.max(0, progressTotal / goalInDisplay * 100));
     document.getElementById('goalBarFill').style.width = pct.toFixed(1) + '%';
+    setScale(fmt(goalInDisplay, state.displayCurrency));
 
     if (progressTotal >= goalInDisplay) {
-      document.getElementById('goalHeadline').innerHTML = `<span class="goal-progress-text">${t('goalProgress', fmt(progressTotal, state.displayCurrency), fmt(goalInDisplay, state.displayCurrency), pct.toFixed(0))}</span>`;
+      document.getElementById('goalHeadline').innerHTML = goalFigure(pct.toFixed(0), progressTotal, goalInDisplay);
       document.getElementById('goalSub').textContent = t('goalReached');
     } else {
-      document.getElementById('goalHeadline').innerHTML = `<span class="goal-progress-text">${t('goalProgress', fmt(progressTotal, state.displayCurrency), fmt(goalInDisplay, state.displayCurrency), pct.toFixed(1))}</span>`;
+      document.getElementById('goalHeadline').innerHTML = goalFigure(pct.toFixed(1), progressTotal, goalInDisplay);
       const remain = goalInDisplay - progressTotal;
       const model = paceModel(progressTotal);
       const months = model ? monthsToGoal(progressTotal, goalInDisplay) : null;
@@ -4360,7 +4472,8 @@
         hint = model.rate > 0 ? t('goalETAHintCompound') : t('goalETAHintLinear');
       }
       const sub = document.getElementById('goalSub');
-      sub.textContent = `${t('goalRemain', fmt(remain, state.displayCurrency))} · ${eta}`;
+      sub.innerHTML = `<span class="goal-remain">${escapeHtml(t('goalRemain', fmt(remain, state.displayCurrency)))}</span>`
+        + `<span class="goal-eta">${escapeHtml(eta)}</span>`;
       sub.title = hint;
     }
   }
