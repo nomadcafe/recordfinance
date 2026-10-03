@@ -1045,6 +1045,8 @@
     background: var(--danger-soft); transform: none; box-shadow: none;
   }
   .add-row-btn { margin-top: 10px; padding: 8px 14px; font-size: 13px; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .err { color: var(--danger); font-size: 13px; }
   .inflow-line { font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
   .inflow-line .arrow { color: var(--muted); margin: 0 4px; }
 
@@ -1468,6 +1470,40 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="transferModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="transferModalTitle" tabindex="-1">
+      <div class="modal-header">
+        <h2 id="transferModalTitle">账户间转账</h2>
+        <button class="icon-btn modal-close" id="transferCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="field" style="flex:1; min-width:140px;">
+            <label for="transferFrom" id="transferFromLabel">从</label>
+            <select id="transferFrom"></select>
+          </div>
+          <div class="field" style="flex:1; min-width:140px;">
+            <label for="transferTo" id="transferToLabel">到</label>
+            <select id="transferTo"></select>
+          </div>
+        </div>
+        <div class="field" style="max-width:240px;">
+          <label for="transferAmount" id="transferAmountLabel">金额</label>
+          <div class="row" style="gap:8px;">
+            <input type="number" inputmode="decimal" step="any" id="transferAmount" placeholder="0" style="flex:1; min-width:0;">
+            <select id="transferCurrency" style="width:96px; flex:none;"></select>
+          </div>
+        </div>
+        <div class="hint" id="transferHint"></div>
+        <div class="err" id="transferError" hidden></div>
+        <div class="actions" style="margin-top: 0; justify-content: flex-end;">
+          <button type="button" class="ghost" id="transferCancelBtn">取消</button>
+          <button type="button" id="transferApplyBtn">填入录入表</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="drilldownView" hidden>
     <button class="link" id="drillBack" style="margin-bottom: 12px; padding: 6px 0;">← <span id="drillBackLabel">返回</span></button>
     <div class="panel hero">
@@ -1717,7 +1753,10 @@
         </div>
       </div>
       <div class="balance-rows" id="balanceRows"></div>
-      <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
+      <div class="row-actions">
+        <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
+        <button type="button" class="ghost add-row-btn" id="transferBtn" title="">⇄ 转账</button>
+      </div>
       <div class="hint hint--note" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
       <div class="actions">
         <button type="submit" id="saveBtn" disabled>保存</button>
@@ -1854,6 +1893,18 @@
   const CATEGORIES = ['cash', 'savings', 'investment', 'property', 'crypto', 'other'];
   const LIABILITY_CATEGORIES = ['mortgage', 'creditCard', 'loan', 'other'];
   function categoriesFor(type) { return type === 'liability' ? LIABILITY_CATEGORIES : CATEGORIES; }
+
+  // Does an account's balance move on its own? An index fund revalues overnight; a
+  // checking account does not. That decides what the residual (balance change minus
+  // the inflow you recorded) actually *means*: a market move for the first kind,
+  // money that moved without being recorded — spending, an untagged transfer — for
+  // the second. Calling both "gains" is how a month of groceries gets filed as a loss.
+  // Liabilities are never self-moving: a card balance grows because you spent.
+  const SELF_MOVING_CATEGORIES = new Set(['investment', 'property', 'crypto']);
+  function residualKind(acc) {
+    if (!acc || acc.type === 'liability') return 'untracked';
+    return SELF_MOVING_CATEGORIES.has(acc.category) ? 'market' : 'untracked';
+  }
   const CATEGORY_COLORS = {
     cash: '#60a5fa', savings: '#4ade80', investment: '#fbbf24',
     property: '#f472b6', crypto: '#a78bfa', other: '#8590a8',
@@ -2318,6 +2369,89 @@
     return { total, has };
   }
 
+  // Net inflow recorded for ONE account from `startDateInclusive` onward, in display
+  // currency. Same sign convention as snapshotInflowInDisplay (a liability's inflow is
+  // negated, so +500 owed reads as −500 net worth), so the two agree when summed.
+  function accountInflowInDisplay(accId, startDateInclusive) {
+    const acc = accountById(accId);
+    if (!acc) return { total: 0, has: false };
+    const sign = signFor(acc.type);
+    let total = 0, has = false, missed = false;
+    sortedSnapshots().forEach(s => {
+      if (s.date < startDateInclusive) return;
+      const u = s.updates[accId];
+      if (!u) return;
+      const rates = state.rates[s.date];
+      updateLegs(u).forEach(leg => {
+        if (leg.inflow == null) return;
+        const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
+        // An unconvertible inflow would land in the residual and read as a market move
+        // or as spending. Flag it so callers can drop the split rather than mislabel it.
+        if (c == null) { missed = true; return; }
+        total += c * sign; has = true;
+      });
+    });
+    return { total, has, missed };
+  }
+
+  // Did any snapshot in the window carry a legacy whole-record inflow? That field
+  // predates per-account inflow and names no account, so it can't be attributed —
+  // and an unattributable number would make the per-account buckets silently fail to
+  // add up to the headline. Windows containing one get no breakdown at all.
+  function windowHasUnattributedInflow(startDateInclusive) {
+    return sortedSnapshots().some(s => s.date >= startDateInclusive && s.inflow);
+  }
+
+  // Split a window's change into the three things that can move a balance: money you
+  // moved in or out and recorded, market revaluation, and everything unrecorded.
+  //
+  // Done per account and then bucketed, because only the account knows which of the
+  // last two its residual belongs to. Returns null unless the per-account numbers
+  // reconcile with the headline delta — a partial split that doesn't add up is worse
+  // than none, so a missing rate or a legacy inflow hides the breakdown instead of
+  // quietly misattributing a chunk of it.
+  function decomposePeriod(startDateInclusive, headlineDelta) {
+    if (windowHasUnattributedInflow(startDateInclusive)) return null;
+    const tl = computeTimeline();
+    if (!tl.length) return null;
+    const assetsOnly = state.basis === 'assets';
+
+    let inflow = 0, market = 0, untracked = 0, anyInflow = false;
+    let sum = 0;
+    for (const acc of state.accounts) {
+      if (assetsOnly && acc.type === 'liability') continue;
+      // Baseline: the account's last value before the window, or 0 for an account whose
+      // history begins inside it (it contributed nothing to the old total).
+      // `undefined` means never recorded; `null` means recorded but unconvertible.
+      let baseline = 0, current, seenBefore = false;
+      for (const tn of tl) {
+        const b = tn.balances[acc.id];
+        if (!b) continue;
+        if (tn.snapshot.date < startDateInclusive) { baseline = b.converted; seenBefore = true; }
+        current = b.converted;
+      }
+      if (current === undefined) continue;  // never recorded
+      if (!seenBefore) baseline = 0;
+      // Only the two endpoints have to be convertible — a gap in old rate history
+      // between them changes neither the baseline nor the current value.
+      if (current === null || baseline === null) return null;
+      const delta = current - baseline;
+      const inf = accountInflowInDisplay(acc.id, startDateInclusive);
+      if (inf.missed) return null;
+      if (inf.has) anyInflow = true;
+      const resid = delta - inf.total;
+      inflow += inf.total;
+      if (residualKind(acc) === 'market') market += resid; else untracked += resid;
+      sum += delta;
+    }
+
+    // Reconcile against the authoritative headline. Tolerance scales with the numbers
+    // involved so it survives per-date rate rounding without waving through a real gap.
+    const tol = Math.max(1, Math.abs(headlineDelta) * 1e-6);
+    if (Math.abs(sum - headlineDelta) > tol) return null;
+    return { inflow, market, untracked, anyInflow };
+  }
+
   // ===== Timeline =====
   // Carry-forward per-account balances (in their stored currency).
   // For each snapshot date, convert each held balance to display currency using that date's rates.
@@ -2622,6 +2756,8 @@
     const wrap = document.getElementById('balanceRows');
     const addBtn = document.getElementById('addRowBtn');
     wrap.innerHTML = '';
+    // A transfer needs somewhere to come from and somewhere to go.
+    document.getElementById('transferBtn').hidden = state.accounts.length < 2;
 
     if (state.accounts.length === 0) {
       document.getElementById('saveBtn').disabled = true;
@@ -2767,6 +2903,136 @@
     if (entryRows.filter(r => r.accountId).length >= state.accounts.length) return;
     entryRows.push(newEmptyRow());
     renderEntryForm();
+  });
+
+  // ===== Transfer helper =====
+  // A move between two of your own accounts changes no net worth, but it moves two
+  // balances — and if neither side is recorded as an inflow, the source looks like
+  // spending and the destination like a gain. Recording both legs by hand is the kind
+  // of discipline nobody keeps, so this fills them in: one dialog writes the two
+  // opposite inflows into the entry form, where they stay editable before saving.
+  // Deliberately NOT a stored record type: the data model already says everything
+  // needed, so there is nothing new to migrate, merge or export.
+  const transferModal = document.getElementById('transferModal');
+
+  // Which currency pocket does this account take the transfer in, and how much? An
+  // account keeps its own currency — a CNY→USD move converts at the record date's rate
+  // rather than forcing a foreign-currency balance into a single-currency account.
+  function transferLegFor(acc, amount, currency, date) {
+    const code = accountCurrencies(acc).includes(currency) ? currency : acc.currency;
+    if (code === currency) return { code, amount };
+    const conv = convert(amount, currency, code, bestRatesForDate(date));
+    if (conv == null) return null;
+    return { code, amount: conv };
+  }
+
+  // Point one entry row at `accId` and set its inflow, reusing a row already on that
+  // account (and an empty row) before adding one.
+  function setRowInflow(accId, signedAmount) {
+    const acc = accountById(accId);
+    if (!acc) return;
+    let row = entryRows.find(r => r.accountId === accId);
+    if (!row) {
+      row = entryRows.find(r => !r.accountId);
+      if (!row) { row = newEmptyRow(); entryRows.push(row); }
+      row.accountId = accId;
+    }
+    const multi = isMultiCurrency(acc);
+    if (multi) {
+      row.currency = acc.currency;
+      row.amounts = row.amounts || {};
+      row.inflows = row.inflows || {};
+      row.autoFilledCur = row.autoFilledCur || {};
+      delete row.amount; delete row.inflow; delete row.autoFilled;
+      row.inflows[signedAmount.code] = String(signedAmount.value);
+      // Let the balance be re-derived from the new inflow even if it was auto-filled before.
+      row.autoFilledCur[signedAmount.code] = true;
+      row.amounts[signedAmount.code] = '';
+      autofillLegBalance(row, signedAmount.code);
+    } else {
+      delete row.amounts; delete row.inflows; delete row.autoFilledCur;
+      row.currency = signedAmount.code;
+      row.inflow = String(signedAmount.value);
+      row.autoFilled = true;
+      row.amount = '';
+      autofillRowBalance(row);
+    }
+  }
+
+  function populateTransferAccounts() {
+    const fromSel = document.getElementById('transferFrom');
+    const toSel = document.getElementById('transferTo');
+    const opts = (selected) => state.accounts.map(a => {
+      const liab = a.type === 'liability' ? ` · ${t('liabBadge')}` : '';
+      return `<option value="${a.id}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name + liab)}</option>`;
+    }).join('');
+    const prevFrom = fromSel.value, prevTo = toSel.value;
+    fromSel.innerHTML = opts(prevFrom || (state.accounts[0] && state.accounts[0].id));
+    toSel.innerHTML = opts(prevTo || (state.accounts[1] && state.accounts[1].id));
+  }
+
+  function renderTransferHint() {
+    const from = accountById(document.getElementById('transferFrom').value);
+    const to = accountById(document.getElementById('transferTo').value);
+    const cur = document.getElementById('transferCurrency').value;
+    const date = document.getElementById('date').value;
+    const amt = parseFloat(document.getElementById('transferAmount').value);
+    const hint = document.getElementById('transferHint');
+    if (!from || !to || from.id === to.id || isNaN(amt) || amt <= 0) { hint.textContent = t('transferHint'); return; }
+    const a = transferLegFor(from, amt, cur, date);
+    const b = transferLegFor(to, amt, cur, date);
+    if (!a || !b) { hint.textContent = t('transferHint'); return; }
+    // Spell out both legs with their signs, so the sign convention for a liability
+    // (borrowing more vs. paying down) is visible before anything is written.
+    const fs = -signFor(from.type), ts = signFor(to.type);
+    hint.textContent = t('transferPreview',
+      from.name, fmtSigned(fs * a.amount, a.code),
+      to.name, fmtSigned(ts * b.amount, b.code));
+  }
+
+  function openTransfer() {
+    if (state.accounts.length < 2) return;
+    populateTransferAccounts();
+    populateCurrencySelect(document.getElementById('transferCurrency'), state.displayCurrency);
+    document.getElementById('transferAmount').value = '';
+    document.getElementById('transferError').hidden = true;
+    renderTransferHint();
+    openModal(transferModal);
+  }
+  function closeTransfer() { closeModal(transferModal); }
+
+  function applyTransfer() {
+    const err = document.getElementById('transferError');
+    const fail = msg => { err.textContent = msg; err.hidden = false; };
+    const from = accountById(document.getElementById('transferFrom').value);
+    const to = accountById(document.getElementById('transferTo').value);
+    const cur = document.getElementById('transferCurrency').value;
+    const date = document.getElementById('date').value;
+    const amt = parseFloat(document.getElementById('transferAmount').value);
+    if (!from || !to) return fail(t('transferNeedTwo'));
+    if (from.id === to.id) return fail(t('transferSameAccount'));
+    if (isNaN(amt) || amt <= 0) return fail(t('transferNeedAmount'));
+    const a = transferLegFor(from, amt, cur, date);
+    const b = transferLegFor(to, amt, cur, date);
+    if (!a || !b) return fail(t('transferNoRate'));
+    // Per-row inflow runs in the account's own direction, so a liability flips: money
+    // out of a credit card means more owed, money into it means less.
+    setRowInflow(from.id, { code: a.code, value: -signFor(from.type) * a.amount });
+    setRowInflow(to.id, { code: b.code, value: signFor(to.type) * b.amount });
+    closeTransfer();
+    renderEntryForm();
+    document.getElementById('balanceRows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  document.getElementById('transferBtn').addEventListener('click', openTransfer);
+  document.getElementById('transferCloseBtn').addEventListener('click', closeTransfer);
+  document.getElementById('transferCancelBtn').addEventListener('click', closeTransfer);
+  document.getElementById('transferApplyBtn').addEventListener('click', applyTransfer);
+  transferModal.addEventListener('click', e => { if (e.target === transferModal) closeTransfer(); });
+  ['transferFrom', 'transferTo', 'transferCurrency', 'transferAmount'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => { document.getElementById('transferError').hidden = true; renderTransferHint(); });
+    el.addEventListener('change', renderTransferHint);
   });
 
   document.getElementById('entryForm').addEventListener('submit', async e => {
@@ -3928,12 +4194,49 @@
 
     const delta = currentVal - baselineVal;
     const pct = baselineVal !== 0 ? delta / baselineVal * 100 : null;
-    return { delta, pct, inflowTotal, inflowHas };
+    // Three-way split when every account reconciles; the flat inflow total otherwise.
+    const split = decomposePeriod(startDateInclusive, delta);
+    return { delta, pct, inflowTotal, inflowHas, split };
   }
 
   function fmtSigned(n, currency) {
     const sign = n > 0 ? '+' : (n < 0 ? '−' : '');
     return sign + fmt(Math.abs(n), currency);
+  }
+
+  // A bucket worth showing? Anything that rounds to zero at the display currency's
+  // precision is noise — a row of "+0" chips reads as a bug, not as information.
+  function isNegligible(n) {
+    const unit = Math.pow(10, -decimalsFor(state.displayCurrency));
+    return !isFinite(n) || Math.abs(n) < unit / 2;
+  }
+
+  // The chips under a change row: where the money actually came from. `kindFilter`
+  // narrows the residual to one bucket for a single account (an account is either
+  // self-moving or it isn't, so showing both would always print an empty one).
+  function renderSplitChips(info, kindFilter) {
+    const chip = (label, v) => `<span class="nb">${label} ${fmtSigned(v, state.displayCurrency)}</span>`;
+    const parts = [];
+    if (info.split) {
+      const s = info.split;
+      // Nothing was recorded as inflow, so the residual is just the whole change under
+      // another name — and calling it a market move would be a guess, not a reading.
+      if (!s.anyInflow) return '';
+      // A month where every bucket rounds to zero (a transfer in and straight back out,
+      // say) is fully described by the headline. Chips reading "0 · 0" only add doubt.
+      if (isNegligible(s.inflow) && isNegligible(s.market) && isNegligible(s.untracked)) return '';
+      parts.push(chip(t('inflow'), s.inflow));
+      if (kindFilter !== 'untracked' && !isNegligible(s.market)) parts.push(chip(t('gain'), s.market));
+      if (kindFilter !== 'market' && !isNegligible(s.untracked)) parts.push(chip(t('untracked'), s.untracked));
+    } else if (info.inflowHas) {
+      // No attributable split (a legacy whole-record inflow, or a missing rate). Show
+      // what is known and label the rest neutrally rather than guessing market vs spend.
+      parts.push(chip(t('inflow'), info.inflowTotal));
+      const rest = info.delta - info.inflowTotal;
+      if (!isNegligible(rest)) parts.push(chip(t('residualOther'), rest));
+    }
+    if (!parts.length) return '';
+    return `<span class="split">${parts.join(' · ')}</span>`;
   }
 
   function renderPeriodChanges() {
@@ -3945,11 +4248,7 @@
       if (!info) return '';
       const cls = info.delta > 0 ? 'pos' : info.delta < 0 ? 'neg' : 'neutral';
       const pctStr = info.pct != null ? `<span class="pct">${info.pct > 0 ? '+' : info.pct < 0 ? '−' : ''}${Math.abs(info.pct).toFixed(1)}%</span>` : '';
-      let split = '';
-      if (info.inflowHas) {
-        const market = info.delta - info.inflowTotal;
-        split = `<span class="split"><span class="nb">${t('inflow')} ${fmtSigned(info.inflowTotal, state.displayCurrency)}</span> · <span class="nb">${t('gain')} ${fmtSigned(market, state.displayCurrency)}</span></span>`;
-      }
+      const split = renderSplitChips(info);
       return `<div class="change-row ${cls}"><span class="change-label">${label}</span><span class="change-value">${fmtSigned(info.delta, state.displayCurrency)}${pctStr}</span>${split}</div>`;
     };
 
@@ -4147,6 +4446,7 @@
       if (!prefsModal.hidden) closePrefs();
       if (!syncModal.hidden) closeSync();
       if (!publicModal.hidden) closePublicExport();
+      if (!transferModal.hidden) closeTransfer();
     }
   });
 
@@ -5431,6 +5731,16 @@
     setText('publicCancelBtn', t('exportPublicCancel'));
     setText('publicExportBtn', t('exportPublicDo'));
     if (!publicModal.hidden) renderPublicOpts();
+    const xferBtn = document.getElementById('transferBtn');
+    if (xferBtn) { xferBtn.textContent = t('transfer'); xferBtn.title = t('transferBtnTitle'); }
+    setText('transferModalTitle', t('transferTitle'));
+    setText('transferFromLabel', t('transferFrom'));
+    setText('transferToLabel', t('transferTo'));
+    setText('transferAmountLabel', t('transferAmount'));
+    setText('transferCancelBtn', t('transferCancel'));
+    setText('transferApplyBtn', t('transferApply'));
+    if (!transferModal.hidden) { populateTransferAccounts(); renderTransferHint(); }
+    else setText('transferHint', t('transferHint'));
     setText('backupBannerExport', t('exportBackup'));
     setText('backupBannerDismiss', t('later'));
 
@@ -5564,7 +5874,21 @@
     if (current == null || baseline == null) return null;
     const delta = current - baseline;
     const pct = baseline !== 0 ? delta / Math.abs(baseline) * 100 : null;
-    return { delta, pct };
+    // One account's split needs no cross-account reconciliation: its residual is
+    // whatever the balance did that the recorded inflow doesn't explain.
+    const acc = accountById(accId);
+    const kind = residualKind(acc);
+    const inf = accountInflowInDisplay(accId, startDateInclusive);
+    let split = null;
+    if (!inf.missed && !windowHasUnattributedInflow(startDateInclusive)) {
+      const resid = delta - inf.total;
+      split = {
+        inflow: inf.total, anyInflow: inf.has,
+        market: kind === 'market' ? resid : 0,
+        untracked: kind === 'market' ? 0 : resid,
+      };
+    }
+    return { delta, pct, inflowTotal: inf.total, inflowHas: inf.has, split, kind };
   }
 
   function renderDrilldown() {
@@ -5599,7 +5923,7 @@
       if (!info) return '';
       const cls = info.delta > 0 ? 'pos' : info.delta < 0 ? 'neg' : 'neutral';
       const pctStr = info.pct != null ? `<span class="pct">${info.pct > 0 ? '+' : info.pct < 0 ? '−' : ''}${Math.abs(info.pct).toFixed(1)}%</span>` : '';
-      return `<div class="change-row ${cls}"><span class="change-label">${label}</span>${fmtSigned(info.delta, state.displayCurrency)}${pctStr}</div>`;
+      return `<div class="change-row ${cls}"><span class="change-label">${label}</span><span class="change-value">${fmtSigned(info.delta, state.displayCurrency)}${pctStr}</span>${renderSplitChips(info, info.kind)}</div>`;
     };
     document.getElementById('drillPeriodChanges').innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd);
 
