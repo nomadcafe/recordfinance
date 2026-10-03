@@ -17,6 +17,7 @@ Your data never leaves your device.
 - **Goal tracking** with ETA estimation and milestone celebrations
 - **Charts** — balance trend, year-over-year, account drilldown, currency / category breakdown
 - **MTD / YTD decomposition** — splits a period's change into inflow, market move and unrecorded spending, per portfolio and per account. An investment account revalues on its own, a bank account doesn't, so the residual is labelled for what it actually is
+- **Capital efficiency** — how much is sitting in cash and savings, what your own investment accounts actually returned (Modified Dietz, so mid-period deposits are time-weighted), and the gap between the two. No rate feed and no product suggestions: the benchmark is your own realized return
 - **Transfers between your own accounts** — one dialog writes both inflow legs, so moving money never shows up as spending on one side and a gain on the other
 - **Local file sync** via the File System Access API — point it at any cloud-synced folder (iCloud Drive, Dropbox, OneDrive); auto-syncs on change, with lossless merge so edits from multiple devices never clobber each other
 - **Rolling local snapshots** (last 20 changes) for undo-safety

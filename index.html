@@ -303,6 +303,7 @@
   body.privacy-blur .stat-breakdown,
   body.privacy-blur .change-row,
   body.privacy-blur .lr-amt,
+  body.privacy-blur .eff-money,
   body.privacy-blur .inflow-line,
   body.privacy-blur td.num,
   body.privacy-blur .goal-progress-text,
@@ -776,9 +777,10 @@
   #mainView > #earlyHint       { order: 3; }
   #mainView > .panel-trend     { order: 4; }
   #mainView > #breakdownPanel  { order: 5; }
-  #mainView > #entryPanel      { order: 6; }
-  #mainView > #accountsPanel   { order: 7; }
-  #mainView > .panel:last-child { order: 8; }
+  #mainView > #efficiencyPanel { order: 6; }
+  #mainView > #entryPanel      { order: 7; }
+  #mainView > #accountsPanel   { order: 8; }
+  #mainView > .panel:last-child { order: 9; }
 
   .dash-row { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; margin-bottom: 20px; }
   .dash-row > .panel { margin-bottom: 0; flex: 1 1 320px; min-width: 0; }
@@ -1232,6 +1234,35 @@
     background: var(--border); border-radius: 3px; overflow: hidden;
   }
   .legend-row .lr-bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Capital-efficiency panel. Headline tiles carry the comparison; the two grouped
+     lists below answer "which account", reusing the breakdown legend's row shape. */
+  .eff-window { font-size: 12px; color: var(--muted); }
+  .eff-headline { display: flex; flex-wrap: wrap; gap: 18px 36px; }
+  .eff-stat { min-width: 132px; }
+  .eff-stat .eff-k {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .eff-stat .eff-v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 5px; }
+  .eff-stat .eff-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .eff-group-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-top: 20px; padding-bottom: 2px;
+  }
+  .eff-pos { color: var(--accent); }
+  .eff-neg { color: var(--danger); }
+  .eff-idle-ret { color: var(--muted); font-size: 12px; min-width: 52px; text-align: right; }
+  /* These rows carry an account name, not a currency code, so the name takes the slack
+     and the amount sits at its natural width (the reverse of the breakdown legend). */
+  #efficiencyGroups .legend-row .eff-name {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #efficiencyGroups .legend-row .lr-amt { flex: 0 0 auto; }
+  #efficiencyGroups .legend-row.clickable { cursor: pointer; }
+  #efficiencyGroups .legend-row.clickable:hover .eff-name { color: var(--accent); }
 
   /* Mobile */
   @media (max-width: 640px) {
@@ -1802,6 +1833,16 @@
       <div class="breakdown-chart"><canvas id="breakdownChart"></canvas></div>
       <div class="breakdown-legend" id="breakdownLegend"></div>
     </div>
+  </div>
+
+  <div class="panel" id="efficiencyPanel" hidden>
+    <div class="toolbar">
+      <h2 id="efficiencyTitle">资金效率</h2>
+      <span class="eff-window" id="efficiencyWindow"></span>
+    </div>
+    <div class="eff-headline" id="efficiencyHeadline"></div>
+    <div id="efficiencyGroups"></div>
+    <div class="hint" id="efficiencyNote"></div>
   </div>
 
   <div class="panel">
@@ -2450,6 +2491,112 @@
     const tol = Math.max(1, Math.abs(headlineDelta) * 1e-6);
     if (Math.abs(sum - headlineDelta) > tol) return null;
     return { inflow, market, untracked, anyInflow };
+  }
+
+  // ===== Realized return =====
+  // Cash-like categories. Deliberately narrower than "not self-moving": `other` is
+  // whatever the user couldn't classify, and accusing an unlabelled account of lying
+  // idle would be a guess. Liabilities are excluded — debt isn't idle capital.
+  const IDLE_CATEGORIES = new Set(['cash', 'savings']);
+  function isIdleAccount(acc) {
+    return !!acc && acc.type === 'asset' && IDLE_CATEGORIES.has(acc.category);
+  }
+
+  const DAY_MS = 86400000;
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / DAY_MS);
+
+  // Summed converted balance of `accIds` at one timeline entry. null if any of them is
+  // held but unconvertible, so a partial sum never masquerades as a total.
+  function sumConvertedAt(entry, accIds) {
+    let sum = 0;
+    for (const id of accIds) {
+      const b = entry.balances[id];
+      if (!b) continue;
+      if (b.converted == null) return null;
+      sum += b.converted;
+    }
+    return sum;
+  }
+
+  // Realized return for a set of accounts over a trailing window, by Modified Dietz —
+  // the standard way to measure return when money moved in and out mid-period without
+  // iterating: each flow is weighted by the fraction of the period it was invested for.
+  //
+  //   R = (end - start - C) / (start + Σ wᵢ·Cᵢ),  wᵢ = (T - tᵢ) / T
+  //
+  // Measured between actual snapshot dates rather than calendar bounds, because those
+  // are the only dates on which a balance is known. Returns null rather than a shaky
+  // number whenever the window is too short, the base too small, or anything in it
+  // unconvertible — a return figure invites a decision, so a guess is worse than silence.
+  const MIN_RETURN_WINDOW_DAYS = 60;
+  function realizedReturn(accIds, targetStartDate) {
+    if (!accIds.length) return null;
+    const tl = computeTimeline();
+    if (tl.length < 2) return null;
+
+    // Baseline: the latest snapshot at or before the requested start. With less history
+    // than that, fall back to the earliest record and measure over what exists — a
+    // nine-month-old account deserves a nine-month figure (the caller is handed `days`
+    // and labels it), not silence until its first anniversary.
+    let baseEntry = null;
+    for (const tn of tl) {
+      if (tn.snapshot.date <= targetStartDate) baseEntry = tn; else break;
+    }
+    if (!baseEntry) baseEntry = tl[0];
+    const endEntry = tl[tl.length - 1];
+    const startDate = baseEntry.snapshot.date;
+    const endDate = endEntry.snapshot.date;
+    const T = daysBetween(startDate, endDate);
+    if (T < MIN_RETURN_WINDOW_DAYS) return null;
+    // Checked from the measured baseline, not the requested start, so the guard covers
+    // exactly the span the figure is built from.
+    if (windowHasUnattributedInflow(startDate)) return null;
+
+    const start = sumConvertedAt(baseEntry, accIds);
+    const end = sumConvertedAt(endEntry, accIds);
+    if (start == null || end == null) return null;
+
+    // Dated flows, so each can be weighted by its time in the market.
+    let flowTotal = 0, weighted = 0;
+    for (const tn of tl) {
+      if (tn.snapshot.date <= startDate) continue;
+      let dayFlow = 0;
+      for (const id of accIds) {
+        const u = tn.snapshot.updates[id];
+        if (!u) continue;
+        const acc = accountById(id);
+        if (!acc) continue;
+        const rates = state.rates[tn.snapshot.date];
+        for (const leg of updateLegs(u)) {
+          if (leg.inflow == null) continue;
+          const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
+          if (c == null) return null;
+          dayFlow += c * signFor(acc.type);
+        }
+      }
+      if (dayFlow === 0) continue;
+      flowTotal += dayFlow;
+      weighted += dayFlow * ((T - daysBetween(startDate, tn.snapshot.date)) / T);
+    }
+
+    const denom = start + weighted;
+    // A tiny or negative average base makes the ratio explode; there is no meaningful
+    // return on roughly no capital.
+    if (!(denom > 0) || denom < Math.abs(end - start - flowTotal) * 0.01) return null;
+    const r = (end - start - flowTotal) / denom;
+    // Annualize by compounding. A position that went to zero or below can't be
+    // annualized at all, so report the period return and let the caller say so.
+    if (1 + r <= 0) return { rate: r, annualized: null, days: T, gain: end - start - flowTotal };
+    const annualized = Math.pow(1 + r, 365 / T) - 1;
+    return { rate: r, annualized, days: T, gain: end - start - flowTotal };
+  }
+
+  // The window the efficiency panel reads: trailing 12 months from the latest record.
+  function trailingYearStart() {
+    const tl = computeTimeline();
+    if (!tl.length) return null;
+    const last = new Date(tl[tl.length - 1].snapshot.date);
+    return new Date(last.getTime() - 365 * DAY_MS).toISOString().slice(0, 10);
   }
 
   // ===== Timeline =====
@@ -4239,6 +4386,142 @@
     return `<span class="split">${parts.join(' · ')}</span>`;
   }
 
+  // ===== Capital efficiency =====
+  // The question this answers: of the money you hold, how much is sitting still, and
+  // what has the rest of your own money actually earned? Both halves come from records
+  // the user already keeps — there is no rate feed, no product list and no suggestion
+  // about where to put anything. The benchmark is the user's own realized return, which
+  // is why this can stay a tracker instead of becoming a recommendation engine.
+  function computeEfficiency() {
+    const start = trailingYearStart();
+    const cur = currentSnapshot();
+    if (!start || !cur) return null;
+
+    const valueOf = acc => {
+      const b = cur.balances[acc.id];
+      return b && b.converted != null ? b.converted : null;
+    };
+
+    const idle = [];
+    let idleTotal = 0;
+    for (const acc of state.accounts.filter(isIdleAccount)) {
+      const v = valueOf(acc);
+      if (v == null || v <= 0) continue;
+      idle.push({ acc, value: v });
+      idleTotal += v;
+    }
+
+    const working = [];
+    for (const acc of state.accounts.filter(a => a.type === 'asset' && residualKind(a) === 'market')) {
+      const v = valueOf(acc);
+      if (v == null || v <= 0) continue;
+      working.push({ acc, value: v, ret: realizedReturn([acc.id], start) });
+    }
+    // Best-performing first — the ranking is the answer to "which account".
+    working.sort((a, b) => {
+      const ra = a.ret && a.ret.annualized, rb = b.ret && b.ret.annualized;
+      if (ra == null && rb == null) return b.value - a.value;
+      if (ra == null) return 1;
+      if (rb == null) return -1;
+      return rb - ra;
+    });
+    idle.sort((a, b) => b.value - a.value);
+
+    // Combined return across the working accounts, not an average of their rates: a
+    // 20% gain on ¥1,000 shouldn't outvote a 2% gain on ¥1,000,000.
+    const combined = realizedReturn(working.map(w => w.acc.id), start);
+    const benchmark = combined && combined.annualized != null ? combined.annualized : null;
+
+    // Nothing to compare against means nothing worth saying. Pointing out that someone
+    // holds cash, with no figure to hold it against, is noise dressed as insight.
+    if (benchmark == null) return null;
+
+    const assets = cur.assetsTotal;
+    return {
+      idle, idleTotal, working, combined, benchmark,
+      idleShare: assets && assets > 0 ? idleTotal / assets : null,
+      // What the idle money would have earned at the rate the rest of it managed.
+      // Phrased as a gap, not a promise: past realized return, applied to a balance.
+      opportunity: benchmark > 0 ? idleTotal * benchmark : null,
+      days: combined.days,
+    };
+  }
+
+  function fmtPct(v, digits) {
+    if (v == null) return '—';
+    const d = digits == null ? 1 : digits;
+    const sign = v > 0 ? '+' : (v < 0 ? '\u2212' : '');
+    return sign + Math.abs(v * 100).toFixed(d) + '%';
+  }
+
+  function renderEfficiency() {
+    const panel = document.getElementById('efficiencyPanel');
+    const eff = computeEfficiency();
+    if (!eff) { panel.hidden = true; return; }
+    panel.hidden = false;
+
+    document.getElementById('efficiencyWindow').textContent = t('effWindow', eff.days);
+
+    const tile = (k, v, sub, cls) =>
+      `<div class="eff-stat"><div class="eff-k">${k}</div>` +
+      `<div class="eff-v ${cls || ''}">${v}</div>` +
+      `<div class="eff-sub">${sub || ''}</div></div>`;
+
+    const retCls = eff.benchmark > 0 ? 'eff-pos' : eff.benchmark < 0 ? 'eff-neg' : '';
+    const tiles = [
+      tile(t('effIdleLabel'),
+        `<span class="eff-money">${fmt(eff.idleTotal, state.displayCurrency)}</span>`,
+        eff.idleShare != null ? t('effIdleShare', (eff.idleShare * 100).toFixed(0)) : ''),
+      tile(t('effReturnLabel'), fmtPct(eff.benchmark), t('effReturnSub'), retCls),
+    ];
+    if (eff.opportunity != null) {
+      tiles.push(tile(t('effGapLabel'),
+        `<span class="eff-money">${fmt(eff.opportunity, state.displayCurrency)}</span>`,
+        t('effGapSub')));
+    }
+    document.getElementById('efficiencyHeadline').innerHTML = tiles.join('');
+
+    // Rows open the account's drilldown — a rate you can't go look at is a dead end.
+    const row = (entry, retCell) =>
+      `<div class="legend-row clickable" data-acc-id="${entry.acc.id}" role="button" tabindex="0">` +
+      `<span class="chip-dot" style="background:${entry.acc.color}"></span>` +
+      `<span class="eff-name">${escapeHtml(entry.acc.name)}</span>` +
+      `<span class="lr-amt">${fmt(entry.value, state.displayCurrency)}</span>` +
+      retCell + `</div>`;
+
+    let html = '';
+    if (eff.working.length) {
+      html += `<div class="eff-group-label">${t('effWorking')}</div>`;
+      html += eff.working.map(w => {
+        const a = w.ret && w.ret.annualized;
+        const cls = a == null ? '' : a > 0 ? 'eff-pos' : a < 0 ? 'eff-neg' : '';
+        const cell = `<span class="lr-pct ${cls}" title="${a == null ? t('effNoReturn') : ''}">${fmtPct(a)}</span>`;
+        return row(w, cell);
+      }).join('');
+    }
+    if (eff.idle.length) {
+      html += `<div class="eff-group-label">${t('effIdleGroup')}</div>`;
+      // No rate for a cash account on purpose: its residual mixes interest with
+      // unrecorded spending, so any number here would be fiction.
+      html += eff.idle.map(e => row(e, `<span class="eff-idle-ret" title="${t('effIdleWhyNoRate')}">\u2014</span>`)).join('');
+    }
+    document.getElementById('efficiencyGroups').innerHTML = html;
+    document.getElementById('efficiencyNote').textContent = t('effNote');
+  }
+
+  // Delegated once, rather than re-bound on every render.
+  (() => {
+    const groups = document.getElementById('efficiencyGroups');
+    const open = e => {
+      const row = e.target.closest('.legend-row[data-acc-id]');
+      if (row) startDrilldown(row.dataset.accId);
+    };
+    groups.addEventListener('click', open);
+    groups.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+    });
+  })();
+
   function renderPeriodChanges() {
     const slot = document.getElementById('periodChanges');
     const mtd = computePeriodChange(startOfMonthStr());
@@ -5700,6 +5983,7 @@
     setText('trendTitle', t('balanceTrend'));
     setText('forecastToggle', t('forecast'));
     setText('historyTitle', t('history'));
+    setText('efficiencyTitle', t('effTitle'));
     setText('thDate', t('historyDate'));
     setText('thUpdates', t('historyUpdates'));
     setText('thTotal', t('historyTotal'));
@@ -6061,6 +6345,7 @@
     renderEnc();
     renderSync();
     renderBreakdown();
+    renderEfficiency();
     renderAccountList();
     renderEntryForm();
     renderHistory();
