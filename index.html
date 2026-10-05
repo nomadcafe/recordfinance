@@ -921,6 +921,11 @@
     font-variant-numeric: tabular-nums;
   }
   .stat-changes:empty { display: none; }
+  /* Spans the whole changes grid: it explains the row above it, not one column. */
+  .change-nudge {
+    grid-column: 1 / -1;
+    font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
   .change-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
   .change-row.pos .change-value { color: var(--accent); }
   .change-row.neg .change-value { color: var(--danger); }
@@ -2196,6 +2201,33 @@
           }
         }
       });
+
+      // Fold a legacy whole-record inflow into the account it names. Older versions
+      // stored one inflow per record with an optional target account; everything now
+      // reads inflow per account, and an unattributed one suppresses the MTD/YTD split
+      // and the return figures entirely. So old records that DO say where the money
+      // went should get the same treatment as new ones.
+      //
+      // Only when the move is provably equivalent, because this edits stored data:
+      // the account must exist, be updated in this record, and hold the inflow's own
+      // currency (migrate runs without exchange rates, so it cannot convert). Assets
+      // only — the legacy total was unsigned, while per-account inflow is negated for
+      // a liability, so folding one would quietly change a displayed total. Anything
+      // that doesn't qualify keeps its legacy field and its old behavior.
+      const legacy = s.inflow;
+      if (legacy && legacy.accountId && typeof legacy.amount === 'number' && !isNaN(legacy.amount)) {
+        const acc = data.accounts.find(a => a.id === legacy.accountId);
+        const u = s.updates[legacy.accountId];
+        if (acc && acc.type === 'asset' && u) {
+          const target = u.byCurrency
+            ? (u.byCurrency[legacy.currency] || null)
+            : (u.currency === legacy.currency ? u : null);
+          if (target && target.inflow == null) {
+            target.inflow = legacy.amount;
+            delete s.inflow;
+          }
+        }
+      }
     });
     return data;
   }
@@ -4522,6 +4554,16 @@
     });
   })();
 
+  // Has the user ever recorded an inflow, in either shape? Every explanation of a
+  // change — the inflow / market / unrecorded split and the realized-return panel —
+  // is built from it, and without any the UI just shows fewer numbers with nothing
+  // saying why. Checked across all history, so the nudge below is a one-time nudge:
+  // it disappears for good the moment any record carries one.
+  function hasAnyInflowData() {
+    return state.snapshots.some(s =>
+      s.inflow || Object.keys(s.updates).some(id => updateLegs(s.updates[id]).some(l => l.inflow != null)));
+  }
+
   function renderPeriodChanges() {
     const slot = document.getElementById('periodChanges');
     const mtd = computePeriodChange(startOfMonthStr());
@@ -4545,7 +4587,12 @@
       avgRow = `<div class="change-row ${cls}"><span class="change-label">${t('avgMonthly')}</span><span class="change-value">${fmtSigned(avg, state.displayCurrency)}</span><span class="split">${t('avgMonthlyHint')}</span></div>`;
     }
 
-    slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd) + avgRow;
+    // Past the early-hint stage but still no inflow anywhere: say what the missing
+    // chips need, once, and then never again.
+    const nudge = (state.snapshots.length >= 3 && !hasAnyInflowData())
+      ? `<div class="change-nudge">${t('inflowNudge')}</div>` : '';
+
+    slot.innerHTML = renderRow(t('thisMonth'), mtd) + renderRow(t('thisYear'), ytd) + avgRow + nudge;
   }
 
   // ===== Theme =====
@@ -4628,15 +4675,24 @@
       { id: crypto.randomUUID(), name: names.cash,     color: PALETTE[7], currency: 'CNY', type: 'asset',     category: 'cash' },
       { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[5], currency: 'CNY', type: 'liability', category: 'other' },
     ];
-    // Predetermined move sequences (instead of Math.random) for a reproducible, visually pleasing trajectory.
-    const stockMoves  = [1.02, 1.01, 0.96, 1.03, 1.05, 1.04, 0.93, 1.02, 1.06, 1.03, 1.07, 1.04, 1.02, 1.03];
-    const cryptoMoves = [1.05, 0.92, 1.18, 0.88, 1.15, 1.06, 0.85, 1.20, 1.10, 0.92, 1.12, 1.05, 1.08, 1.04];
+    // Predetermined move sequences (instead of Math.random) for a reproducible, visually
+    // pleasing trajectory. The month-to-month swings carry the chart's character; the
+    // compounded total is held to something defensible because the efficiency panel now
+    // puts a number on it: over the trailing year it reads ~8%/yr for the index and
+    // ~20% for crypto (calibrated against that panel's own window, not the whole
+    // sequence). A demo boasting 32%/yr, as these numbers once did, would undercut the
+    // one thing this app is selling, which is not flattering you.
+    const stockMoves  = [1.0038, 0.9939, 0.9447, 1.0136, 1.0333, 1.0235, 0.9152, 1.0038, 1.0431, 1.0136, 1.0530, 1.0235, 1.0038, 1.0136];
+    const cryptoMoves = [1.0184, 0.8923, 1.1445, 0.8535, 1.1154, 1.0281, 0.8244, 1.1639, 1.0669, 0.8923, 1.0863, 1.0184, 1.0475, 1.0087];
     const inflows     = [12000, 12000, 14000, 12000, 12000, 18000, 12000, 12000, 14000, 12000, 12000, 20000, 12000, 13000];
     let savings = 600000;
     let stocks = 25000;
     let cryptoVal = 18000;
     let cash = 12000;
-    let mortgage = 220000;
+    // Starts above the floor so the balance actually amortizes across the window; a
+    // start of 220000 against a Math.max floor of 380000 pinned it flat on record one
+    // and the paydown this account exists to show never happened.
+    let mortgage = 420000;
     const snapshots = [];
     const today = new Date();
     const N = 14;
@@ -4652,7 +4708,12 @@
       mortgage = Math.max(380000, mortgage - 2500);
 
       const updates = {};
-      updates[accounts[0].id] = { amount: savings,   currency: 'CNY' };
+      // Per-account inflow, the shape everything reads: it's what makes the demo show
+      // the MTD/YTD split and the realized-return panel instead of hiding both. The
+      // other accounts record none on purpose — their drift is market movement, and
+      // the cash account's is unrecorded spending, which is exactly the distinction
+      // the dashboard is there to draw.
+      updates[accounts[0].id] = { amount: savings,   currency: 'CNY', inflow: inflows[i] };
       updates[accounts[1].id] = { amount: stocks,    currency: 'USD' };
       updates[accounts[2].id] = { amount: cryptoVal, currency: 'USD' };
       // Cash updated less often (realistic: people don't recount cash every month)
@@ -4669,7 +4730,6 @@
         updates,
         note,
         createdAt: createdBase + i * 86400000,
-        inflow: { amount: inflows[i], currency: 'CNY', accountId: accounts[0].id },
       };
       snapshots.push(snap);
     }
