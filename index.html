@@ -1142,6 +1142,8 @@
     margin-top: 18px;
     max-width: 74ch;
   }
+  /* Same block, but for something the save is about to change rather than explain. */
+  .hint--warn { border-left-color: var(--danger); color: var(--muted-strong); }
 
   /* Collapsible */
   details.panel > summary {
@@ -1793,6 +1795,7 @@
         <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
         <button type="button" class="ghost add-row-btn" id="transferBtn" title="">⇄ 转账</button>
       </div>
+      <div class="hint hint--note hint--warn" id="legacyInflowNotice" hidden></div>
       <div class="hint hint--note" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
       <div class="actions">
         <button type="submit" id="saveBtn" disabled>保存</button>
@@ -2445,26 +2448,61 @@
   // Net inflow recorded for ONE account from `startDateInclusive` onward, in display
   // currency. Same sign convention as snapshotInflowInDisplay (a liability's inflow is
   // negated, so +500 owed reads as −500 net worth), so the two agree when summed.
-  function accountInflowInDisplay(accId, startDateInclusive) {
+  function snapshotAccountInflow(snapshot, accId) {
     const acc = accountById(accId);
-    if (!acc) return { total: 0, has: false };
-    const sign = signFor(acc.type);
+    const u = snapshot.updates[accId];
+    if (!acc || !u) return { total: 0, has: false, missed: false };
+    const rates = state.rates[snapshot.date];
     let total = 0, has = false, missed = false;
-    sortedSnapshots().forEach(s => {
-      if (s.date < startDateInclusive) return;
-      const u = s.updates[accId];
-      if (!u) return;
-      const rates = state.rates[s.date];
-      updateLegs(u).forEach(leg => {
-        if (leg.inflow == null) return;
-        const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
-        // An unconvertible inflow would land in the residual and read as a market move
-        // or as spending. Flag it so callers can drop the split rather than mislabel it.
-        if (c == null) { missed = true; return; }
-        total += c * sign; has = true;
-      });
-    });
+    for (const leg of updateLegs(u)) {
+      if (leg.inflow == null) continue;
+      const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
+      // An unconvertible inflow would land in the residual and read as a market move
+      // or as spending. Flag it so callers can drop the split rather than mislabel it.
+      if (c == null) { missed = true; continue; }
+      total += c * signFor(acc.type); has = true;
+    }
     return { total, has, missed };
+  }
+
+  function accountInflowInDisplay(accId, startDateInclusive) {
+    if (!accountById(accId)) return { total: 0, has: false, missed: false };
+    let total = 0, has = false, missed = false;
+    for (const s of sortedSnapshots()) {
+      if (s.date < startDateInclusive) continue;
+      const inf = snapshotAccountInflow(s, accId);
+      total += inf.total;
+      has = has || inf.has;
+      missed = missed || inf.missed;
+    }
+    return { total, has, missed };
+  }
+
+  // An account whose history begins inside the window arrived already holding a
+  // balance, and a balance is not a return on nothing. Whatever part of that arrival
+  // the record doesn't explain as inflow came from outside, so it counts as a
+  // contribution. Without this, opening a brokerage account and typing what it is
+  // worth books the whole balance as profit: a 500,000 account appearing beside a
+  // 1,000,000 one that gained 8% reported 58%.
+  function accountOpeningContribution(accId, baselineDate) {
+    const tl = computeTimeline();
+    let first = null, index = -1;
+    for (let i = 0; i < tl.length; i++) {
+      if (tl[i].balances[accId]) { first = tl[i]; index = i; break; }
+    }
+    if (!first || first.snapshot.date <= baselineDate) return null;
+    const v = first.balances[accId].converted;
+    if (v == null) return null;
+    const inf = snapshotAccountInflow(first.snapshot, accId);
+    if (inf.missed) return null;
+    const implicit = v - inf.total;
+    // Only the unexplained part of the arrival, and only while it points the same way
+    // the balance does: a recorded inflow larger than the opening balance means a real
+    // loss on day one, which belongs in the residual rather than here.
+    if (implicit === 0 || Math.sign(implicit) !== Math.sign(v)) return null;
+    // The index, not the date: several records can share a date, and a contribution
+    // keyed by date would be re-applied once per record on it.
+    return { index, date: first.snapshot.date, amount: implicit };
   }
 
   // Did any snapshot in the window carry a legacy whole-record inflow? That field
@@ -2512,8 +2550,13 @@
       const inf = accountInflowInDisplay(acc.id, startDateInclusive);
       if (inf.missed) return null;
       if (inf.has) anyInflow = true;
-      const resid = delta - inf.total;
-      inflow += inf.total;
+      // An account that showed up inside this window brought its balance with it.
+      // That arrival is money moved, not money earned.
+      const opening = seenBefore ? null : accountOpeningContribution(acc.id, startDateInclusive);
+      const openAmt = opening ? opening.amount : 0;
+      if (openAmt !== 0) anyInflow = true;
+      const resid = delta - inf.total - openAmt;
+      inflow += inf.total + openAmt;
       if (residualKind(acc) === 'market') market += resid; else untracked += resid;
       sum += delta;
     }
@@ -2588,23 +2631,27 @@
     const end = sumConvertedAt(endEntry, accIds);
     if (start == null || end == null) return null;
 
-    // Dated flows, so each can be weighted by its time in the market.
+    // An account joining mid-window arrives with a balance that `start` never counted,
+    // so without this its whole opening value reads as return earned on the others.
+    const openings = {};
+    for (const id of accIds) {
+      if (baseEntry.balances[id]) continue;          // present at the baseline already
+      const open = accountOpeningContribution(id, startDate);
+      if (open) openings[open.index] = (openings[open.index] || 0) + open.amount;
+    }
+
+    // Dated flows, so each can be weighted by its time in the market. Indexed by
+    // position rather than date, because two records sharing a date are two entries
+    // here and an opening keyed by date would land on both.
     let flowTotal = 0, weighted = 0;
-    for (const tn of tl) {
+    for (let i = 0; i < tl.length; i++) {
+      const tn = tl[i];
       if (tn.snapshot.date <= startDate) continue;
-      let dayFlow = 0;
+      let dayFlow = openings[i] || 0;
       for (const id of accIds) {
-        const u = tn.snapshot.updates[id];
-        if (!u) continue;
-        const acc = accountById(id);
-        if (!acc) continue;
-        const rates = state.rates[tn.snapshot.date];
-        for (const leg of updateLegs(u)) {
-          if (leg.inflow == null) continue;
-          const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
-          if (c == null) return null;
-          dayFlow += c * signFor(acc.type);
-        }
+        const inf = snapshotAccountInflow(tn.snapshot, id);
+        if (inf.missed) return null;
+        dayFlow += inf.total;
       }
       if (dayFlow === 0) continue;
       flowTotal += dayFlow;
@@ -3268,7 +3315,15 @@
     }
     if (editingId) {
       const snap = state.snapshots.find(s => s.id === editingId);
-      if (snap) { snap.date = date; snap.note = note; snap.updates = updates; snap.updatedAt = Date.now(); }
+      if (snap) {
+        snap.date = date; snap.note = note; snap.updates = updates; snap.updatedAt = Date.now();
+        // Re-saving through this form restates the whole record, and the form has no
+        // slot for the legacy whole-record inflow — so it goes, or it would be added
+        // on top of the per-row values the user just confirmed. startEdit() showed
+        // the figure before this point.
+        delete snap.inflow;
+      }
+      document.getElementById('legacyInflowNotice').hidden = true;
       editingId = null;
     } else {
       const now = Date.now();
@@ -3309,6 +3364,18 @@
       };
     });
     if (entryRows.length === 0) entryRows = [newEmptyRow()];
+    // This record still carries the old whole-record inflow, a field with no input left
+    // in this form — so saving replaces it with the per-row values below. Say so, with
+    // the figure, rather than dropping a number the user can no longer see. (Leaving it
+    // was worse: the form cannot express it, so re-entering it per row made the two
+    // count twice, and a month could report more inflow than its entire change.)
+    const notice = document.getElementById('legacyInflowNotice');
+    if (snap.inflow && snap.inflow.amount != null) {
+      notice.textContent = t('legacyInflowNotice', fmt(snap.inflow.amount, snap.inflow.currency));
+      notice.hidden = false;
+    } else {
+      notice.hidden = true;
+    }
     renderAll();
     document.getElementById('date').value = snap.date;
     document.getElementById('note').value = snap.note || '';
@@ -3317,6 +3384,7 @@
 
   function cancelEdit() {
     editingId = null;
+    document.getElementById('legacyInflowNotice').hidden = true;
     entryRows = [newEmptyRow()];
     document.getElementById('note').value = '';
     document.getElementById('date').value = localDateStr();
@@ -4449,6 +4517,21 @@
       if (v == null || v <= 0) continue;
       working.push({ acc, value: v, ret: realizedReturn([acc.id], start) });
     }
+
+    // Assets in neither bucket — the `other` category, which is whatever the user
+    // couldn't classify. They get a group of their own rather than being dropped:
+    // without it the two lists can add up to a fraction of the asset base the
+    // headline's percentage is measured against, and a panel whose numbers don't
+    // account for your money reads as broken.
+    const rest = [];
+    for (const acc of state.accounts) {
+      if (acc.type !== 'asset') continue;
+      if (isIdleAccount(acc) || residualKind(acc) === 'market') continue;
+      const v = valueOf(acc);
+      if (v == null || v <= 0) continue;
+      rest.push({ acc, value: v });
+    }
+    rest.sort((a, b) => b.value - a.value);
     // Best-performing first — the ranking is the answer to "which account".
     working.sort((a, b) => {
       const ra = a.ret && a.ret.annualized, rb = b.ret && b.ret.annualized;
@@ -4470,7 +4553,7 @@
 
     const assets = cur.assetsTotal;
     return {
-      idle, idleTotal, working, combined, benchmark,
+      idle, idleTotal, working, rest, combined, benchmark,
       idleShare: assets && assets > 0 ? idleTotal / assets : null,
       // What the idle money would have earned at the rate the rest of it managed.
       // Phrased as a gap, not a promise: past realized return, applied to a balance.
@@ -4531,11 +4614,16 @@
         return row(w, cell);
       }).join('');
     }
+    const noRate = why => `<span class="eff-idle-ret" title="${why}">\u2014</span>`;
     if (eff.idle.length) {
       html += `<div class="eff-group-label">${t('effIdleGroup')}</div>`;
       // No rate for a cash account on purpose: its residual mixes interest with
       // unrecorded spending, so any number here would be fiction.
-      html += eff.idle.map(e => row(e, `<span class="eff-idle-ret" title="${t('effIdleWhyNoRate')}">\u2014</span>`)).join('');
+      html += eff.idle.map(e => row(e, noRate(t('effIdleWhyNoRate')))).join('');
+    }
+    if (eff.rest.length) {
+      html += `<div class="eff-group-label">${t('effRestGroup')}</div>`;
+      html += eff.rest.map(e => row(e, noRate(t('effRestWhyNoRate')))).join('');
     }
     document.getElementById('efficiencyGroups').innerHTML = html;
     document.getElementById('efficiencyNote').textContent = t('effNote');
@@ -6225,9 +6313,13 @@
     const inf = accountInflowInDisplay(accId, startDateInclusive);
     let split = null;
     if (!inf.missed && !windowHasUnattributedInflow(startDateInclusive)) {
-      const resid = delta - inf.total;
+      // Same correction as the portfolio split: an account that first appears inside
+      // the window brought its balance along rather than earning it.
+      const opening = accountOpeningContribution(accId, startDateInclusive);
+      const openAmt = opening ? opening.amount : 0;
+      const resid = delta - inf.total - openAmt;
       split = {
-        inflow: inf.total, anyInflow: inf.has,
+        inflow: inf.total + openAmt, anyInflow: inf.has || openAmt !== 0,
         market: kind === 'market' ? resid : 0,
         untracked: kind === 'market' ? 0 : resid,
       };

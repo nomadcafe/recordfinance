@@ -36,6 +36,7 @@
 - File System Access API + IndexedDB，用于持久化同步句柄
 - Service Worker，用于离线和资源缓存
 - Web Crypto API（PBKDF2 + AES-GCM），用于可选的落盘加密
+- `node test.js` 跑金额数学的回归测试 —— 余额变化的归因、含出入金的真实收益率、数据迁移。零依赖、无构建步骤：直接从 `index.html` 里读取函数
 
 ## 隐私
 

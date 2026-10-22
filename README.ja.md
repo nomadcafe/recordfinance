@@ -36,6 +36,7 @@
 - File System Access API + IndexedDB（同期ハンドルの永続化用）
 - Service Worker（オフライン対応とアセットキャッシュ用）
 - Web Crypto API（PBKDF2 + AES-GCM、任意の落盤暗号化用）
+- `node test.js` で金額計算の回帰テストを実行 —— 残高変化の帰属、入出金を含む実績リターン、データ移行。依存なし・ビルド不要で、`index.html` から関数を直接読み取ります
 
 ## プライバシー
 
