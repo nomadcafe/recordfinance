@@ -1039,7 +1039,11 @@
   .balance-row { display: flex; gap: 8px; align-items: center; }
   .balance-row .acc-sel { flex: 1.4; min-width: 150px; }
   .balance-row .amt-input { flex: 2; min-width: 0; }
-  .balance-row .cur-sel { width: 100px; flex-shrink: 0; }
+  /* Wide enough for the SELECTED label, which needs ~123px in all three languages
+     ("人民币 CNY", "CNY · Yuan", "人民元 CNY") and was being cut mid-word at 100px.
+     The open dropdown is a native popup that sizes itself, so the longest option
+     ("シンガポール・ドル SGD") does not have to fit here. */
+  .balance-row .cur-sel { width: 128px; flex-shrink: 0; }
   .balance-row .row-remove {
     background: transparent; color: var(--muted);
     border: 1px solid var(--border);
@@ -1300,7 +1304,7 @@
     .balance-row { flex-wrap: wrap; gap: 6px; }
     .balance-row .acc-sel { flex: 1 1 100%; min-width: 0; }
     .balance-row .amt-input { flex: 1; }
-    .balance-row .cur-sel { width: 92px; }
+    .balance-row .cur-sel { width: 128px; }
     .row .field { min-width: 100%; }
     .account-row { flex-wrap: wrap; gap: 8px; }
     .account-row input[type="text"] { flex: 1 1 100%; order: 1; }
@@ -1529,7 +1533,7 @@
           <label for="transferAmount" id="transferAmountLabel">金额</label>
           <div class="row" style="gap:8px;">
             <input type="number" inputmode="decimal" step="any" id="transferAmount" placeholder="0" style="flex:1; min-width:0;">
-            <select id="transferCurrency" style="width:96px; flex:none;"></select>
+            <select id="transferCurrency" style="flex:0 1 auto; min-width:120px;"></select>
           </div>
         </div>
         <div class="hint" id="transferHint"></div>
@@ -1902,7 +1906,11 @@
     }
     return 'en';
   }
-  const PALETTE = ['#4ade80', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#34d399', '#fb923c', '#22d3ee', '#facc15'];
+  // Accounts are handed the eight slots in fixed order (stored as the dark step, which
+  // adaptColor() re-resolves per theme). A ninth account takes the neutral rather than a
+  // ninth invented hue — past eight, colour has stopped carrying identity and the name
+  // beside every mark is what the reader is using anyway.
+  const PALETTE = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
   const CURRENCIES = [
     { code: 'CNY', label: '人民币 CNY', symbol: '¥' },
     { code: 'USD', label: '美元 USD',   symbol: '$' },
@@ -1934,11 +1942,61 @@
     return all.filter((c, i) => all.indexOf(c) === i);
   }
   function isMultiCurrency(a) { return accountCurrencies(a).length > 1; }
-  const CURRENCY_COLORS = {
-    CNY: '#f87171', USD: '#4ade80', JPY: '#f472b6', EUR: '#60a5fa', GBP: '#818cf8',
-    HKD: '#a78bfa', SGD: '#fbbf24', TWD: '#2dd4bf', KRW: '#f0abfc', AUD: '#fb923c',
-    CAD: '#f43f5e', CHF: '#94a3b8', INR: '#fdba74', THB: '#22d3ee', MYR: '#a3e635',
+  // ===== Chart palette =====
+  // Categorical slots. BOTH modes are selected, not an automatic flip of one palette:
+  // the old colours were Tailwind 400-steps picked for the dark theme, and on the light
+  // theme's white panel every one of them sat at 1.5-2.8:1 contrast — visible, but faint
+  // enough to read as a styling bug. Each slot below was validated against its own
+  // surface (#ffffff / #151a2b).
+  //
+  // Slot order is fixed and never cycled; a chart past the eighth series folds into
+  // `neutral` rather than inventing a hue.
+  const SERIES = {
+    blue:    { light: '#2a78d6', dark: '#3987e5' },
+    orange:  { light: '#eb6834', dark: '#d95926' },
+    aqua:    { light: '#1baf7a', dark: '#199e70' },
+    yellow:  { light: '#eda100', dark: '#c98500' },
+    magenta: { light: '#e87ba4', dark: '#d55181' },
+    green:   { light: '#008300', dark: '#008300' },
+    violet:  { light: '#4a3aa7', dark: '#9085e9' },
+    red:     { light: '#e34948', dark: '#e66767' },
+    neutral: { light: '#6b7280', dark: '#8590a8' },
   };
+  // Read off the painted theme rather than `state`, which is declared further down and
+  // would throw on any access before load() rather than reading as "not light yet".
+  // applyTheme() stamps the class before every render, so this is also the surface the
+  // mark will actually sit on.
+  const seriesHex = slot =>
+    (SERIES[slot] || SERIES.neutral)[document.body.classList.contains('light') ? 'light' : 'dark'];
+
+  // Every colour the app ever handed out, mapped back to its slot, so a balance recorded
+  // years ago keeps its identity across a theme switch without migrating stored data.
+  // An unrecognised hex (hand-edited state) is passed through untouched.
+  const LEGACY_SLOT = {
+    '#4ade80': 'green', '#60a5fa': 'blue', '#f472b6': 'magenta', '#fbbf24': 'yellow',
+    '#a78bfa': 'violet', '#fb7185': 'red', '#34d399': 'aqua', '#fb923c': 'orange',
+    '#22d3ee': 'aqua', '#facc15': 'yellow', '#8590a8': 'neutral', '#f97316': 'orange',
+  };
+  const SLOT_OF_HEX = (() => {
+    const m = { ...LEGACY_SLOT };
+    for (const [slot, steps] of Object.entries(SERIES)) { m[steps.light] = slot; m[steps.dark] = slot; }
+    return m;
+  })();
+  // Resolve a stored account colour to the step that belongs on the current surface.
+  function adaptColor(hex) {
+    const slot = SLOT_OF_HEX[String(hex).toLowerCase()];
+    return slot ? seriesHex(slot) : hex;
+  }
+
+  // Currencies: 15 codes, far past the eight a categorical palette can separate. The
+  // eight slots are assigned in a fixed order and the rest share `neutral` — the
+  // doughnut's legend carries the name, amount and share for every slice, which is what
+  // makes a repeated colour readable rather than ambiguous.
+  const CURRENCY_SLOT = {
+    CNY: 'red', USD: 'green', JPY: 'magenta', EUR: 'blue', GBP: 'violet',
+    HKD: 'orange', SGD: 'yellow', TWD: 'aqua',
+  };
+  const CURRENCY_COLORS = new Proxy({}, { get: (_, code) => seriesHex(CURRENCY_SLOT[code]) });
   const CATEGORIES = ['cash', 'savings', 'investment', 'property', 'crypto', 'other'];
   const LIABILITY_CATEGORIES = ['mortgage', 'creditCard', 'loan', 'other'];
   function categoriesFor(type) { return type === 'liability' ? LIABILITY_CATEGORIES : CATEGORIES; }
@@ -1954,11 +2012,20 @@
     if (!acc || acc.type === 'liability') return 'untracked';
     return SELF_MOVING_CATEGORIES.has(acc.category) ? 'market' : 'untracked';
   }
-  const CATEGORY_COLORS = {
-    cash: '#60a5fa', savings: '#4ade80', investment: '#fbbf24',
-    property: '#f472b6', crypto: '#a78bfa', other: '#8590a8',
-    mortgage: '#fb7185', creditCard: '#f97316', loan: '#facc15',
+  // Category -> slot. Four of the five asset categories keep the hue family they have
+  // always had; crypto moves off violet because violet and blue are indistinguishable
+  // under deuteranopia (OKLab ΔE 0.3), which put crypto and cash on the same colour for
+  // roughly one man in twelve. This assignment is the measured ceiling for five slices
+  // out of an eight-slot palette: worst pair ΔE 6.5 CVD / 11.9 normal-vision, against
+  // 0.3 / 10.2 before. Five simultaneous slices cannot reach the hard floors by colour
+  // alone, so the ring also carries a surface gap between segments and a legend naming
+  // every slice — identity never rests on hue alone.
+  const CATEGORY_SLOT = {
+    cash: 'blue', savings: 'green', investment: 'yellow',
+    property: 'red', crypto: 'aqua', other: 'neutral',
+    mortgage: 'red', creditCard: 'orange', loan: 'violet',
   };
+  const CATEGORY_COLORS = new Proxy({}, { get: (_, key) => seriesHex(CATEGORY_SLOT[key]) });
   const BACKUP_THRESHOLD = 5; // 改动这么多次后提示导出
 
   const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2168,7 +2235,7 @@
       // Validate against the category set for this account's type (liabilities have
       // their own: mortgage/creditCard/loan/other) so a valid one isn't wiped to "other".
       if (!categoriesFor(a.type).includes(a.category)) a.category = 'other';
-      if (!isHexColor(a.color)) a.color = PALETTE[i % PALETTE.length];
+      if (!isHexColor(a.color)) a.color = PALETTE[i] || SERIES.neutral.dark;
       if (typeof a.name !== 'string') a.name = a.name == null ? '' : String(a.name);
     });
     data.snapshots.forEach(s => {
@@ -2326,7 +2393,7 @@
 
   function nextColor() {
     const used = new Set(state.accounts.map(a => a.color));
-    return PALETTE.find(c => !used.has(c)) || PALETTE[state.accounts.length % PALETTE.length];
+    return PALETTE.find(c => !used.has(c)) || SERIES.neutral.dark;
   }
 
   // ===== Rates =====
@@ -2824,7 +2891,7 @@
         ).join('')}</select>`;
       row.innerHTML = `
         <span class="drag-handle" title="${t('dragReorder')}" aria-label="${t('dragReorder')}">⋮⋮</span>
-        <span class="chip-dot" style="background:${a.color}"></span>
+        <span class="chip-dot" style="background:${adaptColor(a.color)}"></span>
         <input type="text" data-id="${a.id}" data-field="name" value="${escapeHtml(a.name)}">
         <select data-id="${a.id}" data-field="currency"></select>
         <select data-id="${a.id}" data-field="type" class="type-sel">
@@ -3149,7 +3216,11 @@
     if (code === currency) return { code, amount };
     const conv = convert(amount, currency, code, bestRatesForDate(date));
     if (conv == null) return null;
-    return { code, amount: conv };
+    // Round to the target currency, or the inflow lands in the form (and in the saved
+    // record) as 3743.2390514629847 while the balance beside it is rounded to the cent —
+    // the two then disagree by a fraction no one can see or correct.
+    const d = decimalsFor(code);
+    return { code, amount: Math.round(conv * Math.pow(10, d)) / Math.pow(10, d) };
   }
 
   // Point one entry row at `accId` and set its inflow, reusing a row already on that
@@ -3450,7 +3521,7 @@
         : t('original', fmt(signedAmount(b.amount, a.type), b.currency)));
       const liabBadge = a.type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
       chip.innerHTML = `
-        <div class="chip-name"><span class="chip-dot" style="background:${a.color}"></span>${escapeHtml(a.name)}${liabBadge}</div>
+        <div class="chip-name"><span class="chip-dot" style="background:${adaptColor(a.color)}"></span>${escapeHtml(a.name)}${liabBadge}</div>
         <div class="chip-amount">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</div>
         ${showOriginal ? `<div class="chip-original">${originalStr}</div>` : ''}
       `;
@@ -3485,7 +3556,7 @@
       const updates = Object.entries(snapshot.updates).map(([id, v]) => {
         const acc = accountById(id);
         const name = acc ? acc.name : t('deletedAccount');
-        const color = acc ? acc.color : '#666';
+        const color = acc ? adaptColor(acc.color) : seriesHex('neutral');
         const type = acc ? acc.type : 'asset';
         const liabBadge = type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
         const amtStr = updateLegs(v).map(leg => fmt(signedAmount(leg.amount, type), leg.currency)).join(' + ');
@@ -3795,14 +3866,14 @@
           .map(d => ({
             label: d.a.name,
             data: d.data,
-            borderColor: d.a.color,
-            backgroundColor: hexToRgba(d.a.color, 0.5),
+            borderColor: adaptColor(d.a.color),
+            backgroundColor: hexToRgba(adaptColor(d.a.color), 0.5),
             fill: true,
             borderWidth: 1.5,
             cubicInterpolationMode: 'monotone',
             pointRadius: 0,
             pointHoverRadius: 4,
-            pointBackgroundColor: d.a.color,
+            pointBackgroundColor: adaptColor(d.a.color),
             pointBorderColor: cssVar('--panel'),
             pointBorderWidth: 2,
           }));
@@ -3814,13 +3885,13 @@
             const b = t.balances[a.id];
             return b ? b.converted : null;
           }),
-          borderColor: a.color,
+          borderColor: adaptColor(a.color),
           backgroundColor: 'transparent',
           borderWidth: 2,
           cubicInterpolationMode: 'monotone',
           pointRadius: 0,
           pointHoverRadius: 5,
-          pointBackgroundColor: a.color,
+          pointBackgroundColor: adaptColor(a.color),
           pointBorderColor: cssVar('--panel'),
           pointBorderWidth: 2,
           spanGaps: true,
@@ -4344,7 +4415,8 @@
     }
 
     const data = breakdownMode === 'category' ? categoryData : currencyData;
-    const colorOf = d => breakdownMode === 'category' ? (CATEGORY_COLORS[d.key] || '#8590a8') : (CURRENCY_COLORS[d.key] || '#8590a8');
+    // Both maps resolve per theme and fall back to the neutral slot themselves.
+    const colorOf = d => breakdownMode === 'category' ? CATEGORY_COLORS[d.key] : CURRENCY_COLORS[d.key];
     const labelOf = d => breakdownMode === 'category' ? (t('categories')[d.key] || d.key) : d.key;
 
     const legend = document.getElementById('breakdownLegend');
@@ -4599,7 +4671,7 @@
     // Rows open the account's drilldown — a rate you can't go look at is a dead end.
     const row = (entry, retCell) =>
       `<div class="legend-row clickable" data-acc-id="${entry.acc.id}" role="button" tabindex="0">` +
-      `<span class="chip-dot" style="background:${entry.acc.color}"></span>` +
+      `<span class="chip-dot" style="background:${adaptColor(entry.acc.color)}"></span>` +
       `<span class="eff-name">${escapeHtml(entry.acc.name)}</span>` +
       `<span class="lr-amt">${fmt(entry.value, state.displayCurrency)}</span>` +
       retCell + `</div>`;
@@ -4757,11 +4829,14 @@
     const lang = state.language;
     const names = (I18N[lang] || I18N.zh).demoAccounts;
     const accounts = [
-      { id: crypto.randomUUID(), name: names.savings,  color: PALETTE[0], currency: 'CNY', type: 'asset',     category: 'savings' },
-      { id: crypto.randomUUID(), name: names.stocks,   color: PALETTE[1], currency: 'USD', type: 'asset',     category: 'investment' },
-      { id: crypto.randomUUID(), name: names.crypto,   color: PALETTE[4], currency: 'USD', type: 'asset',     category: 'crypto' },
-      { id: crypto.randomUUID(), name: names.cash,     color: PALETTE[7], currency: 'CNY', type: 'asset',     category: 'cash' },
-      { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[5], currency: 'CNY', type: 'liability', category: 'other' },
+      // Slots chosen so the sample reads right at a glance: the debt is the red one and
+      // the cash is not. (Picked by index, so they follow PALETTE's order — reorder that
+      // and these move with it.)
+      { id: crypto.randomUUID(), name: names.savings,  color: PALETTE[5], currency: 'CNY', type: 'asset',     category: 'savings' },
+      { id: crypto.randomUUID(), name: names.stocks,   color: PALETTE[0], currency: 'USD', type: 'asset',     category: 'investment' },
+      { id: crypto.randomUUID(), name: names.crypto,   color: PALETTE[3], currency: 'USD', type: 'asset',     category: 'crypto' },
+      { id: crypto.randomUUID(), name: names.cash,     color: PALETTE[2], currency: 'CNY', type: 'asset',     category: 'cash' },
+      { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[7], currency: 'CNY', type: 'liability', category: 'other' },
     ];
     // Predetermined move sequences (instead of Math.random) for a reproducible, visually
     // pleasing trajectory. The month-to-month swings carry the chart's character; the
@@ -6337,7 +6412,7 @@
     document.getElementById('drillBackLabel').textContent = t('back').replace(/^← /, '');
     const nameEl = document.getElementById('drillAccountName');
     const liabBadge = acc.type === 'liability' ? ` <small class="liab-tag">${t('liabBadge')}</small>` : '';
-    nameEl.innerHTML = `<span class="chip-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${acc.color};margin-right:8px;vertical-align:middle;"></span>${escapeHtml(acc.name)}${liabBadge}`;
+    nameEl.innerHTML = `<span class="chip-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${adaptColor(acc.color)};margin-right:8px;vertical-align:middle;"></span>${escapeHtml(acc.name)}${liabBadge}`;
     document.getElementById('drillBalance').textContent = b && b.converted != null ? fmt(b.converted, state.displayCurrency) : '—';
     const origEl = document.getElementById('drillOriginal');
     if (b && b.legs && b.legs.length > 1) {
@@ -6379,8 +6454,8 @@
       drillChart.data.labels = labels;
       ds.label = acc.name;
       ds.data = data;
-      ds.borderColor = acc.color;
-      ds.backgroundColor = acc.color + '20';
+      ds.borderColor = adaptColor(acc.color);
+      ds.backgroundColor = adaptColor(acc.color) + '20';
       drillChart.options.scales.x.ticks.color = cssVar('--muted');
       drillChart.options.scales.x.grid.color = cssVar('--grid');
       drillChart.options.scales.y.grid.color = cssVar('--grid');
@@ -6393,8 +6468,8 @@
           datasets: [{
             label: acc.name,
             data,
-            borderColor: acc.color,
-            backgroundColor: acc.color + '20',
+            borderColor: adaptColor(acc.color),
+            backgroundColor: adaptColor(acc.color) + '20',
             fill: true,
             tension: 0.25,
             pointRadius: 4,

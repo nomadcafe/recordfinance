@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow',
+  'transferLegFor', 'setRowInflow', 'adaptColor',
 ];
 
 /* ---------- stub globals the extracted code closes over ---------- */
@@ -64,15 +64,28 @@ stubGlobal('navigator', { languages: ['zh-CN'] });
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.randomUUID) {
   stubGlobal('crypto', { randomUUID: (() => { let n = 0; return () => 'id-' + (++n); })() });
 }
+const BODY_CLASSES = new Set();
 const DOM = {};
 global.document = { getElementById: id => (DOM[id] = DOM[id] || { id, value: '',
   set hidden(v) { this._h = v; }, get hidden() { return this._h; },
   set textContent(v) { this._t = v; }, get textContent() { return this._t; },
   set innerHTML(v) { this._i = v; }, get innerHTML() { return this._i; } }) };
+// seriesHex() reads the painted theme off <body>; mirror app.state.theme onto it.
+global.document.body = { classList: {
+  contains: c => BODY_CLASSES.has(c), add: c => BODY_CLASSES.add(c), remove: c => BODY_CLASSES.delete(c),
+} };
 
 const PRELUDE = `
   ${grabConst(/  const CURRENCIES = \[[\s\S]*?\n  \];/)}
   ${grabConst(/  const PALETTE = \[[\s\S]*?\];/)}
+  ${grabConst(/  const SERIES = \{[\s\S]*?\n  \};/)}
+  ${grabConst(/  const seriesHex =[\s\S]*?;\n/)}
+  ${grabConst(/  const LEGACY_SLOT = \{[\s\S]*?\n  \};/)}
+  ${grabConst(/  const SLOT_OF_HEX = \(\(\) => \{[\s\S]*?\n  \}\)\(\);/)}
+  ${grabConst(/  const CURRENCY_SLOT = \{[\s\S]*?\n  \};/)}
+  ${grabConst(/  const CURRENCY_COLORS = new Proxy[^\n]+/)}
+  ${grabConst(/  const CATEGORY_SLOT = \{[\s\S]*?\n  \};/)}
+  ${grabConst(/  const CATEGORY_COLORS = new Proxy[^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -118,7 +131,7 @@ const app = new Function(`
   ${FNS.map(grabFn).join('\n\n')}
   return { get state() { return state; }, set state(v) { state = v; },
     get rows() { return entryRows; }, set rows(v) { entryRows = v; },
-    computeTimeline, signFor,
+    computeTimeline, signFor, SERIES, PALETTE, CATEGORY_COLORS, CURRENCY_COLORS,
     ${FNS.join(', ')} };
 `)();
 
@@ -493,6 +506,13 @@ sec('Transfer helper arithmetic');
 
   const leg = app.transferLegFor(INV, 7000, 'CNY', '2026-10-01');
   ck('7000 CNY converts to 1000 USD for a USD account', leg.code === 'USD' && near(leg.amount, 1000), leg);
+  // A converted leg must be rounded to its own currency, or the inflow written into the
+  // form carries sixteen digits while the balance beside it is rounded to the cent.
+  const odd = app.transferLegFor(INV, 26203, 'CNY', '2026-10-01');
+  ck('a converted leg is rounded to the currency\'s precision',
+     Number.isInteger(odd.amount * 100) && String(odd.amount).length <= 10, odd.amount);
+  const jpy = app.transferLegFor({ id: 'j', name: 'J', type: 'asset', category: 'savings', currency: 'JPY' }, 1, 'JPY', '2026-10-01');
+  ck('a same-currency leg is passed through untouched', jpy.amount === 1, jpy);
   app.rows = [];
   app.setRowInflow('s', { code: leg.code, value: sf('asset') * leg.amount });
   const brk = app.rows.find(r => r.accountId === 's');
@@ -541,6 +561,46 @@ sec('Demo data exercises both features');
   ck('with a believable return, not a boast', e.benchmark > 0 && e.benchmark < 0.25, pc(e.benchmark));
   ck('the mortgage amortizes across the window',
      snapshots[0].updates[accounts[4].id].amount > snapshots[13].updates[accounts[4].id].amount);
+}
+
+sec('Chart palette resolves per theme');
+{
+  const dark = s => { BODY_CLASSES.delete('light'); return s(); };
+  const light = s => { BODY_CLASSES.add('light'); return s(); };
+  // A colour stored years ago still resolves to this theme's step for the same slot.
+  ck('a legacy account colour keeps its slot in dark', dark(() => app.adaptColor('#4ade80')) === '#008300', dark(() => app.adaptColor('#4ade80')));
+  ck('and takes the light step on the light surface', light(() => app.adaptColor('#4ade80')) === '#008300', light(() => app.adaptColor('#4ade80')));
+  ck('a blue account differs between themes',
+     dark(() => app.adaptColor('#60a5fa')) !== light(() => app.adaptColor('#60a5fa')),
+     [dark(() => app.adaptColor('#60a5fa')), light(() => app.adaptColor('#60a5fa'))]);
+  ck('a hand-edited colour is passed through untouched', dark(() => app.adaptColor('#123456')) === '#123456');
+  // Categories and currencies follow the same slots.
+  ck('cash and crypto are no longer the same hue family',
+     dark(() => app.CATEGORY_COLORS.cash) !== dark(() => app.CATEGORY_COLORS.crypto));
+  ck('investment and loan no longer share a yellow',
+     dark(() => app.CATEGORY_COLORS.investment) !== dark(() => app.CATEGORY_COLORS.loan),
+     [dark(() => app.CATEGORY_COLORS.investment), dark(() => app.CATEGORY_COLORS.loan)]);
+  ck('category colours change with the theme',
+     dark(() => app.CATEGORY_COLORS.investment) !== light(() => app.CATEGORY_COLORS.investment));
+  ck('"other" stays a deliberate neutral, not a hue',
+     dark(() => app.CATEGORY_COLORS.other) === '#8590a8' && light(() => app.CATEGORY_COLORS.other) === '#6b7280');
+  // Past the eight slots a currency folds into the neutral rather than inventing a hue.
+  ck('the first eight currencies each get their own slot',
+     new Set(['CNY','USD','JPY','EUR','GBP','HKD','SGD','TWD'].map(c => dark(() => app.CURRENCY_COLORS[c]))).size === 8);
+  ck('a ninth currency folds into the neutral',
+     dark(() => app.CURRENCY_COLORS.KRW) === dark(() => app.CATEGORY_COLORS.other));
+  // Every colour the app hands out must be recognised, or a theme switch would strand it
+  // on its dark step. Green is deliberately the same in both modes, so it is exempt from
+  // the "must change" half of the check.
+  const slotted = hex => {
+    const d = dark(() => app.adaptColor(hex)), l = light(() => app.adaptColor(hex));
+    return d === hex && (l !== hex || hex === '#008300');
+  };
+  ck('every palette entry maps back to a slot', app.PALETTE.every(slotted),
+     app.PALETTE.filter(h => !slotted(h)));
+  ck('and so does every colour older versions handed out',
+     ['#4ade80','#60a5fa','#f472b6','#fbbf24','#a78bfa','#fb7185','#34d399','#fb923c','#22d3ee','#facc15']
+       .every(h => app.adaptColor(h) !== h));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

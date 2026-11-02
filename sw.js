@@ -1,4 +1,4 @@
-const CACHE = 'record-v20';
+const CACHE = 'record-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -52,8 +52,15 @@ self.addEventListener('fetch', e => {
     url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') ||
     url.pathname.endsWith('/i18n.js');
   if (isShell) {
+    // A plain fetch() is allowed to be answered from the browser's own HTTP cache
+    // without ever reaching the server, which quietly turns the paragraph above into
+    // cache-first — measured: an edited index.html kept arriving stale through here.
+    // `no-cache` forces a conditional request, so an unchanged shell costs a 304 and a
+    // changed one actually shows up. Rebuilt from the URL because a navigation request
+    // cannot carry an init object. Offline is unaffected: fetch rejects, and the catch
+    // below still serves the cached shell.
     e.respondWith(
-      fetch(e.request)
+      fetch(new Request(url.href, { cache: 'no-cache', credentials: 'same-origin' }))
         .then(res => putInCache(e.request, res))
         .catch(() => caches.match(e.request).then(c => c || caches.match('./index.html')))
     );
