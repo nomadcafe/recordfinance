@@ -117,6 +117,7 @@
       demoBannerMsg: '正在浏览示例数据 · 随便点点看',
       demoClear: '清空，开始记录我自己的',
       demoConfirmClear: '清空示例数据并开始记录你自己的？',
+      demoExpenses: { trip: '旅行', laptop: '电脑' },
       demoAccounts: {
         savings: '招行储蓄', stocks: '美股账户', crypto: '比特币',
         cash: '现金', mortgage: '房贷',
@@ -321,6 +322,7 @@
       demoBannerMsg: 'Browsing sample data · click around to explore',
       demoClear: 'Clear & start with my own',
       demoConfirmClear: 'Clear the sample data and start tracking your own?',
+      demoExpenses: { trip: 'Trip', laptop: 'Laptop' },
       demoAccounts: {
         savings: 'Bank Savings', stocks: 'US Stocks', crypto: 'Bitcoin',
         cash: 'Cash', mortgage: 'Mortgage',
@@ -527,6 +529,7 @@
       demoBannerMsg: 'サンプルデータを表示中 · 自由に触ってみてください',
       demoClear: 'クリアして自分の記録を始める',
       demoConfirmClear: 'サンプルデータを消して、自分の記録を始めますか？',
+      demoExpenses: { trip: '旅行', laptop: 'パソコン' },
       demoAccounts: {
         savings: '銀行貯蓄', stocks: '米国株', crypto: 'ビットコイン',
         cash: '現金', mortgage: '住宅ローン',

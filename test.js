@@ -562,6 +562,20 @@ sec('Demo data exercises both features');
   ck('with a believable return, not a boast', e.benchmark > 0 && e.benchmark < 0.25, pc(e.benchmark));
   ck('the mortgage amortizes across the window',
      snapshots[0].updates[accounts[4].id].amount > snapshots[13].updates[accounts[4].id].amount);
+  // The tagged-spending feature has to be visible in the demo, and visible the right
+  // way: nested inside a negative "Unrecorded" with a small untagged rest, not under
+  // the over-tagged warning (which a demo must never open with).
+  const tagged = snapshots.filter(s => s.expenses);
+  ck('the last two months carry tagged spending', tagged.length === 2 && tagged[1] === snapshots[13], tagged.map(s => s.date));
+  for (const [name, from] of [['this month', after(snapshots[12].date)], ['the last two months', after(snapshots[11].date)]]) {
+    const m = app.computePeriodChange(from);
+    const html = app.renderSplitChips(m);
+    ck(`${name}: unrecorded is spending, and covers what is tagged`,
+       m.split.untracked < 0 && m.split.untracked + m.expenses.total < 0, [m.split.untracked, m.expenses.total]);
+    ck(`${name}: tags nest with a rest and no warning`, /其余/.test(strip(html)) && !/split-warn/.test(html), strip(html));
+  }
+  ck('mortgage repayments are recorded as inflow, not left unexplained',
+     snapshots.slice(1).every(s => s.updates[accounts[4].id].inflow < 0));
 }
 
 sec('Chart palette resolves per theme');

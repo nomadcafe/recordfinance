@@ -5063,6 +5063,11 @@
     const stockMoves  = [1.0038, 0.9939, 0.9447, 1.0136, 1.0333, 1.0235, 0.9152, 1.0038, 1.0431, 1.0136, 1.0530, 1.0235, 1.0038, 1.0136];
     const cryptoMoves = [1.0184, 0.8923, 1.1445, 0.8535, 1.1154, 1.0281, 0.8244, 1.1639, 1.0669, 0.8923, 1.0863, 1.0184, 1.0475, 1.0087];
     const inflows     = [12000, 12000, 14000, 12000, 12000, 18000, 12000, 12000, 14000, 12000, 12000, 20000, 12000, 13000];
+    // Spending out of savings that the record doesn't explain — only in the last two
+    // months, so the tagged items below have a real hole to sit in. Each is a little
+    // more than what gets tagged, which is how it looks in life: the big items are
+    // named, the small ones stay "the rest".
+    const spends      = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7400, 10200];
     let savings = 600000;
     let stocks = 25000;
     let cryptoVal = 18000;
@@ -5079,10 +5084,11 @@
       // Month-end of (today - (N-1-i)) months.
       const d = new Date(today.getFullYear(), today.getMonth() - (N - 1 - i) + 1, 0);
       const dateStr = localDateStr(d);
-      savings += inflows[i];
+      savings += inflows[i] - spends[i];
       stocks = Math.round(stocks * stockMoves[i]);
       cryptoVal = Math.round(cryptoVal * cryptoMoves[i]);
       cash = Math.max(3000, cash + (i % 3 === 0 ? 2000 : -800));
+      const prevMortgage = mortgage;
       mortgage = Math.max(380000, mortgage - 2500);
 
       const updates = {};
@@ -5096,7 +5102,13 @@
       updates[accounts[2].id] = { amount: cryptoVal, currency: 'USD' };
       // Cash updated less often (realistic: people don't recount cash every month)
       if (i % 2 === 0 || i === N - 1) updates[accounts[3].id] = { amount: cash, currency: 'CNY' };
-      updates[accounts[4].id] = { amount: mortgage, currency: 'CNY' };
+      // The repayment is money paid in, recorded as such (a liability's inflow runs in
+      // its own direction, so less owed is negative). Left unrecorded, it read as +2,500
+      // of unexplained money every month — enough to outweigh any spending tagged above.
+      const repaid = prevMortgage - mortgage;
+      updates[accounts[4].id] = i > 0 && repaid
+        ? { amount: mortgage, currency: 'CNY', inflow: -repaid }
+        : { amount: mortgage, currency: 'CNY' };
 
       let note = '';
       if (i === 0) note = t('demoNoteFirst');
@@ -5109,6 +5121,9 @@
         note,
         createdAt: createdBase + i * 86400000,
       };
+      const ex = (I18N[lang] || I18N.zh).demoExpenses;
+      if (i === N - 2) snap.expenses = [{ label: ex.trip, amount: 6000, currency: 'CNY' }];
+      if (i === N - 1) snap.expenses = [{ label: ex.laptop, amount: 1200, currency: 'USD' }];
       snapshots.push(snap);
     }
     return { accounts, snapshots };
