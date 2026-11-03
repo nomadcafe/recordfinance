@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal',
   'expenseItemsHtml',
 ];
 
@@ -706,6 +706,20 @@ sec('Tagged spending explains the unrecorded bucket');
   ck('an unset basis counts as net worth', /其余/.test(strip(app.renderSplitChips(app.computePeriodChange('2026-10-01')))));
   app.state.basis = 'assets';
   ck('on total assets the tags stand alone', /未记账 −¥13,000/.test(html) && /支出 −¥8,000/.test(html) && !/其余/.test(html), html);
+}
+
+sec('Searching a tag totals it');
+load([A('b', 'savings')], [
+  snap('2026-08-31', { b: { amount: 1, currency: 'CNY' } }, { expenses: [{ label: '房租', amount: 8000, currency: 'CNY' }, { label: 'Trip', amount: 100, currency: 'USD' }] }),
+  snap('2026-09-30', { b: { amount: 1, currency: 'CNY' } }, { expenses: [{ label: '房租 九月', amount: 8000, currency: 'CNY' }] }),
+]);
+{
+  const r = app.expenseSearchTotal('房租');
+  ck('every matching item across records is summed', r.count === 2 && near(r.total, 16000) && !r.missed, r);
+  ck('matching ignores case (query arrives lower-cased)', near(app.expenseSearchTotal('trip').total, 700));
+  ck('an empty query matches nothing', app.expenseSearchTotal('').count === 0);
+  app.state.rates = {};
+  ck('a missing rate is flagged, not summed short', app.expenseSearchTotal('trip').missed);
 }
 
 sec('Tagged spending survives import');

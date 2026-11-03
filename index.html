@@ -305,6 +305,7 @@
   body.privacy-blur .lr-amt,
   body.privacy-blur .eff-money,
   body.privacy-blur .inflow-line,
+  body.privacy-blur .history-expense-total,
   body.privacy-blur td.num,
   body.privacy-blur .goal-progress-text,
   body.privacy-blur .goal-bar,
@@ -1085,6 +1086,7 @@
   #historyTable td:nth-child(4) { color: var(--muted); }
   .history-more { display: flex; align-items: center; gap: 12px; padding: 12px 8px; }
   .history-count { color: var(--muted); font-size: 13px; }
+  .history-expense-total { color: var(--muted-strong); font-size: 13px; padding: 12px 8px 0; font-variant-numeric: tabular-nums; }
   th, td {
     text-align: left; padding: 15px 10px;
     border-bottom: 1px solid var(--border);
@@ -1892,6 +1894,7 @@
       <tbody></tbody>
     </table>
     </div>
+    <div id="historyExpenseTotal" class="history-expense-total" hidden></div>
     <div id="historyMore" class="history-more" style="display:none;">
       <button class="link" id="historyMoreBtn">加载更多</button>
       <span id="historyCount" class="history-count"></span>
@@ -2629,6 +2632,22 @@
   // record's own date — the same window and the same rates the split uses, so the two
   // can be set side by side. Grouped by label, largest first. `missed` means at least
   // one item could not be converted; callers show nothing rather than a partial sum.
+  // Tagged items whose label contains `query` (already lower-cased), across every
+  // record — what "rent" has cost in all. `missed` = some item had no rate for its date.
+  function expenseSearchTotal(query) {
+    let total = 0, count = 0, missed = false;
+    if (!query) return { total, count, missed };
+    for (const s of state.snapshots) {
+      for (const e of s.expenses || []) {
+        if (!e.label.toLowerCase().includes(query)) continue;
+        count++;
+        const c = convert(e.amount, e.currency, state.displayCurrency, state.rates[s.date]);
+        if (c == null) missed = true; else total += c;
+      }
+    }
+    return { total, count, missed };
+  }
+
   function expensesInWindow(startDateInclusive) {
     const byLabel = new Map();
     let total = 0, has = false, missed = false;
@@ -3277,6 +3296,7 @@
     wrap.innerHTML = '';
     document.getElementById('expenseLabelList').innerHTML =
       expenseLabelSuggestions().map(l => `<option value="${escapeHtml(l)}"></option>`).join('');
+    updateExpenseSummary();
     entryExpenses.forEach(row => {
       const el = document.createElement('div');
       el.className = 'balance-row';
@@ -3290,7 +3310,7 @@
       label.value = row.label; amt.value = row.amount;
       populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
       label.addEventListener('input', e => { row.label = e.target.value; });
-      amt.addEventListener('input', e => { row.amount = e.target.value; });
+      amt.addEventListener('input', e => { row.amount = e.target.value; updateExpenseSummary(); });
       el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
       el.querySelector('.row-remove').addEventListener('click', () => {
         entryExpenses = entryExpenses.filter(r => r !== row);
@@ -3326,6 +3346,12 @@
   function resetExpenseSection() {
     document.getElementById('expenseSection').open = entryExpenses.length > 0;
     renderExpenseRows();
+  }
+  // Collapsing the section keeps its rows, and they are still saved — so a closed
+  // section that holds any says how many, instead of hiding data the save will write.
+  function updateExpenseSummary() {
+    const n = entryExpenses.filter(r => String(r.amount).trim() !== '').length;
+    document.getElementById('expenseSummary').textContent = n ? t('expenseSummaryCount', n) : t('expenseSummary');
   }
 
   document.getElementById('addRowBtn').addEventListener('click', () => {
@@ -3745,6 +3771,15 @@
     const emptyEl = document.getElementById('emptyMsg');
     emptyEl.style.display = hasRows ? 'none' : 'block';
     emptyEl.textContent = (historyQuery && timeline.length) ? t('noMatch') : t('noRecords');
+    // Searching a tag answers "how much has this cost?" — sum it over every matching
+    // record, not just the page shown. A missing rate shows the count without a sum.
+    const exTotal = expenseSearchTotal(historyQuery);
+    const exEl = document.getElementById('historyExpenseTotal');
+    exEl.hidden = !exTotal.count;
+    if (exTotal.count) {
+      exEl.textContent = exTotal.missed ? t('expenseSearchCount', exTotal.count)
+        : t('expenseSearchTotal', exTotal.count, fmt(exTotal.total, state.displayCurrency));
+    }
     document.getElementById('historyTable').style.display = hasRows ? '' : 'none';
 
     // Footer: show count + a "load more" button only when rows are hidden below the cap.
@@ -6445,7 +6480,6 @@
     setText('historyMoreBtn', t('loadMore'));
     setText('accountSettingsHint', t('accountSettingsHint'));
     setText('entryHint', t('entryHint'));
-    setText('expenseSummary', t('expenseSummary'));
     setText('expenseHint', t('expenseHint'));
     setText('addExpenseBtn', t('expenseAdd'));
     setText('addAccountBtn', t('add'));

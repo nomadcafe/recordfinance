@@ -1,4 +1,4 @@
-const CACHE = 'record-v24';
+const CACHE = 'record-v25';
 const ASSETS = [
   './',
   './index.html',
