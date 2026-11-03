@@ -1057,6 +1057,14 @@
   }
   .add-row-btn { margin-top: 10px; padding: 8px 14px; font-size: 13px; }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .expense-section { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
+  .expense-section > summary { cursor: pointer; font-size: 13px; color: var(--muted); user-select: none; }
+  .expense-section > summary:hover { color: var(--text); }
+  .expense-section[open] > summary { margin-bottom: 8px; }
+  .expense-hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+  .expense-rows { display: flex; flex-direction: column; gap: 8px; }
+  .expense-rows .balance-row .exp-label { flex: 1.4; min-width: 150px; }
+  .split-warn { display: block; font-size: 12px; color: var(--muted-strong); margin-top: 4px; }
   .err { color: var(--danger); font-size: 13px; }
   .inflow-line { font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
   .inflow-line .arrow { color: var(--muted); margin: 0 4px; }
@@ -1303,6 +1311,7 @@
     .balance-grid { grid-template-columns: 1fr; gap: 10px; }
     .balance-row { flex-wrap: wrap; gap: 6px; }
     .balance-row .acc-sel { flex: 1 1 100%; min-width: 0; }
+    .expense-rows .balance-row .exp-label { flex: 1 1 100%; min-width: 0; }
     .balance-row .amt-input { flex: 1; }
     .balance-row .cur-sel { width: 128px; }
     .row .field { min-width: 100%; }
@@ -1799,6 +1808,13 @@
         <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
         <button type="button" class="ghost add-row-btn" id="transferBtn" title="">⇄ 转账</button>
       </div>
+      <details class="expense-section" id="expenseSection">
+        <summary id="expenseSummary">大额支出（可选）</summary>
+        <div class="expense-hint" id="expenseHint"></div>
+        <div class="expense-rows" id="expenseRows"></div>
+        <button type="button" class="ghost add-row-btn" id="addExpenseBtn">+ 添加一项</button>
+        <datalist id="expenseLabelList"></datalist>
+      </details>
       <div class="hint hint--note hint--warn" id="legacyInflowNotice" hidden></div>
       <div class="hint hint--note" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
       <div class="actions">
@@ -2109,6 +2125,7 @@
   let backupBannerDismissed = false;
   let editingId = null;
   let entryRows = []; // [{ rowId, accountId, amount, currency }]
+  let entryExpenses = []; // [{ rowId, label, amount, currency }] — the form's tagged-spending rows
   let viewingAccountId = null;
   let drillChart = null;
   const inflight = new Set();
@@ -2244,6 +2261,10 @@
       // Backfill from createdAt for records written before this field existed.
       if (typeof s.updatedAt !== 'number') s.updatedAt = typeof s.createdAt === 'number' ? s.createdAt : 0;
       if (typeof s.note !== 'string') s.note = s.note == null ? '' : String(s.note);
+      if (s.expenses !== undefined) {
+        const ex = sanitizeExpenses(s.expenses);
+        if (ex.length) s.expenses = ex; else delete s.expenses;
+      }
       if (!s.updates || typeof s.updates !== 'object') s.updates = {};
       Object.keys(s.updates).forEach(accId => {
         const v = s.updates[accId];
@@ -2578,6 +2599,52 @@
   // add up to the headline. Windows containing one get no breakdown at all.
   function windowHasUnattributedInflow(startDateInclusive) {
     return sortedSnapshots().some(s => s.date >= startDateInclusive && s.inflow);
+  }
+
+  // ===== Tagged spending =====
+  // A record may name a few large outflows since the previous one ("rent 8,000"). They
+  // are annotations on the residual, never inputs to it: balances, inflow, the split and
+  // its reconciliation are computed exactly as if they weren't there. The app still
+  // learns spending from balances; these only say what some of it was.
+  //
+  // Stored as positive amounts in the currency they were paid in. Anything else —
+  // non-positive, non-numeric, unknown currency — is dropped, because this field also
+  // arrives through import and sync-pull.
+  // (Limits inline rather than in a const: migrate() can run before a const further
+  // down the script has been initialised.)
+  function sanitizeExpenses(list) {
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    for (const e of list) {
+      if (!e || typeof e !== 'object') continue;
+      const amount = Number(e.amount);
+      if (!isFinite(amount) || amount <= 0 || !CUR_CODES.includes(e.currency)) continue;
+      const label = typeof e.label === 'string' ? e.label.trim().slice(0, 40) : '';
+      out.push({ label, amount, currency: e.currency });
+    }
+    return out;
+  }
+
+  // Tagged spending from `startDateInclusive` onward, in display currency at each
+  // record's own date — the same window and the same rates the split uses, so the two
+  // can be set side by side. Grouped by label, largest first. `missed` means at least
+  // one item could not be converted; callers show nothing rather than a partial sum.
+  function expensesInWindow(startDateInclusive) {
+    const byLabel = new Map();
+    let total = 0, has = false, missed = false;
+    for (const s of state.snapshots) {
+      if (s.date < startDateInclusive || !Array.isArray(s.expenses)) continue;
+      const rates = state.rates[s.date];
+      for (const e of s.expenses) {
+        const c = convert(e.amount, e.currency, state.displayCurrency, rates);
+        if (c == null) { missed = true; continue; }
+        total += c; has = true;
+        byLabel.set(e.label, (byLabel.get(e.label) || 0) + c);
+      }
+    }
+    const items = [...byLabel].map(([label, amount]) => ({ label, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    return { total, has, missed, items };
   }
 
   // Split a window's change into the three things that can move a balance: money you
@@ -3065,6 +3132,7 @@
     const usedCount = entryRows.filter(r => r.accountId).length;
     addBtn.disabled = usedCount >= state.accounts.length;
     addBtn.textContent = t('addAnotherAccount');
+    renderExpenseRows();
   }
 
   function buildEntryRow(row) {
@@ -3190,6 +3258,74 @@
     group.appendChild(inflowMini);
 
     return group;
+  }
+
+  // ===== Tagged-spending rows in the entry form =====
+  function newExpenseRow() {
+    return { rowId: crypto.randomUUID(), label: '', amount: '', currency: state.displayCurrency };
+  }
+  // Past labels, most-used first, so "rent" is typed once and picked thereafter.
+  function expenseLabelSuggestions() {
+    const n = new Map();
+    state.snapshots.forEach(s => (s.expenses || []).forEach(e => {
+      if (e.label) n.set(e.label, (n.get(e.label) || 0) + 1);
+    }));
+    return [...n].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([l]) => l);
+  }
+  function renderExpenseRows() {
+    const wrap = document.getElementById('expenseRows');
+    wrap.innerHTML = '';
+    document.getElementById('expenseLabelList').innerHTML =
+      expenseLabelSuggestions().map(l => `<option value="${escapeHtml(l)}"></option>`).join('');
+    entryExpenses.forEach(row => {
+      const el = document.createElement('div');
+      el.className = 'balance-row';
+      el.innerHTML = `
+        <input type="text" class="exp-label" list="expenseLabelList" maxlength="40" placeholder="${escapeHtml(t('expenseLabelPh'))}" aria-label="${escapeHtml(t('expenseLabelPh'))}">
+        <input type="number" inputmode="decimal" step="any" min="0" class="amt-input" placeholder="0" aria-label="${escapeHtml(t('expenseAmount'))}">
+        <select class="cur-sel"></select>
+        <button type="button" class="row-remove" title="${t('remove')}" aria-label="${t('remove')}">×</button>
+      `;
+      const label = el.querySelector('.exp-label'), amt = el.querySelector('.amt-input');
+      label.value = row.label; amt.value = row.amount;
+      populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
+      label.addEventListener('input', e => { row.label = e.target.value; });
+      amt.addEventListener('input', e => { row.amount = e.target.value; });
+      el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
+      el.querySelector('.row-remove').addEventListener('click', () => {
+        entryExpenses = entryExpenses.filter(r => r !== row);
+        renderExpenseRows();
+      });
+      wrap.appendChild(el);
+    });
+  }
+  // The form's rows -> the stored list. A blank amount is an unused row, not an error;
+  // a non-positive one is refused rather than silently dropped (see the submit handler).
+  function collectExpenses() {
+    const out = [], bad = [];
+    entryExpenses.forEach(r => {
+      if (String(r.amount).trim() === '') return;
+      const amount = parseFloat(r.amount);
+      if (!(amount > 0)) { bad.push(r); return; }
+      out.push({ label: r.label.trim().slice(0, 40), amount, currency: r.currency });
+    });
+    return { list: out, bad };
+  }
+  // Open the section with a blank row the first time, so the click that reveals it is
+  // also the click that starts the first item.
+  document.getElementById('expenseSection').addEventListener('toggle', e => {
+    if (e.target.open && !entryExpenses.length) { entryExpenses = [newExpenseRow()]; renderExpenseRows(); }
+  });
+  document.getElementById('addExpenseBtn').addEventListener('click', () => {
+    entryExpenses.push(newExpenseRow());
+    renderExpenseRows();
+    const inputs = document.querySelectorAll('#expenseRows .exp-label');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  // Put the form's spending section back to match `entryExpenses` (after save, edit, cancel).
+  function resetExpenseSection() {
+    document.getElementById('expenseSection').open = entryExpenses.length > 0;
+    renderExpenseRows();
   }
 
   document.getElementById('addRowBtn').addEventListener('click', () => {
@@ -3384,10 +3520,19 @@
       alert(t('alertNoBalance'));
       return;
     }
+    const expenses = collectExpenses();
+    if (expenses.bad.length) {
+      alert(t('expenseBadAmount'));
+      return;
+    }
+    const setExpenses = snap => {
+      if (expenses.list.length) snap.expenses = expenses.list; else delete snap.expenses;
+    };
     if (editingId) {
       const snap = state.snapshots.find(s => s.id === editingId);
       if (snap) {
         snap.date = date; snap.note = note; snap.updates = updates; snap.updatedAt = Date.now();
+        setExpenses(snap);
         // Re-saving through this form restates the whole record, and the form has no
         // slot for the legacy whole-record inflow — so it goes, or it would be added
         // on top of the per-row values the user just confirmed. startEdit() showed
@@ -3399,10 +3544,13 @@
     } else {
       const now = Date.now();
       const snap = { id: crypto.randomUUID(), date, updates, note, createdAt: now, updatedAt: now };
+      setExpenses(snap);
       state.snapshots.push(snap);
     }
     markDirty();
     entryRows = [newEmptyRow()];
+    entryExpenses = [];
+    resetExpenseSection();
     document.getElementById('note').value = '';
     document.getElementById('date').value = localDateStr();
     await ensureRates([date]);
@@ -3435,6 +3583,10 @@
       };
     });
     if (entryRows.length === 0) entryRows = [newEmptyRow()];
+    entryExpenses = (snap.expenses || []).map(e => ({
+      rowId: crypto.randomUUID(), label: e.label, amount: String(e.amount), currency: e.currency,
+    }));
+    resetExpenseSection();
     // This record still carries the old whole-record inflow, a field with no input left
     // in this form — so saving replaces it with the per-row values below. Say so, with
     // the figure, rather than dropping a number the user can no longer see. (Leaving it
@@ -3457,6 +3609,8 @@
     editingId = null;
     document.getElementById('legacyInflowNotice').hidden = true;
     entryRows = [newEmptyRow()];
+    entryExpenses = [];
+    resetExpenseSection();
     document.getElementById('note').value = '';
     document.getElementById('date').value = localDateStr();
     renderAll();
@@ -3543,6 +3697,7 @@
       reversed = reversed.filter(({ snapshot }) => {
         if (snapshot.note && snapshot.note.toLowerCase().includes(historyQuery)) return true;
         if (snapshot.date.includes(historyQuery)) return true;
+        if ((snapshot.expenses || []).some(e => e.label.toLowerCase().includes(historyQuery))) return true;
         for (const accId of Object.keys(snapshot.updates)) {
           const acc = accountById(accId);
           if (acc && acc.name.toLowerCase().includes(historyQuery)) return true;
@@ -3567,6 +3722,12 @@
       const inf = snapshotInflowInDisplay(snapshot);
       if (inf.has) {
         inflowLine = `<div class="inflow-line">${t('inflow')} ${fmtSigned(inf.total, state.displayCurrency)}</div>`;
+      }
+      // Tagged spending in the currency it was paid in — what the user typed, not a
+      // conversion of it.
+      if (snapshot.expenses && snapshot.expenses.length) {
+        inflowLine += `<div class="inflow-line">${t('expenseChip')} ` + snapshot.expenses.map(e =>
+          `${e.label ? escapeHtml(e.label) : t('expenseUnlabeled')} ${fmt(e.amount, e.currency)}`).join(' · ') + `</div>`;
       }
       tr.innerHTML = `
         <td>${escapeHtml(snapshot.date)}</td>
@@ -4103,6 +4264,18 @@
     const s = v == null ? '' : String(v);
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
+  // One record's tagged spending in display currency, or blank when it has none or any
+  // item lacks a rate (a short total would read as the real one).
+  function expenseCsvTotal(snapshot, round) {
+    if (!snapshot.expenses || !snapshot.expenses.length) return '';
+    let total = 0;
+    for (const e of snapshot.expenses) {
+      const c = convert(e.amount, e.currency, state.displayCurrency, state.rates[snapshot.date]);
+      if (c == null) return '';
+      total += c;
+    }
+    return round(total);
+  }
   function doExportCsv() {
     const tl = computeTimeline();
     const accs = state.accounts;
@@ -4110,7 +4283,7 @@
     const round = n => n == null ? '' : (decimalsFor(dc) === 0 ? Math.round(n) : Math.round(n * 100) / 100);
     const header = ['Date',
       ...accs.map(a => a.name + (a.type === 'liability' ? ' (−)' : '')),
-      `Net total (${dc})`, `Net inflow (${dc})`, 'Note'];
+      `Net total (${dc})`, `Net inflow (${dc})`, `Tagged spending (${dc})`, 'Tagged items', 'Note'];
     const lines = [header.map(csvCell).join(',')];
     tl.forEach(entry => {
       const inf = snapshotInflowInDisplay(entry.snapshot);
@@ -4118,6 +4291,8 @@
         ...accs.map(a => { const b = entry.balances[a.id]; return b && b.converted != null ? round(b.converted) : ''; }),
         entry.total != null ? round(entry.total) : '',
         inf.has ? round(inf.total) : '',
+        expenseCsvTotal(entry.snapshot, round),
+        (entry.snapshot.expenses || []).map(e => `${e.label} ${e.amount} ${e.currency}`).join('; '),
         entry.snapshot.note || ''];
       lines.push(row.map(csvCell).join(','));
     });
@@ -4515,7 +4690,8 @@
     const pct = baselineVal !== 0 ? delta / baselineVal * 100 : null;
     // Three-way split when every account reconciles; the flat inflow total otherwise.
     const split = decomposePeriod(startDateInclusive, delta);
-    return { delta, pct, inflowTotal, inflowHas, split };
+    const expenses = expensesInWindow(startDateInclusive);
+    return { delta, pct, inflowTotal, inflowHas, split, expenses };
   }
 
   function fmtSigned(n, currency) {
@@ -4536,17 +4712,37 @@
   function renderSplitChips(info, kindFilter) {
     const chip = (label, v) => `<span class="nb">${label} ${fmtSigned(v, state.displayCurrency)}</span>`;
     const parts = [];
-    if (info.split) {
+    // Tagged spending belongs to a whole record, not to an account, so a drilldown
+    // (which passes kindFilter) never shows it. An item without a rate shows nothing
+    // rather than a sum that is quietly short.
+    const ex = (!kindFilter && info.expenses && info.expenses.has && !info.expenses.missed
+      && !isNegligible(info.expenses.total)) ? info.expenses : null;
+    let note = '';
+    if (info.split && info.split.anyInflow) {
       const s = info.split;
-      // Nothing was recorded as inflow, so the residual is just the whole change under
-      // another name — and calling it a market move would be a guess, not a reading.
-      if (!s.anyInflow) return '';
       // A month where every bucket rounds to zero (a transfer in and straight back out,
       // say) is fully described by the headline. Chips reading "0 · 0" only add doubt.
-      if (isNegligible(s.inflow) && isNegligible(s.market) && isNegligible(s.untracked)) return '';
-      parts.push(chip(t('inflow'), s.inflow));
-      if (kindFilter !== 'untracked' && !isNegligible(s.market)) parts.push(chip(t('gain'), s.market));
-      if (kindFilter !== 'market' && !isNegligible(s.untracked)) parts.push(chip(t('untracked'), s.untracked));
+      // (Without any recorded inflow the residual is just the whole change under another
+      // name — calling it a market move would be a guess — so that case shows no split.)
+      if (!(isNegligible(s.inflow) && isNegligible(s.market) && isNegligible(s.untracked))) {
+        parts.push(chip(t('inflow'), s.inflow));
+        if (kindFilter !== 'untracked' && !isNegligible(s.market)) parts.push(chip(t('gain'), s.market));
+        // Tags subdivide the unrecorded bucket only on the net basis: on total assets a
+        // card-paid bill never touches the residual, so "the rest" would be meaningless.
+        if (ex && state.basis !== 'assets') {
+          const rest = s.untracked + ex.total;
+          parts.push(`<span class="nb">${t('untracked')} ${fmtSigned(s.untracked, state.displayCurrency)}</span>` +
+            ` (${expenseItemsHtml(ex, isNegligible(rest) ? null : rest)})`);
+          // More tagged than went missing: money arrived that was never recorded as
+          // inflow — usually salary. Say so instead of printing a positive "rest" as if
+          // it were a refund.
+          if (rest > 0 && !isNegligible(rest)) note = `<span class="split-warn">${t('expenseOverTagged')}</span>`;
+          return `<span class="split">${parts.join(' · ')}</span>${note}`;
+        }
+        if (kindFilter !== 'market' && !isNegligible(s.untracked)) parts.push(chip(t('untracked'), s.untracked));
+      }
+    } else if (info.split) {
+      // Split exists but no inflow was recorded: say nothing about the residual.
     } else if (info.inflowHas) {
       // No attributable split (a legacy whole-record inflow, or a missing rate). Show
       // what is known and label the rest neutrally rather than guessing market vs spend.
@@ -4554,8 +4750,27 @@
       const rest = info.delta - info.inflowTotal;
       if (!isNegligible(rest)) parts.push(chip(t('residualOther'), rest));
     }
+    // No unrecorded bucket to hang the tags on: list them on their own, without a "rest".
+    if (ex) parts.push(`<span class="nb">${t('expenseChip')} ${fmtSigned(-ex.total, state.displayCurrency)}</span>` +
+      ` (${expenseItemsHtml(ex, null)})`);
     if (!parts.length) return '';
     return `<span class="split">${parts.join(' · ')}</span>`;
+  }
+
+  // "rent −8,000 · travel −5,000 · rest −2,000". The three largest labels by name; any
+  // further ones fold into a single "N more" so a busy month doesn't wrap into a list.
+  // Each item is unbreakable; the list between them may wrap, or a narrow column would
+  // push it across its neighbour.
+  function expenseItemsHtml(ex, rest) {
+    const dc = state.displayCurrency;
+    const SHOWN = 3;
+    const item = (label, v) => `<span class="nb">${label} ${fmtSigned(v, dc)}</span>`;
+    const items = ex.items.slice(0, SHOWN).map(i =>
+      item(i.label ? escapeHtml(i.label) : t('expenseUnlabeled'), -i.amount));
+    const more = ex.items.slice(SHOWN);
+    if (more.length) items.push(item(t('expenseMore', more.length), -more.reduce((a, i) => a + i.amount, 0)));
+    if (rest != null) items.push(item(t('residualOther'), rest));
+    return items.join(' · ');
   }
 
   // ===== Capital efficiency =====
@@ -6215,6 +6430,9 @@
     setText('historyMoreBtn', t('loadMore'));
     setText('accountSettingsHint', t('accountSettingsHint'));
     setText('entryHint', t('entryHint'));
+    setText('expenseSummary', t('expenseSummary'));
+    setText('expenseHint', t('expenseHint'));
+    setText('addExpenseBtn', t('expenseAdd'));
     setText('addAccountBtn', t('add'));
     setText('exportBtn', t('export'));
     setText('importBtn', t('import'));

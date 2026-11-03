@@ -49,7 +49,8 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow',
+  'expenseItemsHtml',
 ];
 
 /* ---------- stub globals the extracted code closes over ---------- */
@@ -601,6 +602,121 @@ sec('Chart palette resolves per theme');
   ck('and so does every colour older versions handed out',
      ['#4ade80','#60a5fa','#f472b6','#fbbf24','#a78bfa','#fb7185','#34d399','#fb923c','#22d3ee','#facc15']
        .every(h => app.adaptColor(h) !== h));
+}
+
+sec('Tagged spending explains the unrecorded bucket');
+{
+  // Salary recorded as inflow, so the bank's residual is what was spent: 20,000 in,
+  // balance up 7,000 -> 13,000 went out. Two of those items are tagged.
+  const mk = expenses => load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 107000, currency: 'CNY', inflow: 20000 } }, expenses ? { expenses } : {}),
+  ]);
+  mk(null);
+  const bare = app.computePeriodChange('2026-10-01');
+  mk([{ label: '房租', amount: 8000, currency: 'CNY' }, { label: '旅行', amount: 500, currency: 'USD' }]);
+  const r = app.computePeriodChange('2026-10-01');
+  ck('tags never move the split', JSON.stringify(r.split) === JSON.stringify(bare.split), [r.split, bare.split]);
+  ck('tagged total is converted at the record date', near(r.expenses.total, 8000 + 3500), r.expenses);
+  ck('items are grouped and largest first', r.expenses.items[0].label === '房租' && near(r.expenses.items[1].amount, 3500));
+  const html = strip(app.renderSplitChips(r));
+  ck('the unrecorded chip lists the tags and the rest', /未记账 −¥13,000/.test(html) && /房租 −¥8,000/.test(html) && /其余 −¥1,500/.test(html), html);
+  ck('no over-tag warning when the tags fit', !/工资/.test(html), html);
+
+  // Same label in two records sums into one item.
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-05', { b: { amount: 95000, currency: 'CNY' } }, { expenses: [{ label: '房租', amount: 4000, currency: 'CNY' }] }),
+    snap('2026-10-20', { b: { amount: 90000, currency: 'CNY' } }, { expenses: [{ label: '房租', amount: 4000, currency: 'CNY' }] }),
+  ]);
+  const two = app.computePeriodChange('2026-10-01').expenses;
+  ck('one label across two records is one item', two.items.length === 1 && near(two.items[0].amount, 8000), two);
+  ck('a record before the window is not counted', near(app.computePeriodChange('2026-10-10').expenses.total, 4000));
+}
+{
+  // Salary NOT recorded as inflow: balance up, yet 8,000 is tagged. The rest comes out
+  // positive, and that has to be explained rather than shown as a mystery refund.
+  load([A('b', 'savings'), A('s', 'investment')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' }, s: { amount: 50000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 104000, currency: 'CNY' }, s: { amount: 60000, currency: 'CNY', inflow: 10000 } },
+      { expenses: [{ label: '房租', amount: 8000, currency: 'CNY' }] }),
+  ]);
+  const html = app.renderSplitChips(app.computePeriodChange('2026-10-01'));
+  ck('over-tagging shows a positive rest', /其余 \+¥12,000/.test(strip(html)), strip(html));
+  ck('and says why', /split-warn/.test(html) && /工资/.test(html), strip(html));
+}
+{
+  // No inflow anywhere: the split stays silent, but the tags still show on their own.
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 90000, currency: 'CNY' } }, { expenses: [{ label: '房租', amount: 8000, currency: 'CNY' }] }),
+  ]);
+  const html = strip(app.renderSplitChips(app.computePeriodChange('2026-10-01')));
+  ck('tags show without an inflow split', /支出 −¥8,000/.test(html) && !/未记账/.test(html) && !/其余/.test(html), html);
+  ck('a drilldown never shows record-level tags',
+     !/房租/.test(app.renderSplitChips(app.computePeriodChange('2026-10-01'), 'untracked')));
+}
+{
+  // An item in a currency with no rate for its date: show no tags rather than a short sum.
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 107000, currency: 'CNY', inflow: 20000 } },
+      { expenses: [{ label: 'x', amount: 10, currency: 'EUR' }, { label: '房租', amount: 8000, currency: 'CNY' }] }),
+  ]);
+  const r = app.computePeriodChange('2026-10-01');
+  ck('an unconvertible item is flagged', r.expenses.missed);
+  ck('and suppresses the tag breakdown', !/房租/.test(app.renderSplitChips(r)));
+}
+{
+  // More than three labels fold into "N more"; HTML in a label is escaped.
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 80000, currency: 'CNY', inflow: 1 } }, { expenses: [
+      { label: 'a', amount: 4000, currency: 'CNY' }, { label: 'b', amount: 3000, currency: 'CNY' },
+      { label: 'c', amount: 2000, currency: 'CNY' }, { label: 'd', amount: 1000, currency: 'CNY' },
+      { label: '<img>', amount: 500, currency: 'CNY' },
+    ] }),
+  ]);
+  const html = app.renderSplitChips(app.computePeriodChange('2026-10-01'));
+  ck('labels past the third fold into one item', /另 2 项 −¥1,500/.test(strip(html)), strip(html));
+  ck('a label is never raw HTML', !/<img>/.test(html));
+}
+{
+  // Total-assets basis: a card-paid bill never reaches the asset residual, so no "rest".
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 107000, currency: 'CNY', inflow: 20000 } }, { expenses: [{ label: '房租', amount: 8000, currency: 'CNY' }] }),
+  ], { basis: 'assets' });
+  const html = strip(app.renderSplitChips(app.computePeriodChange('2026-10-01')));
+  app.state.basis = undefined;  // a fresh state before migrate() has filled it in
+  ck('an unset basis counts as net worth', /其余/.test(strip(app.renderSplitChips(app.computePeriodChange('2026-10-01')))));
+  app.state.basis = 'assets';
+  ck('on total assets the tags stand alone', /未记账 −¥13,000/.test(html) && /支出 −¥8,000/.test(html) && !/其余/.test(html), html);
+}
+
+sec('Tagged spending survives import');
+{
+  const data = { accounts: [A('b', 'savings')], snapshots: [
+    snap('2026-10-01', { b: { amount: 1, currency: 'CNY' } }, { expenses: [
+      { label: '  房租  ', amount: '8000', currency: 'CNY' },
+      { label: 'neg', amount: -5, currency: 'CNY' },
+      { label: 'zero', amount: 0, currency: 'CNY' },
+      { label: 'nan', amount: 'abc', currency: 'CNY' },
+      { label: 'cur', amount: 5, currency: 'XXX' },
+      null,
+      { amount: 3, currency: 'USD' },
+      { label: 'x'.repeat(100), amount: 1, currency: 'CNY' },
+    ] }),
+    snap('2026-10-02', { b: { amount: 1, currency: 'CNY' } }, { expenses: [{ amount: -1, currency: 'CNY' }] }),
+    snap('2026-10-03', { b: { amount: 1, currency: 'CNY' } }, { expenses: 'garbage' }),
+  ] };
+  const out = app.migrate(data);
+  const ex = out.snapshots[0].expenses;
+  ck('valid items are kept, invalid ones dropped', ex.length === 3, ex);
+  ck('labels are trimmed and amounts made numeric', ex[0].label === '房租' && ex[0].amount === 8000, ex[0]);
+  ck('a missing label becomes empty', ex[1].label === '' && ex[1].currency === 'USD', ex[1]);
+  ck('an overlong label is capped', ex[2].label.length === 40);
+  ck('a list with nothing valid is removed', !('expenses' in out.snapshots[1]) && !('expenses' in out.snapshots[2]));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
