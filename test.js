@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow',
   'expenseItemsHtml',
 ];
 
@@ -799,6 +799,34 @@ sec('Savings rate');
   ]);
   ck('no rate when income is not positive', app.savingsRate(app.monthlySpending(1, '2026-10-31')) === null);
   ck('no rate with no qualifying month', app.savingsRate([{ spend: null, income: null }]) === null);
+}
+
+sec('Months that need inflow');
+{
+  load([A('b', 'savings'), A('s', 'investment')], [
+    snap('2026-08-31', { b: { amount: 100000, currency: 'CNY' }, s: { amount: 50000, currency: 'CNY' } }),
+    // September: only a transfer between own accounts. Salary went in but wasn't entered.
+    snap('2026-09-30', { b: { amount: 102000, currency: 'CNY', inflow: -5000 }, s: { amount: 55000, currency: 'CNY', inflow: 5000 } }, { id: 'sep' }),
+    snap('2026-10-31', { b: { amount: 110000, currency: 'CNY', inflow: 12000 } }, { id: 'oct' }),
+  ]);
+  const [sep, oct] = app.monthlySpending(2, '2026-10-31');
+  ck('a transfer-only month is blank, not negative spending', sep.spend === null && sep.gap === 'noInflow', sep);
+  ck('a month with salary entered reads normally', near(oct.spend, 4000) && oct.gap === null, oct);
+  ck('a transfer does not count as the month having income', !app.monthHasIncome('2026-09-15'));
+  ck('salary does', app.monthHasIncome('2026-10-02'));
+  ck('the record being edited does not count for itself', !app.monthHasIncome('2026-10-02', 'oct'));
+
+  app.rows = [{ accountId: 'b', amount: '1', currency: 'CNY', inflow: '' }];
+  ck('an empty inflow box is no inflow', !app.formHasInflow());
+  app.rows = [{ accountId: 'b', amount: '1', currency: 'CNY', inflow: '0' }];
+  ck('nor is a zero', !app.formHasInflow());
+  app.rows = [{ accountId: 'b', amount: '1', currency: 'CNY', inflow: '12000' }];
+  ck('a typed inflow counts', app.formHasInflow());
+  app.rows = [{ accountId: 'w', currency: 'USD', amounts: { USD: '1' }, inflows: { USD: '', EUR: '300' } }];
+  ck('so does one in a multi-currency pocket', app.formHasInflow());
+  app.rows = [{ accountId: '', amount: '', currency: 'CNY', inflow: '500' }];
+  ck('a row with no account chosen does not', !app.formHasInflow());
+  app.rows = [];
 }
 
 sec('Tagged spending survives import');

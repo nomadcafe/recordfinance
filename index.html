@@ -1265,6 +1265,8 @@
   .spend-avg { display: flex; flex-wrap: wrap; gap: 6px 28px; }
   .spend-avg strong { font-size: 20px; color: var(--text); font-weight: 600; margin-right: 6px; }
   .spend-chart { position: relative; height: 220px; }
+  .spend-gaps { font-size: 13px; color: var(--muted-strong); margin-top: 12px; }
+  .inflow-reminder { margin-top: 10px; }
   .eff-headline { display: flex; flex-wrap: wrap; gap: 18px 36px; }
   .eff-stat { min-width: 132px; }
   .eff-stat .eff-k {
@@ -1824,6 +1826,7 @@
         <datalist id="expenseLabelList"></datalist>
       </details>
       <div class="hint hint--note hint--warn" id="legacyInflowNotice" hidden></div>
+      <div class="hint hint--note inflow-reminder" id="inflowReminder" hidden></div>
       <div class="hint hint--note" id="entryHint">选择要更新的账户填入新余额。未选的账户沿用最近一次的值。"净入金" = 这次余额变化里有多少是你自己存进/取出的（不算涨跌），用于把存款和市场波动分开。汇率按记录日。</div>
       <div class="actions">
         <button type="submit" id="saveBtn" disabled>保存</button>
@@ -1888,6 +1891,7 @@
     </div>
     <div class="spend-avg" id="spendingAvg"></div>
     <div class="spend-chart"><canvas id="spendingChart" role="img"></canvas></div>
+    <div class="spend-gaps" id="spendingGaps" hidden></div>
     <div class="hint" id="spendingNote"></div>
   </div>
 
@@ -3175,6 +3179,7 @@
     addBtn.disabled = usedCount >= state.accounts.length;
     addBtn.textContent = t('addAnotherAccount');
     renderExpenseRows();
+    updateInflowReminder();
   }
 
   function buildEntryRow(row) {
@@ -3604,6 +3609,7 @@
     document.getElementById('date').value = localDateStr();
     await ensureRates([date]);
     renderAll();
+    updateInflowReminder();
     checkMilestones();
     maybeConfetti();
   });
@@ -3651,6 +3657,7 @@
     renderAll();
     document.getElementById('date').value = snap.date;
     document.getElementById('note').value = snap.note || '';
+    updateInflowReminder();
     document.getElementById('entryPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -3663,8 +3670,12 @@
     document.getElementById('note').value = '';
     document.getElementById('date').value = localDateStr();
     renderAll();
+    updateInflowReminder();
   }
   document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+  // Typing a date or an inflow anywhere in the form re-checks the reminder; `input`
+  // bubbles, so one listener covers every row the form builds.
+  document.getElementById('entryForm').addEventListener('input', updateInflowReminder);
 
   // ===== Summary =====
   function renderSummary() {
@@ -5018,7 +5029,9 @@
       const end = month + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
       // `income` is the month's recorded inflow — salary in, net of money taken out to
       // somewhere untracked — without any new account's opening balance.
-      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null };
+      // `gap` says why a blank month is blank: 'noInflow' is the one the user can fix
+      // (records exist, but nothing says what came in), so the panel lists those.
+      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null, gap: null };
       out.push(row);
       let before = null, last = null;
       for (const e of tl) {
@@ -5026,13 +5039,17 @@
         else if (e.snapshot.date <= end) last = e;
         else break;
       }
-      if (!before || !last) continue;
+      if (!before || !last) { row.gap = 'noRecord'; continue; }
       const a = totalForBasis(before), b = totalForBasis(last);
-      if (a == null || b == null) continue;
+      if (a == null || b == null) { row.gap = 'unreadable'; continue; }
       const split = decomposePeriod(start, b - a, end);
-      if (!split || !split.anyInflow) continue;
+      if (!split) { row.gap = 'unreadable'; continue; }
+      // Inflow that nets to nothing — a transfer between your own accounts — says no
+      // more about salary than no inflow at all, and would book it as negative spending.
+      const income = split.inflow - split.opened;
+      if (!split.anyInflow || isNegligible(income)) { row.gap = 'noInflow'; continue; }
       row.spend = -split.untracked;
-      row.income = split.inflow - split.opened;
+      row.income = income;
       row.since = before.snapshot.date;
       const ex = expensesInWindow(start, end);
       row.tagged = ex.total;
@@ -5079,6 +5096,13 @@
       `<span class="spend-stat"><strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', known.length))}</span>` +
       (sr ? `<span class="spend-stat"><strong>${pct(sr.rate)}</strong>${escapeHtml(t('saveRate', fmt(sr.income - sr.spend, dc), fmt(sr.income, dc)))}</span>` : '');
     document.getElementById('spendingNote').textContent = t('spendNote');
+    // Finished months that are blank only for want of inflow — the gap the user can
+    // close. The current month is left out: its salary may simply not have arrived.
+    const thisMonth = rows[rows.length - 1].month;
+    const fixable = rows.filter(r => r.gap === 'noInflow' && r.month !== thisMonth).map(r => r.month.slice(2).replace('-', '/'));
+    const gapsEl = document.getElementById('spendingGaps');
+    gapsEl.hidden = !fixable.length;
+    if (fixable.length) gapsEl.textContent = t('spendGaps', fixable.join(t('listSep')), fixable.length);
 
     // Tagged part sits at the base, the untagged rest on top. Tags can exceed what went
     // missing (income not entered as inflow), so the base is capped at the bar; a month
@@ -5167,6 +5191,30 @@
         },
       },
     });
+  }
+
+  // Does the month of `dateStr` already say what came in? True if any other record in
+  // that month (the one being edited is the form's own) carries positive net inflow.
+  function monthHasIncome(dateStr, exceptId) {
+    const month = dateStr.slice(0, 7);
+    return state.snapshots.some(s => s.id !== exceptId && s.date.slice(0, 7) === month &&
+      snapshotInflowInDisplay(s).total > 0);
+  }
+  // Has the form been given any inflow? Any non-zero figure counts: the reminder is a
+  // nudge, and second-guessing a value the user did type would only be noise.
+  function formHasInflow() {
+    const nz = v => v != null && v !== '' && parseFloat(v) !== 0 && !isNaN(parseFloat(v));
+    return entryRows.some(r => r.accountId && (nz(r.inflow) || Object.values(r.inflows || {}).some(nz)));
+  }
+  // A month with records but no inflow is the one thing that blanks the spending chart
+  // and the savings rate. Say so while the record is being written, not afterwards —
+  // and only to someone who uses inflow at all (the one-time inflowNudge covers the rest).
+  function updateInflowReminder() {
+    const el = document.getElementById('inflowReminder');
+    const date = document.getElementById('date').value;
+    const show = !!date && hasAnyInflowData() && !formHasInflow() && !monthHasIncome(date, editingId);
+    el.hidden = !show;
+    if (show) el.textContent = t('inflowReminder');
   }
 
   function hasAnyInflowData() {
@@ -5515,6 +5563,7 @@
       if (kind === 'today') dateEl.value = todayStr();
       else if (kind === 'monthEnd') dateEl.value = monthEndStr();
       else if (kind === 'lastMonthEnd') dateEl.value = lastMonthEndStr();
+      updateInflowReminder();
     });
   });
 
