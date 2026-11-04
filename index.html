@@ -306,6 +306,8 @@
   body.privacy-blur .eff-money,
   body.privacy-blur .inflow-line,
   body.privacy-blur .history-expense-total,
+  body.privacy-blur .spend-avg,
+  body.privacy-blur .spend-chart,
   body.privacy-blur td.num,
   body.privacy-blur .goal-progress-text,
   body.privacy-blur .goal-bar,
@@ -1259,6 +1261,9 @@
   /* Capital-efficiency panel. Headline tiles carry the comparison; the two grouped
      lists below answer "which account", reusing the breakdown legend's row shape. */
   .eff-window { font-size: 12px; color: var(--muted); }
+  .spend-avg { font-size: 13px; color: var(--muted); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+  .spend-avg strong { font-size: 20px; color: var(--text); font-weight: 600; margin-right: 6px; }
+  .spend-chart { position: relative; height: 220px; }
   .eff-headline { display: flex; flex-wrap: wrap; gap: 18px 36px; }
   .eff-stat { min-width: 132px; }
   .eff-stat .eff-k {
@@ -1875,6 +1880,16 @@
     <div class="hint" id="efficiencyNote"></div>
   </div>
 
+  <div class="panel" id="spendingPanel" hidden>
+    <div class="toolbar">
+      <h2 id="spendingTitle">每月支出</h2>
+      <span class="eff-window" id="spendingWindow"></span>
+    </div>
+    <div class="spend-avg" id="spendingAvg"></div>
+    <div class="spend-chart"><canvas id="spendingChart" role="img"></canvas></div>
+    <div class="hint" id="spendingNote"></div>
+  </div>
+
   <div class="panel">
     <div class="toolbar">
       <h2 id="historyTitle">历史记录</h2>
@@ -2120,6 +2135,7 @@
   let state = load();
   let chart = null;
   let breakdownChart = null;
+  let spendingChart = null;
   let chartMode = 'total';
   let accountsSubMode = 'line'; // 'line' | 'stacked' — sub-view within the "accounts" mode
   // Per-render inputs the trend overlay plugin reads — kept in module scope (not a
@@ -2556,11 +2572,12 @@
     return { total, has, missed };
   }
 
-  function accountInflowInDisplay(accId, startDateInclusive) {
+  // Every window below takes an optional inclusive end date; omitted, it runs to now.
+  function accountInflowInDisplay(accId, startDateInclusive, endDateInclusive = '9999-12-31') {
     if (!accountById(accId)) return { total: 0, has: false, missed: false };
     let total = 0, has = false, missed = false;
     for (const s of sortedSnapshots()) {
-      if (s.date < startDateInclusive) continue;
+      if (s.date < startDateInclusive || s.date > endDateInclusive) continue;
       const inf = snapshotAccountInflow(s, accId);
       total += inf.total;
       has = has || inf.has;
@@ -2575,13 +2592,13 @@
   // contribution. Without this, opening a brokerage account and typing what it is
   // worth books the whole balance as profit: a 500,000 account appearing beside a
   // 1,000,000 one that gained 8% reported 58%.
-  function accountOpeningContribution(accId, baselineDate) {
+  function accountOpeningContribution(accId, baselineDate, endDateInclusive = '9999-12-31') {
     const tl = computeTimeline();
     let first = null, index = -1;
     for (let i = 0; i < tl.length; i++) {
       if (tl[i].balances[accId]) { first = tl[i]; index = i; break; }
     }
-    if (!first || first.snapshot.date <= baselineDate) return null;
+    if (!first || first.snapshot.date <= baselineDate || first.snapshot.date > endDateInclusive) return null;
     const v = first.balances[accId].converted;
     if (v == null) return null;
     const inf = snapshotAccountInflow(first.snapshot, accId);
@@ -2600,8 +2617,8 @@
   // predates per-account inflow and names no account, so it can't be attributed —
   // and an unattributable number would make the per-account buckets silently fail to
   // add up to the headline. Windows containing one get no breakdown at all.
-  function windowHasUnattributedInflow(startDateInclusive) {
-    return sortedSnapshots().some(s => s.date >= startDateInclusive && s.inflow);
+  function windowHasUnattributedInflow(startDateInclusive, endDateInclusive = '9999-12-31') {
+    return sortedSnapshots().some(s => s.date >= startDateInclusive && s.date <= endDateInclusive && s.inflow);
   }
 
   // ===== Tagged spending =====
@@ -2648,11 +2665,11 @@
     return { total, count, missed };
   }
 
-  function expensesInWindow(startDateInclusive) {
+  function expensesInWindow(startDateInclusive, endDateInclusive = '9999-12-31') {
     const byLabel = new Map();
     let total = 0, has = false, missed = false;
     for (const s of state.snapshots) {
-      if (s.date < startDateInclusive || !Array.isArray(s.expenses)) continue;
+      if (s.date < startDateInclusive || s.date > endDateInclusive || !Array.isArray(s.expenses)) continue;
       const rates = state.rates[s.date];
       for (const e of s.expenses) {
         const c = convert(e.amount, e.currency, state.displayCurrency, rates);
@@ -2674,8 +2691,8 @@
   // reconcile with the headline delta — a partial split that doesn't add up is worse
   // than none, so a missing rate or a legacy inflow hides the breakdown instead of
   // quietly misattributing a chunk of it.
-  function decomposePeriod(startDateInclusive, headlineDelta) {
-    if (windowHasUnattributedInflow(startDateInclusive)) return null;
+  function decomposePeriod(startDateInclusive, headlineDelta, endDateInclusive = '9999-12-31') {
+    if (windowHasUnattributedInflow(startDateInclusive, endDateInclusive)) return null;
     const tl = computeTimeline();
     if (!tl.length) return null;
     const assetsOnly = state.basis === 'assets';
@@ -2689,6 +2706,7 @@
       // `undefined` means never recorded; `null` means recorded but unconvertible.
       let baseline = 0, current, seenBefore = false;
       for (const tn of tl) {
+        if (tn.snapshot.date > endDateInclusive) break;
         const b = tn.balances[acc.id];
         if (!b) continue;
         if (tn.snapshot.date < startDateInclusive) { baseline = b.converted; seenBefore = true; }
@@ -2700,12 +2718,12 @@
       // between them changes neither the baseline nor the current value.
       if (current === null || baseline === null) return null;
       const delta = current - baseline;
-      const inf = accountInflowInDisplay(acc.id, startDateInclusive);
+      const inf = accountInflowInDisplay(acc.id, startDateInclusive, endDateInclusive);
       if (inf.missed) return null;
       if (inf.has) anyInflow = true;
       // An account that showed up inside this window brought its balance with it.
       // That arrival is money moved, not money earned.
-      const opening = seenBefore ? null : accountOpeningContribution(acc.id, startDateInclusive);
+      const opening = seenBefore ? null : accountOpeningContribution(acc.id, startDateInclusive, endDateInclusive);
       const openAmt = opening ? opening.amount : 0;
       if (openAmt !== 0) anyInflow = true;
       const resid = delta - inf.total - openAmt;
@@ -4969,6 +4987,160 @@
   // is built from it, and without any the UI just shows fewer numbers with nothing
   // saying why. Checked across all history, so the nudge below is a one-time nudge:
   // it disappears for good the moment any record carries one.
+  // ===== Monthly spending =====
+  // One row per calendar month, oldest first, ending with the month of `todayStr`:
+  // what the month's records leave unexplained (the "Unrecorded" bucket, negated so
+  // spending is positive) and how much of it was tagged.
+  //
+  // `spend` is null for a month that cannot say: no record dated in it, no inflow
+  // recorded in it (the residual would then be the whole change, salary included),
+  // or a split that didn't reconcile. A gap is honest; a guessed bar is not.
+  //
+  // `since` is the record the month is measured from. When that is earlier than the
+  // previous month, this one bar carries several months of spending, and the tooltip
+  // has to say so rather than let it read as one bad month.
+  function monthlySpending(count, todayStr) {
+    const tl = computeTimeline();
+    const out = [];
+    if (!tl.length) return out;
+    const [ty, tm] = todayStr.split('-').map(Number);
+    const ym = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
+    for (let k = count - 1; k >= 0; k--) {
+      const d = new Date(ty, tm - 1 - k, 1);
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const month = ym(y, m);
+      const start = month + '-01';
+      const end = month + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+      const row = { month, spend: null, tagged: 0, taggedKnown: true, since: null };
+      out.push(row);
+      let before = null, last = null;
+      for (const e of tl) {
+        if (e.snapshot.date < start) before = e;
+        else if (e.snapshot.date <= end) last = e;
+        else break;
+      }
+      if (!before || !last) continue;
+      const a = totalForBasis(before), b = totalForBasis(last);
+      if (a == null || b == null) continue;
+      const split = decomposePeriod(start, b - a, end);
+      if (!split || !split.anyInflow) continue;
+      row.spend = -split.untracked;
+      row.since = before.snapshot.date;
+      const ex = expensesInWindow(start, end);
+      row.tagged = ex.total;
+      row.taggedKnown = !ex.missed;
+    }
+    return out;
+  }
+
+  const SPENDING_MONTHS = 12;
+  function renderSpending() {
+    const panel = document.getElementById('spendingPanel');
+    const rows = monthlySpending(SPENDING_MONTHS, localDateStr(new Date()));
+    const known = rows.filter(r => r.spend != null);
+    // One bar is a number, not a trend; and the panel must not appear for a user who
+    // has never recorded inflow, where every month would be blank.
+    if (known.length < 2) {
+      panel.hidden = true;
+      if (spendingChart) { spendingChart.destroy(); spendingChart = null; }
+      return;
+    }
+    panel.hidden = false;
+    const dc = state.displayCurrency;
+    document.getElementById('spendingTitle').textContent = t('spendTitle');
+    document.getElementById('spendingWindow').textContent = t('spendWindow', SPENDING_MONTHS);
+    const avg = known.reduce((a, r) => a + r.spend, 0) / known.length;
+    document.getElementById('spendingAvg').innerHTML =
+      `<strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', known.length))}`;
+    document.getElementById('spendingNote').textContent = t('spendNote');
+
+    // Tagged part sits at the base, the untagged rest on top. Tags can exceed what went
+    // missing (income not entered as inflow), so the base is capped at the bar; a month
+    // where more came in than went out is a single bar below zero.
+    const taggedPart = rows.map(r => r.spend == null ? null : Math.max(0, Math.min(r.tagged, r.spend)));
+    const restPart = rows.map((r, i) => r.spend == null ? null : r.spend - taggedPart[i]);
+    const anyTagged = taggedPart.some(v => v > 0);
+    const labels = rows.map(r => r.month.slice(2).replace('-', '/'));
+    // Only the bar's outer end is rounded, and the 2px surface gap sits between the two
+    // segments: on the tagged base, and only when an untagged part stands on top of it.
+    // `borderSkipped: 'start'` keeps the baseline end square and flat for negative bars too.
+    const panelBg = cssVar('--panel');
+    const hasRest = i => restPart[i] != null && restPart[i] > 0;
+    const datasets = [];
+    if (anyTagged) datasets.push({
+      label: t('spendTagged'), data: taggedPart, backgroundColor: seriesHex('blue'),
+      borderColor: panelBg, borderSkipped: 'start', maxBarThickness: 28,
+      borderWidth: c => hasRest(c.dataIndex) ? { top: 2, left: 0, right: 0, bottom: 0 } : 0,
+      borderRadius: c => hasRest(c.dataIndex) ? 0 : 4,
+    });
+    datasets.push({
+      label: anyTagged ? t('spendRest') : t('spendTitle'), data: restPart, backgroundColor: seriesHex('neutral'),
+      borderSkipped: 'start', borderRadius: 4, maxBarThickness: 28,
+    });
+    // Axis ticks in whole units: "¥15,000.00" is precision the eye can't use at this scale.
+    const tick = v => (v < 0 ? '−' : '') + SYMBOLS[dc] + Math.abs(Math.round(v)).toLocaleString('zh-CN');
+
+    const canvas = document.getElementById('spendingChart');
+    canvas.setAttribute('aria-label', t('spendAria', fmt(avg, dc), known.length));
+    if (spendingChart) spendingChart.destroy();
+    spendingChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            display: anyTagged,
+            labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 8, padding: 16 },
+          },
+          tooltip: {
+            backgroundColor: cssVar('--panel-elev'),
+            titleColor: cssVar('--muted'),
+            bodyColor: cssVar('--text'),
+            footerColor: cssVar('--muted'),
+            footerFont: { weight: 'normal' },
+            borderColor: cssVar('--border-strong'),
+            borderWidth: 1, padding: 12, cornerRadius: 8, usePointStyle: true, boxPadding: 6,
+            filter: item => item.parsed.y != null,
+            callbacks: {
+              title: items => items.length ? rows[items[0].dataIndex].month : '',
+              label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y, dc)}`,
+              footer: items => {
+                if (!items.length) return '';
+                const r = rows[items[0].dataIndex];
+                if (r.spend == null) return t('spendNoData');
+                const lines = [];
+                if (anyTagged) lines.push(`${t('spendTotal')}：${fmt(r.spend, dc)}`);
+                if (r.spend < 0) lines.push(t('spendNegative'));
+                if (!r.taggedKnown) lines.push(t('spendTagRateMissing'));
+                // Measured from a record before last month: this bar holds more than one month.
+                const prev = new Date(Number(r.month.slice(0, 4)), Number(r.month.slice(5)) - 2, 1);
+                const prevStart = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`;
+                if (r.since < prevStart) lines.push(t('spendSince', r.since));
+                return lines;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+            grid: { display: false }, border: { display: false },
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: { color: cssVar('--muted'), maxTicksLimit: 5, callback: tick },
+            grid: { color: cssVar('--grid'), drawTicks: false }, border: { display: false },
+          },
+        },
+      },
+    });
+  }
+
   function hasAnyInflowData() {
     return state.snapshots.some(s =>
       s.inflow || Object.keys(s.updates).some(id => updateLegs(s.updates[id]).some(l => l.inflow != null)));
@@ -5098,15 +5270,16 @@
     const stockMoves  = [1.0038, 0.9939, 0.9447, 1.0136, 1.0333, 1.0235, 0.9152, 1.0038, 1.0431, 1.0136, 1.0530, 1.0235, 1.0038, 1.0136];
     const cryptoMoves = [1.0184, 0.8923, 1.1445, 0.8535, 1.1154, 1.0281, 0.8244, 1.1639, 1.0669, 0.8923, 1.0863, 1.0184, 1.0475, 1.0087];
     const inflows     = [12000, 12000, 14000, 12000, 12000, 18000, 12000, 12000, 14000, 12000, 12000, 20000, 12000, 13000];
-    // Spending out of savings that the record doesn't explain — only in the last two
-    // months, so the tagged items below have a real hole to sit in. Each is a little
-    // more than what gets tagged, which is how it looks in life: the big items are
-    // named, the small ones stay "the rest".
-    const spends      = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7400, 10200];
+    // Living costs out of savings that no record explains — the monthly-spending chart's
+    // whole subject. The months with a tagged item below spend that much on top of the
+    // usual ~4,000, which is how it looks in life: the big items are named, the small
+    // ones stay "the rest".
+    const spends      = [4300, 3900, 4800, 4100, 4500, 9600, 4200, 3800, 5200, 4400, 4000, 6900, 11500, 12600];
     let savings = 600000;
     let stocks = 25000;
     let cryptoVal = 18000;
     let cash = 12000;
+    let cashTopUp = 0;
     // Starts above the floor so the balance actually amortizes across the window; a
     // start of 220000 against a Math.max floor of 380000 pinned it flat on record one
     // and the paydown this account exists to show never happened.
@@ -5122,7 +5295,12 @@
       savings += inflows[i] - spends[i];
       stocks = Math.round(stocks * stockMoves[i]);
       cryptoVal = Math.round(cryptoVal * cryptoMoves[i]);
-      cash = Math.max(3000, cash + (i % 3 === 0 ? 2000 : -800));
+      // Cash is spent down ~700 a month and topped up every third month. The top-up is
+      // money arriving, so it is recorded as inflow on the next recount — otherwise it
+      // would show up as negative spending.
+      const topUp = i % 3 === 0 ? 2000 : 0;
+      cash += topUp - 700;
+      cashTopUp += topUp;
       const prevMortgage = mortgage;
       mortgage = Math.max(380000, mortgage - 2500);
 
@@ -5136,7 +5314,12 @@
       updates[accounts[1].id] = { amount: stocks,    currency: 'USD' };
       updates[accounts[2].id] = { amount: cryptoVal, currency: 'USD' };
       // Cash updated less often (realistic: people don't recount cash every month)
-      if (i % 2 === 0 || i === N - 1) updates[accounts[3].id] = { amount: cash, currency: 'CNY' };
+      if (i % 2 === 0 || i === N - 1) {
+        updates[accounts[3].id] = i > 0 && cashTopUp
+          ? { amount: cash, currency: 'CNY', inflow: cashTopUp }
+          : { amount: cash, currency: 'CNY' };
+        cashTopUp = 0;
+      }
       // The repayment is money paid in, recorded as such (a liability's inflow runs in
       // its own direction, so less owed is negative). Left unrecorded, it read as +2,500
       // of unexplained money every month — enough to outweigh any spending tagged above.
@@ -5157,6 +5340,8 @@
         createdAt: createdBase + i * 86400000,
       };
       const ex = (I18N[lang] || I18N.zh).demoExpenses;
+      if (i === 5) snap.expenses = [{ label: ex.insurance, amount: 5000, currency: 'CNY' }];
+      if (i === N - 3) snap.expenses = [{ label: ex.appliance, amount: 2600, currency: 'CNY' }];
       if (i === N - 2) snap.expenses = [{ label: ex.trip, amount: 6000, currency: 'CNY' }];
       if (i === N - 1) snap.expenses = [{ label: ex.laptop, amount: 1200, currency: 'USD' }];
       snapshots.push(snap);
@@ -6840,6 +7025,7 @@
     renderSync();
     renderBreakdown();
     renderEfficiency();
+    renderSpending();
     renderAccountList();
     renderEntryForm();
     renderHistory();

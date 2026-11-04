@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending',
   'expenseItemsHtml',
 ];
 
@@ -566,7 +566,17 @@ sec('Demo data exercises both features');
   // way: nested inside a negative "Unrecorded" with a small untagged rest, not under
   // the over-tagged warning (which a demo must never open with).
   const tagged = snapshots.filter(s => s.expenses);
-  ck('the last two months carry tagged spending', tagged.length === 2 && tagged[1] === snapshots[13], tagged.map(s => s.date));
+  ck('the last two months carry tagged spending', snapshots[12].expenses && snapshots[13].expenses, tagged.map(s => s.date));
+  // The monthly chart is the demo's spending story: every month readable, none below
+  // zero (a negative month would open the demo on the "income not entered" caveat),
+  // and a believable household figure rather than noise.
+  const today = snapshots[13].date;
+  const months = app.monthlySpending(12, today);
+  ck('every demo month has a spending figure', months.every(m => m.spend != null), months.filter(m => m.spend == null).map(m => m.month));
+  ck('no demo month is negative', months.every(m => m.spend > 0), months.map(m => Math.round(m.spend)));
+  const avg = months.reduce((a, m) => a + m.spend, 0) / months.length;
+  ck('average monthly spending is a household figure', avg > 3000 && avg < 10000, Math.round(avg));
+  ck('tags never exceed their month', months.every(m => m.tagged <= m.spend + 0.01));
   for (const [name, from] of [['this month', after(snapshots[12].date)], ['the last two months', after(snapshots[11].date)]]) {
     const m = app.computePeriodChange(from);
     const html = app.renderSplitChips(m);
@@ -720,6 +730,38 @@ load([A('b', 'savings')], [
   ck('an empty query matches nothing', app.expenseSearchTotal('').count === 0);
   app.state.rates = {};
   ck('a missing rate is flagged, not summed short', app.expenseSearchTotal('trip').missed);
+}
+
+sec('Monthly spending');
+{
+  // Salary recorded every month; the bank's residual is spending.
+  load([A('b', 'savings'), A('s', 'investment')], [
+    snap('2026-07-31', { b: { amount: 100000, currency: 'CNY' }, s: { amount: 50000, currency: 'CNY' } }),
+    snap('2026-08-31', { b: { amount: 105000, currency: 'CNY', inflow: 10000 }, s: { amount: 55000, currency: 'CNY' } }),
+    // September: no record at all.
+    snap('2026-10-15', { b: { amount: 104000, currency: 'CNY', inflow: 10000 } },
+      { expenses: [{ label: '房租', amount: 8000, currency: 'CNY' }] }),
+    snap('2026-10-31', { b: { amount: 110000, currency: 'CNY', inflow: 10000 } }),
+    // November: a record, but no inflow in it.
+    snap('2026-11-03', { b: { amount: 108000, currency: 'CNY' } }),
+  ]);
+  const rows = app.monthlySpending(5, '2026-11-04');
+  const by = Object.fromEntries(rows.map(r => [r.month, r]));
+  ck('one row per month, oldest first, ending this month',
+     rows.map(r => r.month).join() === '2026-07,2026-08,2026-09,2026-10,2026-11', rows.map(r => r.month));
+  ck('a month with no earlier record is blank', by['2026-07'].spend === null);
+  ck('spending is the bank residual, positive', near(by['2026-08'].spend, 5000), by['2026-08']);
+  ck('a market move is not spending', near(by['2026-08'].spend, 5000));
+  ck('a month with no record is blank, not zero', by['2026-09'].spend === null);
+  // Oct: 105,000 -> 110,000 on the bank with 20,000 in = 15,000 out. The investment
+  // account was not updated, so it moved nothing.
+  ck('two records in a month add up', near(by['2026-10'].spend, 15000), by['2026-10']);
+  ck('and the bar says it reaches back past a gap', by['2026-10'].since === '2026-08-31');
+  ck('tagged spending is the month\'s own', near(by['2026-10'].tagged, 8000) && by['2026-10'].taggedKnown);
+  ck('a month without inflow is blank, not "all of it was spending"', by['2026-11'].spend === null);
+  // Reconciles with the MTD/YTD figure for the same window.
+  const oct = app.computePeriodChange('2026-10-01');  // runs to the newest record (Nov 3)
+  ck('the existing to-now window is unchanged by the end-date parameter', !!oct.split && near(oct.split.untracked, -17000), oct.split);
 }
 
 sec('Tagged spending survives import');
