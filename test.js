@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate',
   'expenseItemsHtml',
 ];
 
@@ -577,6 +577,8 @@ sec('Demo data exercises both features');
   const avg = months.reduce((a, m) => a + m.spend, 0) / months.length;
   ck('average monthly spending is a household figure', avg > 3000 && avg < 10000, Math.round(avg));
   ck('tags never exceed their month', months.every(m => m.tagged <= m.spend + 0.01));
+  const sr = app.savingsRate(months);
+  ck('the demo saves a believable share', sr && sr.rate > 0.2 && sr.rate < 0.8, sr && pc(sr.rate));
   for (const [name, from] of [['this month', after(snapshots[12].date)], ['the last two months', after(snapshots[11].date)]]) {
     const m = app.computePeriodChange(from);
     const html = app.renderSplitChips(m);
@@ -762,6 +764,41 @@ sec('Monthly spending');
   // Reconciles with the MTD/YTD figure for the same window.
   const oct = app.computePeriodChange('2026-10-01');  // runs to the newest record (Nov 3)
   ck('the existing to-now window is unchanged by the end-date parameter', !!oct.split && near(oct.split.untracked, -17000), oct.split);
+}
+
+sec('Savings rate');
+{
+  load([A('b', 'savings')], [
+    snap('2026-08-31', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-09-30', { b: { amount: 108000, currency: 'CNY', inflow: 12000 } }),   // kept 8,000 of 12,000
+    snap('2026-10-31', { b: { amount: 112000, currency: 'CNY', inflow: 10000 } }),   // kept 4,000 of 10,000
+  ]);
+  const rows = app.monthlySpending(2, '2026-10-31');
+  ck('a month\'s income is its recorded inflow', near(rows[0].income, 12000) && near(rows[1].income, 10000), rows);
+  const sr = app.savingsRate(rows);
+  ck('the rate is summed over months, not averaged', near(sr.rate, 12000 / 22000, 1e-9), sr);
+  ck('and counts its months', sr.months === 2);
+}
+{
+  // A brokerage account first recorded in October brings 50,000 with it. That is money
+  // moved, not income: counted as income it would turn a 60% month into 93%.
+  load([A('b', 'savings'), A('s', 'investment')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-31', { b: { amount: 106000, currency: 'CNY', inflow: 10000 }, s: { amount: 50000, currency: 'CNY' } }),
+  ]);
+  const [r] = app.monthlySpending(1, '2026-10-31');
+  ck('a new account\'s opening balance is not income', near(r.income, 10000), r);
+  ck('nor spending', near(r.spend, 4000), r);
+  ck('so the rate stays 60%', near(app.savingsRate([r]).rate, 0.6, 1e-9));
+}
+{
+  // Money only taken out: there is no income to take a share of.
+  load([A('b', 'savings')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-10-31', { b: { amount: 90000, currency: 'CNY', inflow: -5000 } }),
+  ]);
+  ck('no rate when income is not positive', app.savingsRate(app.monthlySpending(1, '2026-10-31')) === null);
+  ck('no rate with no qualifying month', app.savingsRate([{ spend: null, income: null }]) === null);
 }
 
 sec('Tagged spending survives import');

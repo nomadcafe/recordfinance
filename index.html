@@ -1262,6 +1262,7 @@
      lists below answer "which account", reusing the breakdown legend's row shape. */
   .eff-window { font-size: 12px; color: var(--muted); }
   .spend-avg { font-size: 13px; color: var(--muted); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+  .spend-avg { display: flex; flex-wrap: wrap; gap: 6px 28px; }
   .spend-avg strong { font-size: 20px; color: var(--text); font-weight: 600; margin-right: 6px; }
   .spend-chart { position: relative; height: 220px; }
   .eff-headline { display: flex; flex-wrap: wrap; gap: 18px 36px; }
@@ -2698,6 +2699,9 @@
     const assetsOnly = state.basis === 'assets';
 
     let inflow = 0, market = 0, untracked = 0, anyInflow = false;
+    // The part of `inflow` that is a new account arriving with its balance: money moved,
+    // but not earned in the window, so a savings rate must not count it as income.
+    let opened = 0;
     let sum = 0;
     for (const acc of state.accounts) {
       if (assetsOnly && acc.type === 'liability') continue;
@@ -2728,6 +2732,7 @@
       if (openAmt !== 0) anyInflow = true;
       const resid = delta - inf.total - openAmt;
       inflow += inf.total + openAmt;
+      opened += openAmt;
       if (residualKind(acc) === 'market') market += resid; else untracked += resid;
       sum += delta;
     }
@@ -2736,7 +2741,7 @@
     // involved so it survives per-date rate rounding without waving through a real gap.
     const tol = Math.max(1, Math.abs(headlineDelta) * 1e-6);
     if (Math.abs(sum - headlineDelta) > tol) return null;
-    return { inflow, market, untracked, anyInflow };
+    return { inflow, market, untracked, anyInflow, opened };
   }
 
   // ===== Realized return =====
@@ -5011,7 +5016,9 @@
       const month = ym(y, m);
       const start = month + '-01';
       const end = month + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
-      const row = { month, spend: null, tagged: 0, taggedKnown: true, since: null };
+      // `income` is the month's recorded inflow — salary in, net of money taken out to
+      // somewhere untracked — without any new account's opening balance.
+      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null };
       out.push(row);
       let before = null, last = null;
       for (const e of tl) {
@@ -5025,6 +5032,7 @@
       const split = decomposePeriod(start, b - a, end);
       if (!split || !split.anyInflow) continue;
       row.spend = -split.untracked;
+      row.income = split.inflow - split.opened;
       row.since = before.snapshot.date;
       const ex = expensesInWindow(start, end);
       row.tagged = ex.total;
@@ -5032,6 +5040,21 @@
     }
     return out;
   }
+
+  // Share of income kept: (income − spending) / income, summed over the months that
+  // have both. Income is what was recorded as inflow, so no separate income figure is
+  // asked for. Null when that income is not positive — a rate of a withdrawal is not a
+  // savings rate — or when no month qualifies.
+  function savingsRate(rows) {
+    let income = 0, spend = 0, n = 0;
+    for (const r of rows) {
+      if (r.spend == null || r.income == null) continue;
+      income += r.income; spend += r.spend; n++;
+    }
+    if (!n || !(income > 0)) return null;
+    return { rate: (income - spend) / income, income, spend, months: n };
+  }
+  const monthRate = r => (r.spend != null && r.income > 0) ? (r.income - r.spend) / r.income : null;
 
   const SPENDING_MONTHS = 12;
   function renderSpending() {
@@ -5050,8 +5073,11 @@
     document.getElementById('spendingTitle').textContent = t('spendTitle');
     document.getElementById('spendingWindow').textContent = t('spendWindow', SPENDING_MONTHS);
     const avg = known.reduce((a, r) => a + r.spend, 0) / known.length;
+    const sr = savingsRate(rows);
+    const pct = v => Math.round(v * 100) + '%';
     document.getElementById('spendingAvg').innerHTML =
-      `<strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', known.length))}`;
+      `<span class="spend-stat"><strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', known.length))}</span>` +
+      (sr ? `<span class="spend-stat"><strong>${pct(sr.rate)}</strong>${escapeHtml(t('saveRate', fmt(sr.income - sr.spend, dc), fmt(sr.income, dc)))}</span>` : '');
     document.getElementById('spendingNote').textContent = t('spendNote');
 
     // Tagged part sits at the base, the untagged rest on top. Tags can exceed what went
@@ -5113,6 +5139,8 @@
                 if (r.spend == null) return t('spendNoData');
                 const lines = [];
                 if (anyTagged) lines.push(`${t('spendTotal')}：${fmt(r.spend, dc)}`);
+                const mr = monthRate(r);
+                if (mr != null) lines.push(`${t('saveRateShort')}：${Math.round(mr * 100)}%`);
                 if (r.spend < 0) lines.push(t('spendNegative'));
                 if (!r.taggedKnown) lines.push(t('spendTagRateMissing'));
                 // Measured from a record before last month: this bar holds more than one month.
