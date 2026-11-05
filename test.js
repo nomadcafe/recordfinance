@@ -50,7 +50,7 @@ const FNS = [
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
   'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
-  'expenseItemsHtml', 'previousMonthInflows', 'applyInflowCopy',
+  'expenseItemsHtml', 'previousMonthInflows', 'applyInflowCopy', 'renderSpendingTable',
 ];
 
 /* ---------- stub globals the extracted code closes over ---------- */
@@ -87,6 +87,7 @@ const PRELUDE = `
   ${grabConst(/  const CURRENCY_COLORS = new Proxy[^\n]+/)}
   ${grabConst(/  const CATEGORY_SLOT = \{[\s\S]*?\n  \};/)}
   ${grabConst(/  const CATEGORY_COLORS = new Proxy[^\n]+/)}
+  ${grabConst(/  const monthRate = [^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -869,6 +870,26 @@ sec('Copy last month\'s inflow');
   app.state.accounts = app.state.accounts.filter(a => a.id !== 'x');
   const p = app.previousMonthInflows('2026-10-31');
   ck('a deleted account is skipped', p.items.length === 1 && p.items[0].accId === 'b', p);
+}
+
+sec('Spending table');
+{
+  const rows = [
+    { month: '2026-08', spend: null, gap: 'noRecord', span: 1 },
+    { month: '2026-09', spend: null, gap: 'noInflow', span: 1 },
+    { month: '2026-10', spend: 8000, income: 20000, tagged: 5000, taggedKnown: false, span: 2, since: '2026-08-31' },
+  ];
+  app.state.language = 'zh'; app.state.displayCurrency = 'CNY';
+  app.renderSpendingTable(rows, true);
+  const html = document.getElementById('spendingTable').innerHTML;
+  const trs = html.split('<tr>').slice(2);
+  ck('newest month first', trs[0].startsWith('<td>2026-10'), trs);
+  ck('shows spending, tagged, income and the rate', ['¥8,000<', '¥5,000', '¥20,000', '60%'].every(x => trs[0].includes(x)), trs[0]);
+  ck('a month spanning two says so', trs[0].includes('2 个月'));
+  ck('a tag missing a rate is flagged', trs[0].includes('*'));
+  ck('a blank month says why, not zero', trs[1].includes('没填入金') && trs[2].includes('没有记录') && !trs[1].includes('¥'));
+  app.renderSpendingTable(rows, false);
+  ck('no tagged column without tags', !document.getElementById('spendingTable').innerHTML.includes('已标注'));
 }
 
 sec('Review fixes');

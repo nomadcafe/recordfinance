@@ -1265,6 +1265,16 @@
   .spend-avg { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 13px; color: var(--muted); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
   .spend-avg strong { font-size: 20px; color: var(--text); font-weight: 600; margin-right: 6px; }
   .spend-chart { position: relative; height: 220px; }
+  .spend-table-wrap { margin-top: 12px; }
+  .spend-table-wrap > summary { cursor: pointer; font-size: 13px; color: var(--muted); user-select: none; }
+  .spend-table-wrap > summary:hover { color: var(--text); }
+  .spend-table-wrap[open] > summary { margin-bottom: 4px; }
+  .spend-table-scroll { overflow-x: auto; }
+  .spend-table th, .spend-table td { padding: 9px 10px; font-size: 13px; white-space: nowrap; }
+  .spend-table th.num, .spend-table td.num { text-align: right; }
+  .spend-table td.blank { color: var(--muted); }
+  @media (max-width: 480px) { .spend-table th, .spend-table td { padding: 8px 6px; } }
+  .spend-table .span-note { color: var(--muted); font-size: 12px; margin-left: 4px; }
   .spend-gaps { font-size: 13px; color: var(--muted-strong); margin-top: 12px; }
   .inflow-reminder { margin-top: 10px; }
   .inflow-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
@@ -1894,6 +1904,10 @@
     </div>
     <div class="spend-avg" id="spendingAvg"></div>
     <div class="spend-chart"><canvas id="spendingChart" role="img"></canvas></div>
+    <details class="spend-table-wrap" id="spendingTableWrap">
+      <summary id="spendingTableSummary">按月明细</summary>
+      <div class="spend-table-scroll"><table class="spend-table" id="spendingTable"></table></div>
+    </details>
     <div class="spend-gaps" id="spendingGaps" hidden></div>
     <div class="hint" id="spendingNote"></div>
   </div>
@@ -5125,6 +5139,8 @@
     gapsEl.hidden = !fixable.length;
     if (fixable.length) gapsEl.textContent = t('spendGaps', fixable.join(t('listSep')), fixable.length);
 
+    renderSpendingTable(rows, rows.some(r => r.spend != null && r.tagged > 0));
+
     // Tagged part sits at the base, the untagged rest on top. Tags can exceed what went
     // missing (income not entered as inflow), so the base is capped at the bar; a month
     // where more came in than went out is a single bar below zero.
@@ -5209,6 +5225,35 @@
         },
       },
     });
+  }
+
+  // The chart's numbers as a table, newest month first: a phone can't hover and a
+  // screen reader gets only the canvas's one-line summary. Same rows, so the two
+  // never disagree; a blank month says why instead of showing a zero.
+  function renderSpendingTable(rows, anyTagged) {
+    const dc = state.displayCurrency;
+    document.getElementById('spendingTableSummary').textContent = t('spendTableSummary');
+    // Whole units, as on the axis: cents only widen the columns past a phone's width.
+    const money = v => (v < 0 ? '−' : '') + SYMBOLS[dc] + Math.abs(Math.round(v)).toLocaleString('zh-CN');
+    const head = [t('spendMonth'), t('spendCol')]
+      .concat(anyTagged ? [t('spendTagged')] : [], [t('spendIncome'), t('saveRateShort')]);
+    const cls = i => i === 0 ? '' : ' class="num"';
+    const body = rows.slice().reverse().map(r => {
+      const month = escapeHtml(r.month) + (r.span > 1 ? `<span class="span-note">${escapeHtml(t('spendSpan', r.span))}</span>` : '');
+      if (r.spend == null) {
+        const why = t(r.gap === 'noRecord' ? 'spendGapNoRecord' : r.gap === 'unreadable' ? 'spendGapUnreadable' : 'spendGapNoInflow');
+        return `<tr><td>${month}</td><td class="blank" colspan="${head.length - 1}">${escapeHtml(why)}</td></tr>`;
+      }
+      const mr = monthRate(r);
+      const cells = [money(r.spend)]
+        .concat(anyTagged ? [r.tagged > 0 ? money(r.tagged) : '—'] : [],
+          [r.income > 0 ? money(r.income) : '—', mr == null ? '—' : Math.round(mr * 100) + '%']).map(escapeHtml);
+      // Same caveat the tooltip gives: a tag with no rate is left out of this figure.
+      if (anyTagged && !r.taggedKnown) cells[1] += ` <span class="span-note" title="${escapeHtml(t('spendTagRateMissing'))}">*</span>`;
+      return `<tr><td>${month}</td>${cells.map(c => `<td class="num">${c}</td>`).join('')}</tr>`;
+    }).join('');
+    document.getElementById('spendingTable').innerHTML =
+      `<thead><tr>${head.map((h, i) => `<th${cls(i)} scope="col">${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody>`;
   }
 
   // Does the month of `dateStr` already say what came in? True if any other record in
