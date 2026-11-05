@@ -1261,8 +1261,7 @@
   /* Capital-efficiency panel. Headline tiles carry the comparison; the two grouped
      lists below answer "which account", reusing the breakdown legend's row shape. */
   .eff-window { font-size: 12px; color: var(--muted); }
-  .spend-avg { font-size: 13px; color: var(--muted); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
-  .spend-avg { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+  .spend-avg { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 13px; color: var(--muted); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
   .spend-avg strong { font-size: 20px; color: var(--text); font-weight: 600; margin-right: 6px; }
   .spend-chart { position: relative; height: 220px; }
   .spend-gaps { font-size: 13px; color: var(--muted-strong); margin-top: 12px; }
@@ -2650,10 +2649,6 @@
     return out;
   }
 
-  // Tagged spending from `startDateInclusive` onward, in display currency at each
-  // record's own date — the same window and the same rates the split uses, so the two
-  // can be set side by side. Grouped by label, largest first. `missed` means at least
-  // one item could not be converted; callers show nothing rather than a partial sum.
   // Tagged items whose label contains `query` (already lower-cased), across every
   // record — what "rent" has cost in all. `missed` = some item had no rate for its date.
   function expenseSearchTotal(query) {
@@ -2670,6 +2665,10 @@
     return { total, count, missed };
   }
 
+  // Tagged spending from `startDateInclusive` onward, in display currency at each
+  // record's own date — the same window and the same rates the split uses, so the two
+  // can be set side by side. Grouped by label, largest first. `missed` means at least
+  // one item could not be converted; callers show nothing rather than a partial sum.
   function expensesInWindow(startDateInclusive, endDateInclusive = '9999-12-31') {
     const byLabel = new Map();
     let total = 0, has = false, missed = false;
@@ -3338,7 +3337,9 @@
       label.value = row.label; amt.value = row.amount;
       populateCurrencySelect(el.querySelector('.cur-sel'), row.currency);
       label.addEventListener('input', e => { row.label = e.target.value; });
-      amt.addEventListener('input', e => { row.amount = e.target.value; updateExpenseSummary(); });
+      // A number field reports '' for text it can't parse ("8,000"), indistinguishable
+      // from empty — keep the browser's own flag so the save can refuse it.
+      amt.addEventListener('input', e => { row.amount = e.target.value; row.badInput = e.target.validity.badInput; updateExpenseSummary(); });
       el.querySelector('.cur-sel').addEventListener('change', e => { row.currency = e.target.value; });
       el.querySelector('.row-remove').addEventListener('click', () => {
         entryExpenses = entryExpenses.filter(r => r !== row);
@@ -3347,14 +3348,17 @@
       wrap.appendChild(el);
     });
   }
-  // The form's rows -> the stored list. A blank amount is an unused row, not an error;
-  // a non-positive one is refused rather than silently dropped (see the submit handler).
+  // The form's rows -> the stored list. A row with neither label nor amount is unused.
+  // Anything else that isn't a finite positive amount — a named item with no amount,
+  // text the number field couldn't parse, zero, 1e999 — is refused rather than dropped,
+  // so a tag the user typed is never lost without a word.
   function collectExpenses() {
     const out = [], bad = [];
     entryExpenses.forEach(r => {
-      if (String(r.amount).trim() === '') return;
+      const blank = String(r.amount).trim() === '';
+      if (blank && !r.badInput && !r.label.trim()) return;
       const amount = parseFloat(r.amount);
-      if (!(amount > 0)) { bad.push(r); return; }
+      if (r.badInput || blank || !isFinite(amount) || amount <= 0) { bad.push(r); return; }
       out.push({ label: r.label.trim().slice(0, 40), amount, currency: r.currency });
     });
     return { list: out, bad };
@@ -3370,6 +3374,17 @@
     const inputs = document.querySelectorAll('#expenseRows .exp-label');
     if (inputs.length) inputs[inputs.length - 1].focus();
   });
+  // Throw the whole entry form away: balance rows, the record being edited, and its
+  // tagged-spending rows. Every path that replaces state (import, restore, sync) or
+  // removes the record under edit must go through here — clearing only some of it let
+  // the previous form's tags ride into the next new record and count twice.
+  function clearEntryForm() {
+    entryRows = [];
+    editingId = null;
+    entryExpenses = [];
+    document.getElementById('expenseSection').open = false;
+    document.getElementById('legacyInflowNotice').hidden = true;
+  }
   // Put the form's spending section back to match `entryExpenses` (after save, edit, cancel).
   function resetExpenseSection() {
     document.getElementById('expenseSection').open = entryExpenses.length > 0;
@@ -3673,9 +3688,11 @@
     updateInflowReminder();
   }
   document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
-  // Typing a date or an inflow anywhere in the form re-checks the reminder; `input`
-  // bubbles, so one listener covers every row the form builds.
-  document.getElementById('entryForm').addEventListener('input', updateInflowReminder);
+  // Typing a date or an inflow re-checks the reminder; `input` bubbles, so one listener
+  // covers every row the form builds. Other fields (notes, labels) can't change it.
+  document.getElementById('entryForm').addEventListener('input', e => {
+    if (e.target.matches('#date, .row-inflow-input, .leg-inflow')) updateInflowReminder();
+  });
 
   // ===== Summary =====
   function renderSummary() {
@@ -3830,7 +3847,7 @@
     } else if (e.target.matches('button.danger')) {
       const id = e.target.dataset.id;
       if (confirm(t('confirmDeleteEntry'))) {
-        if (editingId === id) editingId = null;
+        if (editingId === id) clearEntryForm();
         state.snapshots = state.snapshots.filter(s => s.id !== id);
         markDirty(); renderAll();
       }
@@ -4571,8 +4588,7 @@
         state.dirtySinceExport = 0;
         backupBannerDismissed = false;
         // Reset form state — incoming accounts may differ
-        entryRows = [];
-        editingId = null;
+        clearEntryForm();
         historyQuery = '';
         const hs = document.getElementById('historySearch');
         if (hs) hs.value = '';
@@ -4998,11 +5014,6 @@
     });
   })();
 
-  // Has the user ever recorded an inflow, in either shape? Every explanation of a
-  // change — the inflow / market / unrecorded split and the realized-return panel —
-  // is built from it, and without any the UI just shows fewer numbers with nothing
-  // saying why. Checked across all history, so the nudge below is a one-time nudge:
-  // it disappears for good the moment any record carries one.
   // ===== Monthly spending =====
   // One row per calendar month, oldest first, ending with the month of `todayStr`:
   // what the month's records leave unexplained (the "Unrecorded" bucket, negated so
@@ -5031,7 +5042,7 @@
       // somewhere untracked — without any new account's opening balance.
       // `gap` says why a blank month is blank: 'noInflow' is the one the user can fix
       // (records exist, but nothing says what came in), so the panel lists those.
-      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null, gap: null };
+      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null, span: 0, gap: null };
       out.push(row);
       let before = null, last = null;
       for (const e of tl) {
@@ -5051,6 +5062,10 @@
       row.spend = -split.untracked;
       row.income = income;
       row.since = before.snapshot.date;
+      // Months this bar covers: measured from a record two months back, it holds two
+      // months of spending, and an average must divide it by two, not one.
+      const [sy, sm] = row.since.split('-').map(Number);
+      row.span = Math.max(1, (y * 12 + m) - (sy * 12 + sm));
       const ex = expensesInWindow(start, end);
       row.tagged = ex.total;
       row.taggedKnown = !ex.missed;
@@ -5066,7 +5081,7 @@
     let income = 0, spend = 0, n = 0;
     for (const r of rows) {
       if (r.spend == null || r.income == null) continue;
-      income += r.income; spend += r.spend; n++;
+      income += r.income; spend += r.spend; n += r.span || 1;
     }
     if (!n || !(income > 0)) return null;
     return { rate: (income - spend) / income, income, spend, months: n };
@@ -5089,11 +5104,13 @@
     const dc = state.displayCurrency;
     document.getElementById('spendingTitle').textContent = t('spendTitle');
     document.getElementById('spendingWindow').textContent = t('spendWindow', SPENDING_MONTHS);
-    const avg = known.reduce((a, r) => a + r.spend, 0) / known.length;
+    // Per calendar month covered, not per bar: a bar spanning a gap holds several.
+    const monthsCovered = known.reduce((a, r) => a + r.span, 0);
+    const avg = known.reduce((a, r) => a + r.spend, 0) / monthsCovered;
     const sr = savingsRate(rows);
     const pct = v => Math.round(v * 100) + '%';
     document.getElementById('spendingAvg').innerHTML =
-      `<span class="spend-stat"><strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', known.length))}</span>` +
+      `<span class="spend-stat"><strong>${fmt(avg, dc)}</strong>${escapeHtml(t('spendAvg', monthsCovered))}</span>` +
       (sr ? `<span class="spend-stat"><strong>${pct(sr.rate)}</strong>${escapeHtml(t('saveRate', fmt(sr.income - sr.spend, dc), fmt(sr.income, dc)))}</span>` : '');
     document.getElementById('spendingNote').textContent = t('spendNote');
     // Finished months that are blank only for want of inflow — the gap the user can
@@ -5131,7 +5148,7 @@
     const tick = v => (v < 0 ? '−' : '') + SYMBOLS[dc] + Math.abs(Math.round(v)).toLocaleString('zh-CN');
 
     const canvas = document.getElementById('spendingChart');
-    canvas.setAttribute('aria-label', t('spendAria', fmt(avg, dc), known.length));
+    canvas.setAttribute('aria-label', t('spendAria', fmt(avg, dc), monthsCovered));
     if (spendingChart) spendingChart.destroy();
     spendingChart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
@@ -5167,10 +5184,7 @@
                 if (mr != null) lines.push(`${t('saveRateShort')}：${Math.round(mr * 100)}%`);
                 if (r.spend < 0) lines.push(t('spendNegative'));
                 if (!r.taggedKnown) lines.push(t('spendTagRateMissing'));
-                // Measured from a record before last month: this bar holds more than one month.
-                const prev = new Date(Number(r.month.slice(0, 4)), Number(r.month.slice(5)) - 2, 1);
-                const prevStart = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`;
-                if (r.since < prevStart) lines.push(t('spendSince', r.since));
+                if (r.span > 1) lines.push(t('spendSince', r.since));
                 return lines;
               },
             },
@@ -5195,10 +5209,32 @@
 
   // Does the month of `dateStr` already say what came in? True if any other record in
   // that month (the one being edited is the form's own) carries positive net inflow.
+  //
+  // An inflow leg with no rate yet counts as income entered: the user did type it, and
+  // telling them to enter it again would be wrong. Otherwise the month's net inflow must
+  // clear the same negligible threshold monthlySpending uses, so the two always agree.
   function monthHasIncome(dateStr, exceptId) {
     const month = dateStr.slice(0, 7);
-    return state.snapshots.some(s => s.id !== exceptId && s.date.slice(0, 7) === month &&
-      snapshotInflowInDisplay(s).total > 0);
+    let total = 0;
+    for (const s of state.snapshots) {
+      if (s.id === exceptId || s.date.slice(0, 7) !== month) continue;
+      const rates = state.rates[s.date];
+      if (s.inflow) {
+        const c = convert(s.inflow.amount, s.inflow.currency, state.displayCurrency, rates);
+        if (c == null) return true;
+        total += c;
+      }
+      for (const [accId, u] of Object.entries(s.updates)) {
+        const acc = accountById(accId);
+        for (const leg of updateLegs(u)) {
+          if (leg.inflow == null) continue;
+          const c = convert(leg.inflow, leg.currency, state.displayCurrency, rates);
+          if (c == null) return true;
+          total += c * (acc ? signFor(acc.type) : 1);
+        }
+      }
+    }
+    return total > 0 && !isNegligible(total);
   }
   // Has the form been given any inflow? Any non-zero figure counts: the reminder is a
   // nudge, and second-guessing a value the user did type would only be noise.
@@ -5217,6 +5253,11 @@
     if (show) el.textContent = t('inflowReminder');
   }
 
+  // Has the user ever recorded an inflow, in either shape? Every explanation of a
+  // change — the inflow / market / unrecorded split and the realized-return panel —
+  // is built from it, and without any the UI just shows fewer numbers with nothing
+  // saying why. Checked across all history, so the nudge below is a one-time nudge:
+  // it disappears for good the moment any record carries one.
   function hasAnyInflowData() {
     return state.snapshots.some(s =>
       s.inflow || Object.keys(s.updates).some(id => updateLegs(s.updates[id]).some(l => l.inflow != null)));
@@ -6374,7 +6415,7 @@
         state = migrate(parsed);
         state.sync = keepSync;
         state.dirtySinceExport = 0;
-        entryRows = []; editingId = null; historyQuery = '';
+        clearEntryForm(); historyQuery = '';
         const hs = document.getElementById('historySearch');
         if (hs) hs.value = '';
         save();
@@ -6458,8 +6499,7 @@
     state.sync.lastSync = new Date().toISOString();
     state.dirtySinceExport = 0;
     // Reset form state — incoming accounts may differ
-    entryRows = [];
-    editingId = null;
+    clearEntryForm();
     historyQuery = '';
     const hs = document.getElementById('historySearch');
     if (hs) hs.value = '';
@@ -6543,8 +6583,7 @@
     state = merged;
     state.sync = keepSync;
     state.dirtySinceExport = 0;
-    entryRows = [];
-    editingId = null;
+    clearEntryForm();
     historyQuery = '';
     const hs = document.getElementById('historySearch');
     if (hs) hs.value = '';

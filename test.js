@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
   'expenseItemsHtml',
 ];
 
@@ -101,6 +101,7 @@ const PRELUDE = `
 
   let state = { language: 'zh', displayCurrency: 'CNY', basis: 'net', rates: {}, accounts: [], snapshots: [] };
   let entryRows = [];
+  let entryExpenses = [];
   function t(key, ...a) { const d = I18N[state ? state.language : 'zh'] || I18N.zh; const v = d[key]; return typeof v === 'function' ? v(...a) : v; }
   const signFor = type => (type === 'liability' ? -1 : 1);
   const signedAmount = (amount, type) => amount * signFor(type);
@@ -132,6 +133,7 @@ const app = new Function(`
   ${FNS.map(grabFn).join('\n\n')}
   return { get state() { return state; }, set state(v) { state = v; },
     get rows() { return entryRows; }, set rows(v) { entryRows = v; },
+    set expenseRows(v) { entryExpenses = v; },
     computeTimeline, signFor, SERIES, PALETTE, CATEGORY_COLORS, CURRENCY_COLORS,
     ${FNS.join(', ')} };
 `)();
@@ -827,6 +829,52 @@ sec('Months that need inflow');
   app.rows = [{ accountId: '', amount: '', currency: 'CNY', inflow: '500' }];
   ck('a row with no account chosen does not', !app.formHasInflow());
   app.rows = [];
+}
+
+sec('Review fixes');
+{
+  // A bar measured across a missing month holds two months: the average must say so.
+  load([A('b', 'savings')], [
+    snap('2026-07-31', { b: { amount: 100000, currency: 'CNY' } }),
+    snap('2026-08-31', { b: { amount: 106000, currency: 'CNY', inflow: 10000 } }),   // 4,000 spent
+    // September: no record.
+    snap('2026-10-31', { b: { amount: 118000, currency: 'CNY', inflow: 20000 } }),   // 8,000 over two months
+  ]);
+  const rows = app.monthlySpending(3, '2026-10-31');
+  const oct = rows[2];
+  ck('a bar across a gap knows how many months it spans', oct.span === 2 && rows[0].span === 1, rows.map(r => r.span));
+  const known = rows.filter(r => r.spend != null);
+  const avg = known.reduce((a, r) => a + r.spend, 0) / known.reduce((a, r) => a + r.span, 0);
+  ck('so the monthly average is 4,000, not 6,000', near(avg, 4000), avg);
+  ck('and the savings rate counts three months', app.savingsRate(rows).months === 3);
+}
+{
+  // Salary entered in USD on a date whose rates haven't loaded: the reminder must not
+  // tell the user to enter what they already did.
+  load([A('u', 'savings', { currency: 'USD' })], [
+    snap('2026-10-25', { u: { amount: 5000, currency: 'USD', inflow: 3000 } }),
+  ], { rates: {} });
+  ck('an inflow without a rate yet still counts as income entered', app.monthHasIncome('2026-10-31'));
+  load([A('b', 'savings')], [snap('2026-10-25', { b: { amount: 5000, currency: 'CNY', inflow: 0.001 } })]);
+  ck('a negligible inflow does not, matching the chart', !app.monthHasIncome('2026-10-31'));
+}
+{
+  const r = (label, amount, extra) => Object.assign({ rowId: 'x', label, amount, currency: 'CNY' }, extra || {});
+  app.state.displayCurrency = 'CNY';
+  app.expenseRows = [r('', ''), r('房租', '8000')];
+  let c = app.collectExpenses();
+  ck('an untouched row is ignored, a filled one kept', c.bad.length === 0 && c.list.length === 1 && c.list[0].amount === 8000, c);
+  app.expenseRows = [r('房租', '')];
+  ck('a named item with no amount is refused, not dropped', app.collectExpenses().bad.length === 1);
+  app.expenseRows = [r('房租', '', { badInput: true })];
+  ck('text the number field could not parse ("8,000") is refused', app.collectExpenses().bad.length === 1);
+  app.expenseRows = [r('', '', { badInput: true })];
+  ck('even without a label', app.collectExpenses().bad.length === 1);
+  app.expenseRows = [r('x', '1e999')];
+  ck('an infinite amount is refused', app.collectExpenses().bad.length === 1);
+  app.expenseRows = [r('x', '0')];
+  ck('zero is refused', app.collectExpenses().bad.length === 1);
+  app.expenseRows = [];
 }
 
 sec('Tagged spending survives import');
