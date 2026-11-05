@@ -50,7 +50,7 @@ const FNS = [
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
   'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
-  'expenseItemsHtml',
+  'expenseItemsHtml', 'previousMonthInflows', 'applyInflowCopy',
 ];
 
 /* ---------- stub globals the extracted code closes over ---------- */
@@ -829,6 +829,46 @@ sec('Months that need inflow');
   app.rows = [{ accountId: '', amount: '', currency: 'CNY', inflow: '500' }];
   ck('a row with no account chosen does not', !app.formHasInflow());
   app.rows = [];
+}
+
+sec('Copy last month\'s inflow');
+{
+  load([A('b', 'savings'), A('m', 'savings', { type: 'liability', category: 'mortgage' }), A('w', 'savings', { currency: 'CNY', currencies: ['CNY', 'USD'] })], [
+    snap('2026-08-31', { b: { amount: 100000, currency: 'CNY' }, m: { amount: 500000, currency: 'CNY' } }),
+    snap('2026-09-10', { b: { amount: 120000, currency: 'CNY', inflow: 20000 } }),
+    snap('2026-09-25', { b: { amount: 121000, currency: 'CNY', inflow: 1000 }, m: { amount: 495000, currency: 'CNY', inflow: -5000 },
+      w: { currency: 'CNY', byCurrency: { USD: { amount: 300, inflow: 300 } } } }),
+  ]);
+  const p = app.previousMonthInflows('2026-10-31');
+  ck('takes the latest earlier month', p && p.month === '2026-09', p);
+  const get = (id, c) => p.items.find(i => i.accId === id && i.code === c);
+  ck('sums the month per account', get('b', 'CNY').value === 21000, p.items);
+  ck('keeps a repayment negative', get('m', 'CNY').value === -5000);
+  ck('keeps a pocket in its own currency', get('w', 'USD').value === 300);
+  ck('largest first', p.items[0].accId === 'b');
+  ck('nothing before the first inflow month', app.previousMonthInflows('2026-09-05') === null);
+  ck('the current month is not "last month"', app.previousMonthInflows('2026-09-30') === null);
+
+  app.rows = [{ rowId: 'r0', accountId: 'm', amount: '494000', currency: 'CNY', inflow: '' }];
+  app.applyInflowCopy(p.items);
+  const row = id => app.rows.find(r => r.accountId === id);
+  ck('fills an account not yet in the form, with its balance', row('b').inflow === '21000' && row('b').amount === '142000.00', row('b'));
+  ck('a balance typed by hand is kept', row('m').inflow === '-5000' && row('m').amount === '494000', row('m'));
+  ck('a multi-currency pocket gets its own', row('w').inflows.USD === '300' && row('w').amounts.USD === '600.00', row('w'));
+  ck('and the reminder would now see inflow', app.formHasInflow());
+
+  app.rows = [{ rowId: 'r1', accountId: 'b', amount: '', currency: 'CNY', inflow: '18000' }];
+  app.applyInflowCopy(p.items);
+  ck('an inflow already typed is not replaced', row('b').inflow === '18000');
+  app.rows = [];
+}
+{
+  load([A('b', 'savings'), A('x', 'savings')], [
+    snap('2026-09-25', { b: { amount: 1, currency: 'CNY', inflow: 100 }, x: { amount: 1, currency: 'CNY', inflow: 100 } }),
+  ]);
+  app.state.accounts = app.state.accounts.filter(a => a.id !== 'x');
+  const p = app.previousMonthInflows('2026-10-31');
+  ck('a deleted account is skipped', p.items.length === 1 && p.items[0].accId === 'b', p);
 }
 
 sec('Review fixes');

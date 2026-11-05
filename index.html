@@ -305,6 +305,7 @@
   body.privacy-blur .lr-amt,
   body.privacy-blur .eff-money,
   body.privacy-blur .inflow-line,
+  body.privacy-blur .copy-amt,
   body.privacy-blur .history-expense-total,
   body.privacy-blur .spend-avg,
   body.privacy-blur .spend-chart,
@@ -1266,6 +1267,9 @@
   .spend-chart { position: relative; height: 220px; }
   .spend-gaps { font-size: 13px; color: var(--muted-strong); margin-top: 12px; }
   .inflow-reminder { margin-top: 10px; }
+  .inflow-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+  .inflow-copy button { padding: 4px 10px; font-size: 13px; }
+  .inflow-copy-preview { color: var(--muted); font-size: 12px; }
   .eff-headline { display: flex; flex-wrap: wrap; gap: 18px 36px; }
   .eff-stat { min-width: 132px; }
   .eff-stat .eff-k {
@@ -5250,7 +5254,105 @@
     const date = document.getElementById('date').value;
     const show = !!date && hasAnyInflowData() && !formHasInflow() && !monthHasIncome(date, editingId);
     el.hidden = !show;
-    if (show) el.textContent = t('inflowReminder');
+    if (!show) return;
+    // Salary is mostly the same each month, so offer last month's figures as a start:
+    // one click fills them in, and the user corrects whatever changed.
+    const prev = previousMonthInflows(date);
+    let html = `<span>${escapeHtml(t('inflowReminder'))}</span>`;
+    if (prev) {
+      const SHOWN = 3;
+      const parts = prev.items.slice(0, SHOWN).map(i => {
+        const acc = accountById(i.accId);
+        return `<span class="nb">${escapeHtml(acc.name)} <span class="copy-amt">${fmtSigned(i.value, i.code)}</span></span>`;
+      });
+      if (prev.items.length > SHOWN) parts.push(`<span class="nb">${escapeHtml(t('expenseMore', prev.items.length - SHOWN))}</span>`);
+      html += `<div class="inflow-copy"><button type="button" class="ghost" id="inflowCopyBtn">${escapeHtml(t('inflowCopy', Number(prev.month.slice(5))))}</button>` +
+        `<span class="inflow-copy-preview">${parts.join(' · ')}</span></div>`;
+    }
+    el.innerHTML = html;
+    const btn = document.getElementById('inflowCopyBtn');
+    if (btn) btn.addEventListener('click', () => {
+      applyInflowCopy(prev.items);
+      renderEntryForm();
+      document.getElementById('balanceRows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  // The latest month before `dateStr`'s that recorded any per-account inflow, summed per
+  // account and currency pocket: { month, items: [{ accId, code, value }] }, largest
+  // first. Values stay in each account's own direction (a mortgage repayment stays
+  // negative), so copying them reproduces exactly what was typed. Deleted accounts and
+  // pockets that netted to zero are dropped; null when no earlier month has any.
+  function previousMonthInflows(dateStr) {
+    const month = dateStr.slice(0, 7);
+    const byMonth = new Map();
+    for (const s of state.snapshots) {
+      const m = s.date.slice(0, 7);
+      if (m >= month) continue;
+      for (const [accId, u] of Object.entries(s.updates)) {
+        if (!accountById(accId)) continue;
+        for (const leg of updateLegs(u)) {
+          const v = Number(leg.inflow);
+          if (leg.inflow == null || !isFinite(v) || v === 0) continue;
+          if (!byMonth.has(m)) byMonth.set(m, new Map());
+          const key = accId + '|' + leg.currency;
+          const acc = byMonth.get(m);
+          acc.set(key, (acc.get(key) || 0) + v);
+        }
+      }
+    }
+    const months = [...byMonth.keys()].sort();
+    for (let i = months.length - 1; i >= 0; i--) {
+      const items = [...byMonth.get(months[i])].map(([key, value]) => {
+        const [accId, code] = key.split('|');
+        const d = Math.pow(10, decimalsFor(code));
+        return { accId, code, value: Math.round(value * d) / d };
+      }).filter(x => x.value !== 0);
+      if (items.length) {
+        const dc = state.displayCurrency, rates = bestRatesForDate(dateStr);
+        const size = x => Math.abs(convert(x.value, x.code, dc, rates) ?? x.value);
+        items.sort((a, b) => size(b) - size(a));
+        return { month: months[i], items };
+      }
+    }
+    return null;
+  }
+
+  // Put copied inflows into the form. Unlike a transfer (which the user just asked
+  // for), a copy is a suggestion: a pocket whose inflow is already filled is left
+  // alone, and a balance typed by hand is never overwritten — only blank or
+  // auto-filled balances are re-derived from the new inflow.
+  function applyInflowCopy(items) {
+    for (const { accId, code, value } of items) {
+      const acc = accountById(accId);
+      if (!acc) continue;
+      let row = entryRows.find(r => r.accountId === accId);
+      if (!row) {
+        row = entryRows.find(r => !r.accountId);
+        if (!row) { row = newEmptyRow(); entryRows.push(row); }
+        row.accountId = accId;
+        row.currency = acc.currency;
+      }
+      if (isMultiCurrency(acc)) {
+        if (!row.amounts) { row.currency = acc.currency; row.amounts = {}; delete row.amount; delete row.inflow; delete row.autoFilled; }
+        row.inflows = row.inflows || {};
+        row.autoFilledCur = row.autoFilledCur || {};
+        const had = row.inflows[code];
+        if (had != null && had !== '' && parseFloat(had) !== 0) continue;
+        row.inflows[code] = String(value);
+        autofillLegBalance(row, code);
+      } else {
+        if (row.inflow != null && row.inflow !== '' && parseFloat(row.inflow) !== 0) continue;
+        // A single-currency row takes the pocket's currency only while its balance is
+        // still blank; otherwise the inflow would be read in the wrong unit.
+        if (row.currency !== code) {
+          if (row.amount !== '' && !row.autoFilled) continue;
+          row.currency = code;
+        }
+        row.inflow = String(value);
+        autofillRowBalance(row);
+      }
+    }
   }
 
   // Has the user ever recorded an inflow, in either shape? Every explanation of a
