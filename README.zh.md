@@ -39,6 +39,7 @@
 - Service Worker，用于离线和资源缓存
 - Web Crypto API（PBKDF2 + AES-GCM），用于可选的落盘加密
 - `node test.js` 跑金额数学的回归测试 —— 余额变化的归因、含出入金的真实收益率、数据迁移。零依赖、无构建步骤：直接从 `index.html` 里读取函数
+- `node e2e.js`（可选）在真实的 Chrome 里点一遍页面 —— 表单是否清空、手机宽度、隐私模糊、三种语言。需要本机装有 Chrome 和 `npm i --no-save playwright-core`，所以不放进零依赖的 `test.js`
 
 ## 隐私
 

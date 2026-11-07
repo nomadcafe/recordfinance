@@ -24,3 +24,6 @@ local-data/
 
 # Logs
 *.log
+
+# Optional browser-test dependency (npm i --no-save playwright-core)
+node_modules/

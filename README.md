@@ -39,6 +39,7 @@ Pure static site. No build step, no framework.
 - Service Worker for offline + asset caching
 - Web Crypto API (PBKDF2 + AES-GCM) for optional at-rest encryption
 - `node test.js` runs the regression tests for the money math — how a balance change is attributed, realized return with cash flows, the data migration. No dependencies and no build step: it reads the functions straight out of `index.html`
+- `node e2e.js` (optional) clicks through the page in a real Chrome — form clearing, phone width, privacy blur, all three languages. It needs Chrome installed and `npm i --no-save playwright-core`, so it stays out of the zero-dependency `test.js`
 
 ## Privacy
 
