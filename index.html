@@ -304,6 +304,7 @@
   body.privacy-blur .change-row,
   body.privacy-blur .lr-amt,
   body.privacy-blur .eff-money,
+  body.privacy-blur .debt-sub,
   body.privacy-blur .inflow-line,
   body.privacy-blur .copy-amt,
   body.privacy-blur .history-expense-total,
@@ -781,7 +782,9 @@
   #mainView > #earlyHint       { order: 3; }
   #mainView > .panel-trend     { order: 4; }
   #mainView > #breakdownPanel  { order: 5; }
-  #mainView > #efficiencyPanel { order: 6; }
+  #mainView > #efficiencyPanel,
+  #mainView > #spendingPanel,
+  #mainView > #debtPanel       { order: 6; }
   #mainView > #entryPanel      { order: 7; }
   #mainView > #accountsPanel   { order: 8; }
   #mainView > .panel:last-child { order: 9; }
@@ -1306,6 +1309,15 @@
   #efficiencyGroups .legend-row .lr-amt { flex: 0 0 auto; }
   #efficiencyGroups .legend-row.clickable { cursor: pointer; }
   #efficiencyGroups .legend-row.clickable:hover .eff-name { color: var(--accent); }
+  .debt-accounts { margin-top: 16px; }
+  .debt-acc { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .debt-acc:last-child { border-bottom: none; }
+  .debt-acc .legend-row { padding: 10px 0 2px; border-bottom: none; }
+  .debt-acc .legend-row .eff-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .debt-acc .legend-row .lr-amt { flex: 0 0 auto; }
+  .debt-acc .legend-row.clickable { cursor: pointer; }
+  .debt-acc .legend-row.clickable:hover .eff-name { color: var(--accent); }
+  .debt-sub { font-size: 12px; color: var(--muted); padding-left: 24px; }
 
   /* Mobile */
   @media (max-width: 640px) {
@@ -1911,6 +1923,16 @@
     </details>
     <div class="spend-gaps" id="spendingGaps" hidden></div>
     <div class="hint" id="spendingNote"></div>
+  </div>
+
+  <div class="panel" id="debtPanel" hidden>
+    <div class="toolbar">
+      <h2 id="debtTitle">债务</h2>
+      <span class="eff-window" id="debtWindow"></span>
+    </div>
+    <div class="eff-headline" id="debtHeadline"></div>
+    <div class="debt-accounts" id="debtAccounts"></div>
+    <div class="hint" id="debtNote"></div>
   </div>
 
   <div class="panel">
@@ -5062,6 +5084,196 @@
     });
   })();
 
+  // ===== Debt =====
+  // What is owed, how fast it is coming down, and when it would be gone at that pace.
+  // Everything is read off the balances already recorded: the paydown pace is the
+  // median slope of the loan's own records over the trailing year, and the interest
+  // rate is the one the records imply (interest the balance didn't come down by, over
+  // what was owed) — not a contract rate, which this app never asks for.
+  //
+  // Theil-Sen, as for the goal pace: a one-off lump-sum repayment is a minority of the
+  // pairwise slopes, so it moves the median far less than it would a least-squares line.
+  function theilSen(xs, ys) {
+    const slopes = [];
+    for (let i = 0; i < xs.length; i++) {
+      for (let j = i + 1; j < xs.length; j++) {
+        const dx = xs[j] - xs[i];
+        if (dx > 0) slopes.push((ys[j] - ys[i]) / dx);
+      }
+    }
+    if (!slopes.length) return null;
+    slopes.sort((a, b) => a - b);
+    const mid = slopes.length >> 1;
+    return slopes.length % 2 ? slopes[mid] : (slopes[mid - 1] + slopes[mid]) / 2;
+  }
+
+  // Months until `owed` reaches zero, paying `principal` a month. With a known monthly
+  // rate the instalment is held fixed and solved as an annuity, so the principal share
+  // grows as interest shrinks — which is how a mortgage actually amortizes. The
+  // instalment is the measured principal plus interest on `atBalance`, the balance that
+  // principal was measured at (the window's average; today's balance by default) —
+  // pairing a mid-window principal with today's interest would understate it. Without a
+  // rate it is a straight line, which can only err late. null past 50 years: a forecast
+  // that far out is not one.
+  function debtPayoffMonths(owed, principal, monthlyRate, atBalance = owed) {
+    if (!(owed > 0) || !(principal > 0)) return null;
+    let n;
+    if (monthlyRate > 0) {
+      const payment = principal + monthlyRate * atBalance;
+      n = -Math.log(1 - monthlyRate * owed / payment) / Math.log(1 + monthlyRate);
+    } else {
+      n = owed / principal;
+    }
+    n = Math.ceil(n - 1e-9);
+    return isFinite(n) && n <= 600 ? Math.max(1, n) : null;
+  }
+
+  const MIN_DEBT_WINDOW_DAYS = 60;
+  function computeDebt() {
+    const tl = computeTimeline();
+    const cur = currentSnapshot();
+    if (!cur) return null;
+    const owedAt = (entry, acc) => {
+      const b = entry.balances[acc.id];
+      if (!b) return 0;
+      return b.converted == null ? null : -b.converted;
+    };
+    const liabs = state.accounts.filter(a => a.type === 'liability' && cur.balances[a.id]);
+    const accounts = liabs.map(acc => ({ acc, owed: owedAt(cur, acc) }))
+      .filter(r => r.owed == null || !isNegligible(r.owed));
+    if (!accounts.length) return null;
+    const total = accounts.some(r => r.owed == null) ? null : accounts.reduce((a, r) => a + r.owed, 0);
+    const assets = cur.assetsTotal;
+    const ratio = total != null && assets != null && assets > 0 ? total / assets : null;
+
+    // The window: from the last record before a year ago, or from the first record for
+    // a shorter history. Same anchor as computeAccountPeriodChange uses, so the interest
+    // it reports covers exactly this span.
+    const start = trailingYearStart();
+    let base = tl[0];
+    for (const e of tl) { if (e.snapshot.date < start) base = e; else break; }
+    const days = daysBetween(base.snapshot.date, cur.snapshot.date);
+    const enough = days >= MIN_DEBT_WINDOW_DAYS;
+    let change = null;
+    if (enough && total != null) {
+      const before = liabs.reduce((a, acc) => (a == null ? null : (v => v == null ? null : a + v)(owedAt(base, acc))), 0);
+      if (before != null) change = total - before;
+    }
+
+    let interestTotal = 0, interestKnown = false;
+    for (const r of accounts) {
+      const acc = r.acc;
+      r.status = acc.category === 'creditCard' ? 'revolving' : 'short';
+      r.principal = null; r.rate = null; r.interest = null; r.months = null;
+      // The loan's own records in the window (the baseline included), in its own
+      // currency when it has only ever had one — a yen loan's payoff date should not
+      // move with the yen — and in display currency otherwise.
+      const pts = [];
+      for (const e of tl) {
+        if (e.snapshot.date < base.snapshot.date) continue;
+        if (e !== base && !e.snapshot.updates[acc.id]) continue;
+        const b = e.balances[acc.id];
+        if (b) pts.push({ date: e.snapshot.date, b });
+      }
+      const native = pts.length && pts.every(p => p.b.legs.length === 1 && p.b.legs[0].currency === pts[0].b.legs[0].currency);
+      r.unit = native ? pts[0].b.legs[0].currency : state.displayCurrency;
+      const val = p => native ? p.b.legs[0].amount : (p.b.converted == null ? null : -p.b.converted);
+      r.owedNative = pts.length ? val(pts[pts.length - 1]) : null;
+
+      if (chargesInterest(acc) && enough) {
+        const ch = computeAccountPeriodChange(acc.id, start);
+        // Only with a repayment recorded: otherwise a grown balance is just the whole
+        // change, and calling it interest would be a guess.
+        if (ch && ch.split && ch.split.anyInflow) {
+          r.interest = -ch.split.interest;
+          interestKnown = true;
+          interestTotal += r.interest;
+          const owedPts = pts.map(p => p.b.converted == null ? null : -p.b.converted);
+          if (r.interest > 0 && owedPts.every(v => v != null)) {
+            const avg = owedPts.reduce((a, v) => a + v, 0) / owedPts.length;
+            const rate = avg > 0 ? r.interest / avg * 365 / days : null;
+            // A rate outside 0–30% says the records don't describe a loan's interest
+            // (a missed repayment, a top-up) more than it describes the loan.
+            if (rate != null && rate > 0 && rate < 0.3) r.rate = rate;
+          }
+        }
+      }
+      if (r.status === 'revolving') continue;
+      const usable = pts.filter(p => val(p) != null);
+      if (!enough || usable.length < 2) continue;
+      const t0 = new Date(usable[0].date).getTime();
+      const slope = theilSen(usable.map(p => (new Date(p.date).getTime() - t0) / (30.44 * DAY_MS)), usable.map(val));
+      if (slope == null || slope >= 0 || isNegligible(slope)) { r.status = 'notFalling'; continue; }
+      r.principal = -slope;
+      r.status = 'payoff';
+      const avgOwed = usable.reduce((a, p) => a + val(p), 0) / usable.length;
+      r.months = debtPayoffMonths(r.owedNative, r.principal, r.rate ? r.rate / 12 : 0, avgOwed);
+      if (r.months == null) r.status = 'far';
+      else {
+        const d = new Date(cur.snapshot.date);
+        const ym = d.getFullYear() * 12 + d.getMonth() + r.months;
+        r.payoff = `${Math.floor(ym / 12)}-${String(ym % 12 + 1).padStart(2, '0')}`;
+      }
+    }
+    accounts.sort((a, b) => (b.owed || 0) - (a.owed || 0));
+    return { total, assets, ratio, change, days, interest: interestKnown ? interestTotal : null, accounts };
+  }
+
+  function renderDebt() {
+    const panel = document.getElementById('debtPanel');
+    const d = computeDebt();
+    if (!d) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const dc = state.displayCurrency;
+    document.getElementById('debtTitle').textContent = t('debtTitle');
+    document.getElementById('debtWindow').textContent = d.days >= MIN_DEBT_WINDOW_DAYS ? t('effWindow', d.days) : '';
+    const tile = (k, v, sub, cls) =>
+      `<div class="eff-stat"><div class="eff-k">${k}</div>` +
+      `<div class="eff-v ${cls || ''}">${v}</div>` +
+      `<div class="eff-sub">${sub || ''}</div></div>`;
+    const money = v => `<span class="eff-money">${fmt(v, dc)}</span>`;
+    const tiles = [tile(t('debtTotal'), d.total == null ? '—' : money(d.total), '')];
+    if (d.ratio != null) tiles.push(tile(t('debtRatio'), Math.round(d.ratio * 100) + '%', escapeHtml(t('debtRatioSub', fmt(d.assets, dc)))));
+    if (d.change != null && !isNegligible(d.change)) {
+      tiles.push(tile(t('debtChange'), `<span class="eff-money">${fmtSigned(d.change, dc)}</span>`,
+        t(d.change < 0 ? 'debtDown' : 'debtUp'), d.change < 0 ? 'eff-pos' : 'eff-neg'));
+    }
+    if (d.interest != null && d.interest > 0 && !isNegligible(d.interest)) {
+      tiles.push(tile(t('debtInterest'), money(d.interest), t('debtInterestSub')));
+    }
+    document.getElementById('debtHeadline').innerHTML = tiles.join('');
+
+    const pctStr = v => (v * 100).toFixed(1) + '%';
+    document.getElementById('debtAccounts').innerHTML = d.accounts.map(r => {
+      const bits = [];
+      // An estimate in whole units: "≈ ¥2,536.17" claims a precision it doesn't have.
+      if (r.principal != null) bits.push(t('debtPrincipal', SYMBOLS[r.unit] + Math.round(r.principal).toLocaleString('zh-CN')));
+      if (r.rate != null) bits.push(t('debtRate', pctStr(r.rate)));
+      if (r.status === 'payoff') bits.push(t('debtPayoff', r.payoff));
+      else if (r.status === 'far') bits.push(t('debtPayoffFar'));
+      else if (r.status === 'notFalling') bits.push(t('debtNotFalling'));
+      else if (r.status === 'revolving') bits.push(t('debtRevolving'));
+      else bits.push(t('debtShort'));
+      return `<div class="debt-acc"><div class="legend-row clickable" data-acc-id="${r.acc.id}" role="button" tabindex="0">` +
+        `<span class="chip-dot" style="background:${adaptColor(r.acc.color)}"></span>` +
+        `<span class="eff-name">${escapeHtml(r.acc.name)}</span>` +
+        `<span class="lr-amt">${r.owed == null ? '—' : fmt(r.owed, dc)}</span></div>` +
+        `<div class="debt-sub">${bits.map(escapeHtml).join(' · ')}</div></div>`;
+    }).join('');
+    document.getElementById('debtNote').textContent = t('debtNote');
+  }
+  (() => {
+    const list = document.getElementById('debtAccounts');
+    const open = e => {
+      const row = e.target.closest('.legend-row[data-acc-id]');
+      if (row) startDrilldown(row.dataset.accId);
+    };
+    list.addEventListener('click', open);
+    list.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+    });
+  })();
+
   // ===== Monthly spending =====
   // One row per calendar month, oldest first, ending with the month of `todayStr`:
   // what the month's records leave unexplained (the "Unrecorded" bucket, negated so
@@ -7332,6 +7544,7 @@
     renderBreakdown();
     renderEfficiency();
     renderSpending();
+    renderDebt();
     renderAccountList();
     renderEntryForm();
     renderHistory();

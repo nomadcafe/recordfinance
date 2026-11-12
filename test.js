@@ -41,7 +41,7 @@ function grabConst(re) {
 }
 
 const FNS = [
-  'residualKind', 'chargesInterest', 'interestPart', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
+  'residualKind', 'chargesInterest', 'interestPart', 'theilSen', 'debtPayoffMonths', 'computeDebt', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
   'accountOpeningContribution', 'windowHasUnattributedInflow', 'decomposePeriod',
   'sumConvertedAt', 'realizedReturn', 'trailingYearStart', 'computeEfficiency',
   'computePeriodChange', 'computeAccountPeriodChange', 'hasAnyInflowData',
@@ -89,6 +89,7 @@ const PRELUDE = `
   ${grabConst(/  const CATEGORY_COLORS = new Proxy[^\n]+/)}
   ${grabConst(/  const monthRate = [^\n]+/)}
   ${grabConst(/  const INTEREST_CATEGORIES = [^\n]+/)}
+  ${grabConst(/  const MIN_DEBT_WINDOW_DAYS = [^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -234,6 +235,67 @@ sec('Interest on a mortgage or loan');
   ], { basis: 'assets' });
   const ra = app.computePeriodChange('2026-10-01');
   ck('the assets basis carries no interest', !ra.split || near(ra.split.interest, 0), ra.split);
+}
+
+sec('Debt overview');
+{
+  // 13 monthly instalments of 3,000 on a 4%/yr mortgage, each recorded as a transfer
+  // from the bank, the balance taken from the statement.
+  const r = 0.04 / 12;
+  let owed = 400000, bank = 200000;
+  const snaps = [snap('2025-10-31', { b: { amount: bank, currency: 'CNY' }, m: { amount: owed, currency: 'CNY' } })];
+  for (let k = 1; k <= 13; k++) {
+    owed = Math.round((owed * (1 + r) - 3000) * 100) / 100;
+    bank -= 3000;
+    const d = new Date(2025, 10 + k, 0);
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    snaps.push(snap(date, { b: { amount: bank, currency: 'CNY', inflow: -3000 }, m: { amount: owed, currency: 'CNY', inflow: -3000 } }));
+  }
+  load([A('b', 'savings'), LI('m', 'mortgage')], snaps);
+  const d = app.computeDebt();
+  const m = d.accounts[0];
+  ck('total owed is the mortgage', near(d.total, owed), d.total);
+  ck('debt ratio is owed over assets', near(d.ratio, owed / bank), d.ratio);
+  ck('a year of paydown reads as a fall', d.change < 0, d.change);
+  ck('the implied rate is close to the real 4%', Math.abs(m.rate - 0.04) < 0.003, m.rate);
+  ck('principal per month is what came off', m.principal > 1600 && m.principal < 1750, m.principal);
+  // The true payoff: keep paying 3,000 at 4% from today's balance.
+  let left = owed, n = 0;
+  while (left > 0 && n < 1000) { left = left * (1 + r) - 3000; n++; }
+  ck('payoff matches a real amortization within a month', m.status === 'payoff' && Math.abs(m.months - n) <= 1, [m.months, n]);
+  ck('and is named as a month', /^\d{4}-\d{2}$/.test(m.payoff), m.payoff);
+  ck('interest paid is summed', d.interest > 15000 && d.interest < 17000, d.interest);
+
+  // The annuity solve beats a straight line, which only errs late.
+  ck('without a rate the estimate is a straight line', app.debtPayoffMonths(12000, 1000, 0) === 12);
+  ck('with a rate it is shorter than owed ÷ principal', app.debtPayoffMonths(300000, 1500, 0.04 / 12) < 200);
+  ck('no paydown, no date', app.debtPayoffMonths(1000, 0, 0) === null);
+  ck('past 50 years, no date', app.debtPayoffMonths(1e9, 1, 0) === null);
+
+  // A card revolves; a loan that isn't falling gets no date; a short history gets none.
+  load([A('b', 'savings'), LI('c', 'creditCard')], [
+    snap('2026-01-31', { b: { amount: 10000, currency: 'CNY' }, c: { amount: 3000, currency: 'CNY' } }),
+    snap('2026-06-30', { b: { amount: 10000, currency: 'CNY' }, c: { amount: 2000, currency: 'CNY' } }),
+  ]);
+  ck('a card gets no payoff date', app.computeDebt().accounts[0].status === 'revolving');
+  load([LI('l', 'loan')], [
+    snap('2026-01-31', { l: { amount: 3000, currency: 'CNY' } }),
+    snap('2026-06-30', { l: { amount: 3500, currency: 'CNY' } }),
+  ]);
+  ck('a loan that grew is not falling', app.computeDebt().accounts[0].status === 'notFalling');
+  load([LI('l', 'loan')], [
+    snap('2026-06-01', { l: { amount: 3000, currency: 'CNY' } }),
+    snap('2026-06-30', { l: { amount: 2500, currency: 'CNY' } }),
+  ]);
+  ck('under two months, no estimate', app.computeDebt().accounts[0].status === 'short');
+  // Without any repayment recorded there is no interest to read, so no rate either.
+  load([LI('l', 'loan')], [
+    snap('2026-01-31', { l: { amount: 3000, currency: 'CNY' } }),
+    snap('2026-06-30', { l: { amount: 2500, currency: 'CNY' } }),
+  ]);
+  ck('no recorded repayment, no rate', app.computeDebt().accounts[0].rate === null && app.computeDebt().interest === null);
+  load([A('b', 'savings')], [snap('2026-01-31', { b: { amount: 1, currency: 'CNY' } })]);
+  ck('no debt, no panel', app.computeDebt() === null);
 }
 
 sec('Transfers between your own accounts');
