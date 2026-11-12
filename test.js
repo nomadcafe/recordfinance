@@ -41,7 +41,7 @@ function grabConst(re) {
 }
 
 const FNS = [
-  'residualKind', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
+  'residualKind', 'chargesInterest', 'interestPart', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
   'accountOpeningContribution', 'windowHasUnattributedInflow', 'decomposePeriod',
   'sumConvertedAt', 'realizedReturn', 'trailingYearStart', 'computeEfficiency',
   'computePeriodChange', 'computeAccountPeriodChange', 'hasAnyInflowData',
@@ -88,6 +88,7 @@ const PRELUDE = `
   ${grabConst(/  const CATEGORY_SLOT = \{[\s\S]*?\n  \};/)}
   ${grabConst(/  const CATEGORY_COLORS = new Proxy[^\n]+/)}
   ${grabConst(/  const monthRate = [^\n]+/)}
+  ${grabConst(/  const INTEREST_CATEGORIES = [^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -191,6 +192,48 @@ load([LI('c', 'creditCard')], [
   ck('repayment reads as inflow', near(r.split.inflow, 5000));
   ck('unrecorded card spend is negative', near(r.split.untracked, -3000));
   ck('debt is never a market gain', near(r.split.market, 0));
+}
+
+sec('Interest on a mortgage or loan');
+{
+  // A 5,000 instalment from the bank, of which only 3,000 came off the mortgage.
+  const accs = [A('b', 'savings'), LI('m', 'mortgage')];
+  load(accs, [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' }, m: { amount: 400000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 95000, currency: 'CNY', inflow: -5000 }, m: { amount: 397000, currency: 'CNY', inflow: -5000 } }),
+  ]);
+  const r = app.computePeriodChange('2026-10-01');
+  ck('the 2,000 not taken off principal is interest', near(r.split.interest, -2000), r.split);
+  ck('and stays inside the unrecorded bucket', near(r.split.untracked, -2000));
+  ck('so the split still reconciles', near(r.split.inflow + r.split.market + r.split.untracked, r.delta));
+  const html = app.renderSplitChips(r);
+  ck('the chips name it', /利息/.test(html), html);
+  const acc = app.computeAccountPeriodChange('m', '2026-10-01');
+  ck('the mortgage drilldown calls its residual interest', near(acc.split.interest, -2000) && /利息/.test(app.renderSplitChips(acc, acc.kind)), acc.split);
+  // A loan is the same; a card is not — what grows a card is spending.
+  load([A('b', 'savings'), LI('m', 'loan')], [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' }, m: { amount: 50000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 99000, currency: 'CNY', inflow: -1000 }, m: { amount: 49300, currency: 'CNY', inflow: -1000 } }),
+  ]);
+  ck('a loan charges interest too', near(app.computePeriodChange('2026-10-01').split.interest, -300));
+  load([LI('c', 'creditCard')], [
+    snap('2026-09-30', { c: { amount: 5000, currency: 'CNY' } }),
+    snap('2026-10-15', { c: { amount: 3000, currency: 'CNY', inflow: -5000 } }),
+  ]);
+  ck('a card balance that grew is spending, not interest', near(app.computePeriodChange('2026-10-01').split.interest, 0));
+  // Paid down by more than was recorded: an unrecorded repayment, never negative interest.
+  load(accs, [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' }, m: { amount: 400000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 95000, currency: 'CNY', inflow: -5000 }, m: { amount: 390000, currency: 'CNY', inflow: -5000 } }),
+  ]);
+  ck('a balance that fell further than recorded is not interest', near(app.computePeriodChange('2026-10-01').split.interest, 0));
+  // On the total-assets basis no liability is counted, so there is no interest either.
+  load(accs, [
+    snap('2026-09-30', { b: { amount: 100000, currency: 'CNY' }, m: { amount: 400000, currency: 'CNY' } }),
+    snap('2026-10-15', { b: { amount: 95000, currency: 'CNY', inflow: -5000 }, m: { amount: 397000, currency: 'CNY', inflow: -5000 } }),
+  ], { basis: 'assets' });
+  const ra = app.computePeriodChange('2026-10-01');
+  ck('the assets basis carries no interest', !ra.split || near(ra.split.interest, 0), ra.split);
 }
 
 sec('Transfers between your own accounts');
@@ -563,6 +606,8 @@ sec('Demo data exercises both features');
   const e = app.computeEfficiency();
   ck('the efficiency panel appears', !!e);
   ck('with a believable return, not a boast', e.benchmark > 0 && e.benchmark < 0.25, pc(e.benchmark));
+  ck('the demo mortgage is a mortgage', accounts[4].category === 'mortgage');
+  ck('and its instalments show interest', r.split.interest < -1000 && r.split.interest > r.split.untracked, r.split);
   ck('the mortgage amortizes across the window',
      snapshots[0].updates[accounts[4].id].amount > snapshots[13].updates[accounts[4].id].amount);
   // The tagged-spending feature has to be visible in the demo, and visible the right

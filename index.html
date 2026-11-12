@@ -1273,7 +1273,8 @@
   .spend-table th, .spend-table td { padding: 9px 10px; font-size: 13px; white-space: nowrap; }
   .spend-table th.num, .spend-table td.num { text-align: right; }
   .spend-table td.blank { color: var(--muted); }
-  @media (max-width: 480px) { .spend-table th, .spend-table td { padding: 8px 6px; } }
+  /* Up to six columns (interest and tags both present) still fit a 390px phone. */
+  @media (max-width: 480px) { .spend-table th, .spend-table td { padding: 8px 4px; font-size: 12px; } }
   .spend-table .span-note { color: var(--muted); font-size: 12px; margin-left: 4px; }
   .spend-gaps { font-size: 13px; color: var(--muted-strong); margin-top: 12px; }
   .inflow-reminder { margin-top: 10px; }
@@ -2068,6 +2069,18 @@
     if (!acc || acc.type === 'liability') return 'untracked';
     return SELF_MOVING_CATEGORIES.has(acc.category) ? 'market' : 'untracked';
   }
+  // A mortgage or loan that grew by more than the recorded repayments explain was
+  // charged interest (or a fee) — a cost of the debt, not something bought. A card is
+  // left out: what grows a card balance is spending. Only the cost direction counts;
+  // a balance that fell further than recorded is an unrecorded repayment, not negative
+  // interest, and stays in the unrecorded rest. Interest is a part of the unrecorded
+  // bucket, never a fourth bucket, so every split still reconciles and spending still
+  // includes it — money paid as interest is money gone.
+  const INTEREST_CATEGORIES = new Set(['mortgage', 'loan']);
+  function chargesInterest(acc) {
+    return !!acc && acc.type === 'liability' && INTEREST_CATEGORIES.has(acc.category);
+  }
+  function interestPart(acc, resid) { return chargesInterest(acc) && resid < 0 ? resid : 0; }
   // Category -> slot. Four of the five asset categories keep the hue family they have
   // always had; crypto moves off violet because violet and blue are indistinguishable
   // under deuteranopia (OKLab ΔE 0.3), which put crypto and cash on the same colour for
@@ -2720,6 +2733,8 @@
     const assetsOnly = state.basis === 'assets';
 
     let inflow = 0, market = 0, untracked = 0, anyInflow = false;
+    // The part of `untracked` that is interest on a mortgage or loan (net-worth sign).
+    let interest = 0;
     // The part of `inflow` that is a new account arriving with its balance: money moved,
     // but not earned in the window, so a savings rate must not count it as income.
     let opened = 0;
@@ -2754,7 +2769,8 @@
       const resid = delta - inf.total - openAmt;
       inflow += inf.total + openAmt;
       opened += openAmt;
-      if (residualKind(acc) === 'market') market += resid; else untracked += resid;
+      if (residualKind(acc) === 'market') market += resid;
+      else { untracked += resid; interest += interestPart(acc, resid); }
       sum += delta;
     }
 
@@ -2762,7 +2778,7 @@
     // involved so it survives per-date rate rounding without waving through a real gap.
     const tol = Math.max(1, Math.abs(headlineDelta) * 1e-6);
     if (Math.abs(sum - headlineDelta) > tol) return null;
-    return { inflow, market, untracked, anyInflow, opened };
+    return { inflow, market, untracked, anyInflow, opened, interest };
   }
 
   // ===== Realized return =====
@@ -3508,6 +3524,9 @@
     hint.textContent = t('transferPreview',
       from.name, fmtSigned(fs * a.amount, a.code),
       to.name, fmtSigned(ts * b.amount, b.code));
+    // The form will pre-fill the loan as "last balance − payment", which is right only
+    // if none of the payment was interest. Say what to type instead.
+    if (chargesInterest(to)) hint.textContent += ' ' + t('transferInterestHint', to.name);
   }
 
   function openTransfer() {
@@ -4832,17 +4851,28 @@
         if (kindFilter !== 'untracked' && !isNegligible(s.market)) parts.push(chip(t('gain'), s.market));
         // Tags subdivide the unrecorded bucket only on the net basis: on total assets a
         // card-paid bill never touches the residual, so "the rest" would be meaningless.
+        // Interest is measured, not annotated, so it is listed before the tags and taken
+        // out of "the rest" along with them.
+        const int = s.interest && !isNegligible(s.interest) ? s.interest : 0;
         if (ex && state.basis !== 'assets') {
-          const rest = s.untracked + ex.total;
+          const rest = s.untracked + ex.total - int;
+          const items = (int ? [chip(t('interest'), int)] : []).concat(expenseItemsHtml(ex, isNegligible(rest) ? null : rest));
           parts.push(`<span class="nb">${t('untracked')} ${fmtSigned(s.untracked, state.displayCurrency)}</span>` +
-            ` (${expenseItemsHtml(ex, isNegligible(rest) ? null : rest)})`);
+            ` (${items.join(' · ')})`);
           // More tagged than went missing: money arrived that was never recorded as
           // inflow — usually salary. Say so instead of printing a positive "rest" as if
           // it were a refund.
           if (rest > 0 && !isNegligible(rest)) note = `<span class="split-warn">${t('expenseOverTagged')}</span>`;
           return `<span class="split">${parts.join(' · ')}</span>${note}`;
         }
-        if (kindFilter !== 'market' && !isNegligible(s.untracked)) parts.push(chip(t('untracked'), s.untracked));
+        if (kindFilter !== 'market' && !isNegligible(s.untracked)) {
+          const rest = s.untracked - int;
+          // All of it interest (a loan's own drilldown, typically): one chip says it.
+          if (int && isNegligible(rest)) parts.push(chip(t('interest'), int));
+          else if (int) parts.push(`<span class="nb">${t('untracked')} ${fmtSigned(s.untracked, state.displayCurrency)}</span>` +
+            ` (${chip(t('interest'), int)} · ${chip(t('residualOther'), rest)})`);
+          else parts.push(chip(t('untracked'), s.untracked));
+        }
       }
     } else if (info.split) {
       // Split exists but no inflow was recorded: say nothing about the residual.
@@ -5060,7 +5090,7 @@
       // somewhere untracked — without any new account's opening balance.
       // `gap` says why a blank month is blank: 'noInflow' is the one the user can fix
       // (records exist, but nothing says what came in), so the panel lists those.
-      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, since: null, span: 0, gap: null };
+      const row = { month, spend: null, income: null, tagged: 0, taggedKnown: true, interest: 0, since: null, span: 0, gap: null };
       out.push(row);
       let before = null, last = null;
       for (const e of tl) {
@@ -5078,6 +5108,7 @@
       const income = split.inflow - split.opened;
       if (!split.anyInflow || isNegligible(income)) { row.gap = 'noInflow'; continue; }
       row.spend = -split.untracked;
+      row.interest = -split.interest;
       row.income = income;
       row.since = before.snapshot.date;
       // Months this bar covers: measured from a record two months back, it holds two
@@ -5139,29 +5170,37 @@
     gapsEl.hidden = !fixable.length;
     if (fixable.length) gapsEl.textContent = t('spendGaps', fixable.join(t('listSep')), fixable.length);
 
-    renderSpendingTable(rows, rows.some(r => r.spend != null && r.tagged > 0));
+    renderSpendingTable(rows, rows.some(r => r.spend != null && r.tagged > 0),
+      rows.some(r => r.spend != null && r.interest > 0 && !isNegligible(r.interest)));
 
-    // Tagged part sits at the base, the untagged rest on top. Tags can exceed what went
-    // missing (income not entered as inflow), so the base is capped at the bar; a month
-    // where more came in than went out is a single bar below zero.
-    const taggedPart = rows.map(r => r.spend == null ? null : Math.max(0, Math.min(r.tagged, r.spend)));
-    const restPart = rows.map((r, i) => r.spend == null ? null : r.spend - taggedPart[i]);
+    // Tagged part sits at the base, interest above it, the rest on top. Interest is
+    // measured, so it is carved out first; tags can exceed what went missing (income
+    // not entered as inflow), so both are capped at the bar. A month where more came
+    // in than went out is a single bar below zero.
+    const intPart = rows.map(r => r.spend == null ? null : Math.max(0, Math.min(r.interest, r.spend)));
+    const taggedPart = rows.map((r, i) => r.spend == null ? null : Math.max(0, Math.min(r.tagged, r.spend - intPart[i])));
+    const restPart = rows.map((r, i) => r.spend == null ? null : r.spend - taggedPart[i] - intPart[i]);
     const anyTagged = taggedPart.some(v => v > 0);
+    const anyInterest = intPart.some(v => v > 0 && !isNegligible(v));
+    const split = anyTagged || anyInterest;
     const labels = rows.map(r => r.month.slice(2).replace('-', '/'));
     // Only the bar's outer end is rounded, and the 2px surface gap sits between the two
     // segments: on the tagged base, and only when an untagged part stands on top of it.
     // `borderSkipped: 'start'` keeps the baseline end square and flat for negative bars too.
     const panelBg = cssVar('--panel');
-    const hasRest = i => restPart[i] != null && restPart[i] > 0;
-    const datasets = [];
-    if (anyTagged) datasets.push({
-      label: t('spendTagged'), data: taggedPart, backgroundColor: seriesHex('blue'),
+    // A lower segment carries the gap only when something positive stands on it.
+    const above = (i, ...parts) => parts.some(p => p[i] != null && p[i] > 0);
+    const lower = (label, data, color, ...higher) => ({
+      label, data, backgroundColor: seriesHex(color),
       borderColor: panelBg, borderSkipped: 'start', maxBarThickness: 28,
-      borderWidth: c => hasRest(c.dataIndex) ? { top: 2, left: 0, right: 0, bottom: 0 } : 0,
-      borderRadius: c => hasRest(c.dataIndex) ? 0 : 4,
+      borderWidth: c => above(c.dataIndex, ...higher) ? { top: 2, left: 0, right: 0, bottom: 0 } : 0,
+      borderRadius: c => above(c.dataIndex, ...higher) ? 0 : 4,
     });
+    const datasets = [];
+    if (anyTagged) datasets.push(lower(t('spendTagged'), taggedPart, 'blue', ...(anyInterest ? [intPart] : []), restPart));
+    if (anyInterest) datasets.push(lower(t('interest'), intPart, 'orange', restPart));
     datasets.push({
-      label: anyTagged ? t('spendRest') : t('spendTitle'), data: restPart, backgroundColor: seriesHex('neutral'),
+      label: anyTagged ? t('spendRest') : anyInterest ? t('residualOther') : t('spendTitle'), data: restPart, backgroundColor: seriesHex('neutral'),
       borderSkipped: 'start', borderRadius: 4, maxBarThickness: 28,
     });
     // Axis ticks in whole units: "¥15,000.00" is precision the eye can't use at this scale.
@@ -5179,7 +5218,7 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: {
-            display: anyTagged,
+            display: split,
             labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 8, padding: 16 },
           },
           tooltip: {
@@ -5199,7 +5238,7 @@
                 const r = rows[items[0].dataIndex];
                 if (r.spend == null) return t('spendNoData');
                 const lines = [];
-                if (anyTagged) lines.push(`${t('spendTotal')}：${fmt(r.spend, dc)}`);
+                if (split) lines.push(`${t('spendTotal')}：${fmt(r.spend, dc)}`);
                 const mr = monthRate(r);
                 if (mr != null) lines.push(`${t('saveRateShort')}：${Math.round(mr * 100)}%`);
                 if (r.spend < 0) lines.push(t('spendNegative'));
@@ -5230,13 +5269,13 @@
   // The chart's numbers as a table, newest month first: a phone can't hover and a
   // screen reader gets only the canvas's one-line summary. Same rows, so the two
   // never disagree; a blank month says why instead of showing a zero.
-  function renderSpendingTable(rows, anyTagged) {
+  function renderSpendingTable(rows, anyTagged, anyInterest) {
     const dc = state.displayCurrency;
     document.getElementById('spendingTableSummary').textContent = t('spendTableSummary');
     // Whole units, as on the axis: cents only widen the columns past a phone's width.
     const money = v => (v < 0 ? '−' : '') + SYMBOLS[dc] + Math.abs(Math.round(v)).toLocaleString('zh-CN');
     const head = [t('spendMonth'), t('spendCol')]
-      .concat(anyTagged ? [t('spendTagged')] : [], [t('spendIncome'), t('saveRateShort')]);
+      .concat(anyInterest ? [t('interest')] : [], anyTagged ? [t('spendTagged')] : [], [t('spendIncome'), t('saveRateShort')]);
     const cls = i => i === 0 ? '' : ' class="num"';
     const body = rows.slice().reverse().map(r => {
       const month = escapeHtml(r.month) + (r.span > 1 ? `<span class="span-note">${escapeHtml(t('spendSpan', r.span))}</span>` : '');
@@ -5246,10 +5285,11 @@
       }
       const mr = monthRate(r);
       const cells = [money(r.spend)]
-        .concat(anyTagged ? [r.tagged > 0 ? money(r.tagged) : '—'] : [],
+        .concat(anyInterest ? [r.interest > 0 && !isNegligible(r.interest) ? money(r.interest) : '—'] : [],
+          anyTagged ? [r.tagged > 0 ? money(r.tagged) : '—'] : [],
           [r.income > 0 ? money(r.income) : '—', mr == null ? '—' : Math.round(mr * 100) + '%']).map(escapeHtml);
       // Same caveat the tooltip gives: a tag with no rate is left out of this figure.
-      if (anyTagged && !r.taggedKnown) cells[1] += ` <span class="span-note" title="${escapeHtml(t('spendTagRateMissing'))}">*</span>`;
+      if (anyTagged && !r.taggedKnown) cells[anyInterest ? 2 : 1] += ` <span class="span-note" title="${escapeHtml(t('spendTagRateMissing'))}">*</span>`;
       return `<tr><td>${month}</td>${cells.map(c => `<td class="num">${c}</td>`).join('')}</tr>`;
     }).join('');
     document.getElementById('spendingTable').innerHTML =
@@ -5522,7 +5562,7 @@
       { id: crypto.randomUUID(), name: names.stocks,   color: PALETTE[0], currency: 'USD', type: 'asset',     category: 'investment' },
       { id: crypto.randomUUID(), name: names.crypto,   color: PALETTE[3], currency: 'USD', type: 'asset',     category: 'crypto' },
       { id: crypto.randomUUID(), name: names.cash,     color: PALETTE[2], currency: 'CNY', type: 'asset',     category: 'cash' },
-      { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[7], currency: 'CNY', type: 'liability', category: 'other' },
+      { id: crypto.randomUUID(), name: names.mortgage, color: PALETTE[7], currency: 'CNY', type: 'liability', category: 'mortgage' },
     ];
     // Predetermined move sequences (instead of Math.random) for a reproducible, visually
     // pleasing trajectory. The month-to-month swings carry the chart's character; the
@@ -5544,9 +5584,6 @@
     let cryptoVal = 18000;
     let cash = 12000;
     let cashTopUp = 0;
-    // Starts above the floor so the balance actually amortizes across the window; a
-    // start of 220000 against a Math.max floor of 380000 pinned it flat on record one
-    // and the paydown this account exists to show never happened.
     let mortgage = 420000;
     const snapshots = [];
     const today = new Date();
@@ -5556,7 +5593,15 @@
       // Month-end of (today - (N-1-i)) months.
       const d = new Date(today.getFullYear(), today.getMonth() - (N - 1 - i) + 1, 0);
       const dateStr = localDateStr(d);
-      savings += inflows[i] - spends[i];
+      // The mortgage is paid from savings: a fixed instalment, of which this month's
+      // interest (3.75%/yr on what is owed) is the cost and the rest is principal. The
+      // instalment leaves savings as a transfer, so savings records its inflow net of
+      // it and the loan records the whole instalment — the interest then surfaces on its
+      // own, as the part of the instalment the balance didn't come down by.
+      const payment = i > 0 ? 3800 : 0;
+      const interest = i > 0 ? Math.round(mortgage * 0.0375 / 12) : 0;
+      mortgage -= payment - interest;
+      savings += inflows[i] - spends[i] - payment;
       stocks = Math.round(stocks * stockMoves[i]);
       cryptoVal = Math.round(cryptoVal * cryptoMoves[i]);
       // Cash is spent down ~700 a month and topped up every third month. The top-up is
@@ -5565,8 +5610,6 @@
       const topUp = i % 3 === 0 ? 2000 : 0;
       cash += topUp - 700;
       cashTopUp += topUp;
-      const prevMortgage = mortgage;
-      mortgage = Math.max(380000, mortgage - 2500);
 
       const updates = {};
       // Per-account inflow, the shape everything reads: it's what makes the demo show
@@ -5574,7 +5617,7 @@
       // other accounts record none on purpose — their drift is market movement, and
       // the cash account's is unrecorded spending, which is exactly the distinction
       // the dashboard is there to draw.
-      updates[accounts[0].id] = { amount: savings,   currency: 'CNY', inflow: inflows[i] };
+      updates[accounts[0].id] = { amount: savings,   currency: 'CNY', inflow: inflows[i] - payment };
       updates[accounts[1].id] = { amount: stocks,    currency: 'USD' };
       updates[accounts[2].id] = { amount: cryptoVal, currency: 'USD' };
       // Cash updated less often (realistic: people don't recount cash every month)
@@ -5584,12 +5627,11 @@
           : { amount: cash, currency: 'CNY' };
         cashTopUp = 0;
       }
-      // The repayment is money paid in, recorded as such (a liability's inflow runs in
-      // its own direction, so less owed is negative). Left unrecorded, it read as +2,500
-      // of unexplained money every month — enough to outweigh any spending tagged above.
-      const repaid = prevMortgage - mortgage;
-      updates[accounts[4].id] = i > 0 && repaid
-        ? { amount: mortgage, currency: 'CNY', inflow: -repaid }
+      // The instalment is money paid in, recorded as such (a liability's inflow runs in
+      // its own direction, so less owed is negative) — the whole instalment, as the
+      // transfer dialog writes it, not just the principal.
+      updates[accounts[4].id] = payment
+        ? { amount: mortgage, currency: 'CNY', inflow: -payment }
         : { amount: mortgage, currency: 'CNY' };
 
       let note = '';
@@ -7112,6 +7154,7 @@
         inflow: inf.total + openAmt, anyInflow: inf.has || openAmt !== 0,
         market: kind === 'market' ? resid : 0,
         untracked: kind === 'market' ? 0 : resid,
+        interest: kind === 'market' ? 0 : interestPart(acc, resid),
       };
     }
     return { delta, pct, inflowTotal: inf.total, inflowHas: inf.has, split, kind };
