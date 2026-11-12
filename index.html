@@ -1298,6 +1298,7 @@
     text-transform: uppercase; letter-spacing: 0.06em;
     margin-top: 20px; padding-bottom: 2px;
   }
+  .eff-compare { font-size: 13px; color: var(--muted); margin-top: 14px; line-height: 1.6; }
   .eff-pos { color: var(--accent); }
   .eff-neg { color: var(--danger); }
   .eff-idle-ret { color: var(--muted); font-size: 12px; min-width: 52px; text-align: right; }
@@ -1908,6 +1909,7 @@
       <span class="eff-window" id="efficiencyWindow"></span>
     </div>
     <div class="eff-headline" id="efficiencyHeadline"></div>
+    <div class="eff-compare" id="efficiencyDebtCompare" hidden></div>
     <div id="efficiencyGroups"></div>
     <div class="hint" id="efficiencyNote"></div>
   </div>
@@ -5072,8 +5074,32 @@
     // holds cash, with no figure to hold it against, is noise dressed as insight.
     if (benchmark == null) return null;
 
+    // Debt that charges interest, at the rate its own records imply (see computeDebt).
+    // Paying it down "earns" that rate with certainty, which is the other number worth
+    // holding a return against. Highest rate first: that is the one repaid first.
+    const debt = computeDebt();
+    const costly = debt ? debt.accounts.filter(r => r.rate != null && r.owed > 0)
+      .map(r => ({ acc: r.acc, value: r.owed, rate: r.rate }))
+      .sort((a, b) => b.rate - a.rate) : [];
+    const costlyOwed = costly.reduce((a, r) => a + r.value, 0);
+    const debtRate = costly.length ? costly.reduce((a, r) => a + r.rate * r.value, 0) / costlyOwed : null;
+    // A year's interest the idle money would stop paying if it went to the dearest
+    // debt first. A fact about the two balances, not a recommendation: how much cash to
+    // keep at hand is not something these records can know.
+    let idleToDebt = null;
+    if (costly.length && idleTotal > 0) {
+      let left = idleTotal, saved = 0;
+      for (const r of costly) {
+        const take = Math.min(left, r.value);
+        saved += take * r.rate; left -= take;
+        if (left <= 0) break;
+      }
+      idleToDebt = saved;
+    }
+
     const assets = cur.assetsTotal;
     return {
+      costly, debtRate, idleToDebt,
       idle, idleTotal, working, rest, combined, benchmark,
       idleShare: assets && assets > 0 ? idleTotal / assets : null,
       // What the idle money would have earned at the rate the rest of it managed.
@@ -5115,7 +5141,23 @@
         `<span class="eff-money">${fmt(eff.opportunity, state.displayCurrency)}</span>`,
         t('effGapSub')));
     }
+    if (eff.debtRate != null) {
+      tiles.push(tile(t('effDebtRateLabel'), fmtPct(-eff.debtRate), t('effDebtRateSub'), 'eff-neg'));
+      if (eff.idleToDebt != null && !isNegligible(eff.idleToDebt)) {
+        tiles.push(tile(t('effDebtPayLabel'),
+          `<span class="eff-money">${fmt(eff.idleToDebt, state.displayCurrency)}</span>`, t('effDebtPaySub')));
+      }
+    }
     document.getElementById('efficiencyHeadline').innerHTML = tiles.join('');
+    // Repaying earns the debt's rate for certain; the return beside it is what the
+    // investments did, which nothing promises again. Both, side by side, no verdict.
+    const cmp = document.getElementById('efficiencyDebtCompare');
+    cmp.hidden = eff.debtRate == null;
+    if (eff.debtRate != null) {
+      const pct = v => (v * 100).toFixed(1) + '%';
+      cmp.textContent = t('effDebtCompare', pct(eff.debtRate), fmtPct(eff.benchmark),
+        Math.abs((eff.benchmark - eff.debtRate) * 100).toFixed(1), eff.benchmark > eff.debtRate);
+    }
 
     // Rows open the account's drilldown — a rate you can't go look at is a dead end.
     const row = (entry, retCell) =>
@@ -5145,6 +5187,11 @@
     if (eff.rest.length) {
       html += `<div class="eff-group-label">${t('effRestGroup')}</div>`;
       html += eff.rest.map(e => row(e, noRate(t('effRestWhyNoRate')))).join('');
+    }
+    if (eff.costly.length) {
+      html += `<div class="eff-group-label">${t('effDebtGroup')}</div>`;
+      html += eff.costly.map(e => row(e,
+        `<span class="lr-pct eff-neg" title="${escapeHtml(t('effDebtWhyRate'))}">${fmtPct(-e.rate)}</span>`)).join('');
     }
     document.getElementById('efficiencyGroups').innerHTML = html;
     document.getElementById('efficiencyNote').textContent = t('effNote');

@@ -267,6 +267,16 @@ sec('Debt overview');
   ck('and is named as a month', /^\d{4}-\d{2}$/.test(m.payoff), m.payoff);
   ck('interest paid is summed', d.interest > 15000 && d.interest < 17000, d.interest);
 
+  // The same mortgage beside an index fund: the efficiency panel holds the two up.
+  const withFund = snaps.map((sn, k) => ({ ...sn, updates: { ...sn.updates, s: { amount: Math.round(100000 * Math.pow(1.005, k)), currency: 'CNY' } } }));
+  load([A('b', 'savings'), A('s', 'investment'), LI('m', 'mortgage')], withFund);
+  const e = app.computeEfficiency();
+  ck('the panel carries the debt at its implied rate', e.costly.length === 1 && Math.abs(e.debtRate - 0.04) < 0.003, e.costly);
+  ck('idle money against the debt: a year of interest on the smaller of the two',
+     near(e.idleToDebt, Math.min(e.idleTotal, e.costly[0].value) * e.costly[0].rate), [e.idleToDebt, e.idleTotal]);
+  ck('a card never appears there', !e.costly.some(r => r.acc.category === 'creditCard'));
+  load([A('b', 'savings'), LI('m', 'mortgage')], snaps);
+
   // The annuity solve beats a straight line, which only errs late.
   ck('without a rate the estimate is a straight line', app.debtPayoffMonths(12000, 1000, 0) === 12);
   ck('with a rate it is shorter than owed ÷ principal', app.debtPayoffMonths(300000, 1500, 0.04 / 12) < 200);
