@@ -990,6 +990,7 @@
     letter-spacing: -0.015em;
   }
   .chip-original { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip-stale { font-size: 11px; color: var(--warning); }
   .chip.liability {
     background:
       linear-gradient(135deg, rgba(248, 113, 113, 0.06), transparent 60%),
@@ -1843,6 +1844,7 @@
       <div class="row-actions">
         <button type="button" class="ghost add-row-btn" id="addRowBtn">+ 添加另一个账户</button>
         <button type="button" class="ghost add-row-btn" id="transferBtn" title="">⇄ 转账</button>
+        <button type="button" class="ghost add-row-btn" id="addStaleBtn" hidden></button>
       </div>
       <details class="expense-section" id="expenseSection">
         <summary id="expenseSummary">大额支出（可选）</summary>
@@ -2987,6 +2989,48 @@
     return tl.length ? tl[tl.length - 1] : null;
   }
 
+  // ===== Staleness =====
+  // Which accounts have gone quiet? Judged against each account's own rhythm, not one
+  // fixed deadline: cash recounted every other month is not overdue at day 50, but a
+  // bank account updated monthly is. An account is stale when its last record is older
+  // than one and a half times its usual gap (the median interval between its records) —
+  // one missed cycle plus some slack — and never
+  // before STALE_MIN_DAYS. An account whose last balance is zero is closed, not
+  // forgotten, and is left alone.
+  //
+  // This matters beyond tidiness: a balance carried forward unchanged reads as "nothing
+  // moved", so the spending it hides lands in whichever month the account is next
+  // recorded.
+  const STALE_MIN_DAYS = 45;
+  function accountStaleness(todayStr) {
+    const dates = new Map(), lastUpdate = new Map();
+    for (const snap of sortedSnapshots()) {
+      for (const [id, u] of Object.entries(snap.updates)) {
+        lastUpdate.set(id, u);
+        if (!dates.has(id)) dates.set(id, []);
+        const list = dates.get(id);
+        if (list[list.length - 1] !== snap.date) list.push(snap.date);
+      }
+    }
+    const out = [];
+    for (const acc of state.accounts) {
+      const list = dates.get(acc.id);
+      if (!list || !list.length) continue;
+      const last = list[list.length - 1];
+      const legs = updateLegs(lastUpdate.get(acc.id));
+      if (!legs.length || legs.every(l => Number(l.amount) === 0)) continue;
+      const gaps = [];
+      for (let i = 1; i < list.length; i++) gaps.push(daysBetween(list[i - 1], list[i]));
+      gaps.sort((a, b) => a - b);
+      const median = gaps.length ? (gaps.length % 2 ? gaps[gaps.length >> 1] : (gaps[gaps.length / 2 - 1] + gaps[gaps.length / 2]) / 2) : 0;
+      const threshold = Math.max(STALE_MIN_DAYS, 1.5 * median);
+      const days = daysBetween(last, todayStr);
+      out.push({ acc, last, days, threshold, stale: days > threshold });
+    }
+    return out;
+  }
+  const staleAccounts = todayStr => accountStaleness(todayStr).filter(r => r.stale);
+
   // ===== Currency selector population =====
   function populateCurrencySelect(sel, selected) {
     const labels = t('currencies');
@@ -3233,6 +3277,15 @@
     const usedCount = entryRows.filter(r => r.accountId).length;
     addBtn.disabled = usedCount >= state.accounts.length;
     addBtn.textContent = t('addAnotherAccount');
+    // Stale accounts not yet in the form, offered as one click. Not while editing an old
+    // record: "not updated lately" is about today, not about that date.
+    const staleBtn = document.getElementById('addStaleBtn');
+    const missing = editingId ? [] : staleNotInForm();
+    staleBtn.hidden = !missing.length;
+    if (missing.length) {
+      staleBtn.textContent = t('addStale', missing.length);
+      staleBtn.title = missing.map(r => r.acc.name).join(t('listSep'));
+    }
     renderExpenseRows();
     updateInflowReminder();
   }
@@ -3452,6 +3505,27 @@
     const n = entryExpenses.filter(r => String(r.amount).trim() !== '').length;
     document.getElementById('expenseSummary').textContent = n ? t('expenseSummaryCount', n) : t('expenseSummary');
   }
+
+  function staleNotInForm() {
+    const inForm = new Set(entryRows.map(r => r.accountId).filter(Boolean));
+    return staleAccounts(localDateStr(new Date())).filter(r => !inForm.has(r.acc.id));
+  }
+  // Fill empty rows first, then add one per account. The balance is left blank: the
+  // point is to recount it, and a pre-filled old figure would be saved unchanged.
+  function addStaleRows() {
+    for (const r of staleNotInForm()) {
+      let row = entryRows.find(x => !x.accountId);
+      if (!row) { row = newEmptyRow(); entryRows.push(row); }
+      row.accountId = r.acc.id;
+      row.currency = r.acc.currency;
+      if (isMultiCurrency(r.acc)) {
+        row.amounts = {}; row.inflows = {}; row.autoFilledCur = {};
+        delete row.amount; delete row.inflow; delete row.autoFilled;
+      }
+    }
+    renderEntryForm();
+  }
+  document.getElementById('addStaleBtn').addEventListener('click', addStaleRows);
 
   document.getElementById('addRowBtn').addEventListener('click', () => {
     if (entryRows.filter(r => r.accountId).length >= state.accounts.length) return;
@@ -3776,7 +3850,10 @@
       sbEl.hidden = true;
     } else {
       totalEl.textContent = fmt(totalVal, state.displayCurrency);
-      noteEl.textContent = t('asOf', cur.snapshot.date);
+      // A week or more since anything was recorded: say how long, so a figure weeks
+      // old doesn't pass for today's.
+      const ago = daysBetween(cur.snapshot.date, localDateStr(new Date()));
+      noteEl.textContent = t('asOf', cur.snapshot.date) + (ago >= 7 ? ' · ' + t('daysAgo', ago) : '');
 
       if (hasLiab) {
         let assets = 0, liabilities = 0;
@@ -3795,6 +3872,7 @@
     const chips = document.getElementById('accountChips');
     chips.innerHTML = '';
     if (singleAccount) return;
+    const stale = new Map(staleAccounts(localDateStr(new Date())).map(r => [r.acc.id, r]));
     state.accounts.forEach(a => {
       const b = cur && cur.balances[a.id];
       const chip = document.createElement('div');
@@ -3814,6 +3892,7 @@
         <div class="chip-name"><span class="chip-dot" style="background:${adaptColor(a.color)}"></span>${escapeHtml(a.name)}${liabBadge}</div>
         <div class="chip-amount">${converted != null ? fmt(converted, state.displayCurrency) : '—'}</div>
         ${showOriginal ? `<div class="chip-original">${originalStr}</div>` : ''}
+        ${stale.has(a.id) ? `<div class="chip-stale" title="${escapeHtml(t('staleWhy', stale.get(a.id).last))}">${escapeHtml(t('staleDays', stale.get(a.id).days))}</div>` : ''}
       `;
       chips.appendChild(chip);
     });

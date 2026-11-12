@@ -41,7 +41,7 @@ function grabConst(re) {
 }
 
 const FNS = [
-  'residualKind', 'chargesInterest', 'interestPart', 'theilSen', 'debtPayoffMonths', 'computeDebt', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
+  'residualKind', 'chargesInterest', 'interestPart', 'theilSen', 'debtPayoffMonths', 'computeDebt', 'accountStaleness', 'isIdleAccount', 'snapshotAccountInflow', 'accountInflowInDisplay',
   'accountOpeningContribution', 'windowHasUnattributedInflow', 'decomposePeriod',
   'sumConvertedAt', 'realizedReturn', 'trailingYearStart', 'computeEfficiency',
   'computePeriodChange', 'computeAccountPeriodChange', 'hasAnyInflowData',
@@ -90,6 +90,7 @@ const PRELUDE = `
   ${grabConst(/  const monthRate = [^\n]+/)}
   ${grabConst(/  const INTEREST_CATEGORIES = [^\n]+/)}
   ${grabConst(/  const MIN_DEBT_WINDOW_DAYS = [^\n]+/)}
+  ${grabConst(/  const STALE_MIN_DAYS = [^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -296,6 +297,34 @@ sec('Debt overview');
   ck('no recorded repayment, no rate', app.computeDebt().accounts[0].rate === null && app.computeDebt().interest === null);
   load([A('b', 'savings')], [snap('2026-01-31', { b: { amount: 1, currency: 'CNY' } })]);
   ck('no debt, no panel', app.computeDebt() === null);
+}
+
+sec('Accounts gone quiet');
+{
+  // A bank updated monthly, cash every other month, a card paid off to zero.
+  const months = ['2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30', '2026-07-31', '2026-08-31'];
+  const snaps = months.map((d, i) => {
+    const u = { b: { amount: 1000 + i, currency: 'CNY' } };
+    if (i % 2 === 0) u.c = { amount: 500 - i, currency: 'CNY' };
+    if (i === 0) u.k = { amount: 300, currency: 'CNY' };
+    if (i === 1) u.k = { amount: 0, currency: 'CNY' };
+    return snap(d, u);
+  });
+  load([A('b', 'savings'), A('c', 'cash'), LI('k', 'creditCard'), A('n', 'cash')], snaps);
+  const by = today => Object.fromEntries(app.accountStaleness(today).map(r => [r.acc.id, r]));
+  let r = by('2026-09-20');
+  ck('nothing is stale three weeks after the last record', !r.b.stale && !r.c.stale, r);
+  r = by('2026-10-20');
+  ck('the monthly bank is stale after 50 days', r.b.stale && r.b.days === 50, r.b);
+  ck('the every-other-month cash is not, on its own rhythm', !r.c.stale && r.c.days === 81, r.c);
+  ck('cash goes stale after one missed cycle and a half', by('2026-11-05').c.stale, by('2026-11-05').c);
+  ck('a balance closed at zero is never stale', !('k' in by('2027-06-01')));
+  ck('an account never recorded is not listed', !('n' in r));
+  ck('no gap yet means the floor applies', (() => {
+    load([A('b', 'savings')], [snap('2026-08-01', { b: { amount: 1, currency: 'CNY' } })]);
+    const x = app.accountStaleness('2026-09-14')[0], y = app.accountStaleness('2026-09-16')[0];
+    return x.threshold === 45 && !x.stale && y.stale;
+  })());
 }
 
 sec('Transfers between your own accounts');
