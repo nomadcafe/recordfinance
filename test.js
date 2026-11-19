@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'averageSpend', 'computeLiquid', 'renderLiquid', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'averageSpend', 'computeLiquid', 'renderLiquid', 'milestoneLadder', 'findMilestoneCrossings', 'fmtCompact', 'trendSeries', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
   'expenseItemsHtml', 'previousMonthInflows', 'applyInflowCopy', 'renderSpendingTable',
 ];
 
@@ -1119,6 +1119,27 @@ sec('Spendable now');
   ck('average spend is per month covered, not per bar',
      near(app.averageSpend([{ spend: 6000, span: 2 }, { spend: 3000, span: 1 }, { spend: null, span: 0 }]).avg, 3000));
   ck('one month is not an average', app.averageSpend([{ spend: 3000, span: 1 }, { spend: null }]) === null);
+}
+
+sec('Trend chart');
+{
+  ck('the ladder is round in the display currency', app.milestoneLadder(7.1).slice(0, 4).join() === '50000,100000,200000,500000', app.milestoneLadder(7.1).slice(0, 4));
+  ck('and scales for yen', app.milestoneLadder(150)[0] === 1000000, app.milestoneLadder(150)[0]);
+  load([A('b', 'savings'), LI('m', 'mortgage')], [
+    snap('2026-01-31', { b: { amount: 380000, currency: 'CNY' }, m: { amount: 200000, currency: 'CNY' } }),
+    snap('2026-02-28', { b: { amount: 360000, currency: 'CNY' }, m: { amount: 190000, currency: 'CNY' } }),
+    snap('2026-03-31', { b: { amount: 390000, currency: 'CNY' }, m: { amount: 180000, currency: 'CNY' } }),
+    snap('2026-04-30', { b: { amount: 400000, currency: 'CNY' }, m: { amount: 170000, currency: 'CNY' } }),
+  ]);
+  app.state.rates['2026-04-30'] = { USD: 1, CNY: 7.1 };
+  const tl = app.computeTimeline();
+  const cr = app.findMilestoneCrossings(tl);
+  ck('the first record is not a milestone; 170k -> 210k crosses 200k', cr.length === 1 && cr[0].index === 2 && cr[0].milestone === 200000, cr);
+  ck('its label is a round number', cr.length === 1 && cr[0].label === '¥20万', cr);
+  const ts = app.trendSeries(tl);
+  ck('debt is assets less net worth', near(ts[0].debt, 200000) && near(ts[0].assets, 380000), ts[0]);
+  ck('the ratio is debt over assets', near(ts[3].ratio, 170000 / 400000, 1e-9), ts[3]);
+  ck('compact money drops the decimals', app.fmtCompact(-500000, 'CNY') === '−¥50万', app.fmtCompact(-500000, 'CNY'));
 }
 
 sec('Tagged spending survives import');

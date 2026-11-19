@@ -15,7 +15,7 @@ Your data never leaves your device.
 - **Asset / liability accounts** with categories (cash, savings, investment, property, crypto, other)
 - **Net worth or total assets** — switch the entire app's basis with one toggle
 - **Goal tracking** with ETA estimation and milestone celebrations
-- **Charts** — balance trend, year-over-year, account drilldown, currency / category breakdown
+- **Charts** — balance trend (with debt, assets above zero and debt below it around the net-worth line, plus the debt ratio now against the start of the range), year-over-year, account drilldown, currency / category breakdown
 - **MTD / YTD decomposition** — splits a period's change into inflow, market move and unrecorded spending, per portfolio and per account. An investment account revalues on its own, a bank account doesn't, so the residual is labelled for what it actually is
 - **Spendable now** — under the headline: cash and savings less what is owed on cards, and how many months of your average spending it covers. Investments, crypto and property are left out because they have to be sold first. Shown only when it differs from the headline
 - **Capital efficiency** — how much is sitting in cash and savings, what your own investment accounts actually returned (Modified Dietz, so mid-period deposits are time-weighted), and the gap between the two — and, when a loan has an implied rate, that rate beside it, with the interest a year your idle money would stop paying if it went to the debt. No rate feed and no product suggestions: the benchmark is your own realized return

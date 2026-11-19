@@ -310,6 +310,8 @@
   body.privacy-blur .history-expense-total,
   body.privacy-blur .spend-avg,
   body.privacy-blur .spend-chart,
+  body.privacy-blur .trend-v,
+  body.privacy-blur .trend-sub,
   body.privacy-blur td.num,
   body.privacy-blur .goal-progress-text,
   body.privacy-blur .goal-bar,
@@ -1152,6 +1154,11 @@
   .chart-toggle.active:hover { color: var(--warning); }
 
   canvas { max-height: 360px; }
+  .trend-stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: -6px 0 6px; }
+  .trend-stat { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+  .trend-k { font-size: 12px; color: var(--muted); }
+  .trend-v { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; color: var(--text); }
+  .trend-sub { font-size: 12px; color: var(--muted-strong); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
   /* The two long "how this works" blocks read as a wall of grey mid-form. Setting them
      into their own surface with a marker rule makes them skippable. */
@@ -1888,6 +1895,7 @@
         <button type="button" class="chart-toggle" id="forecastToggle" hidden>预测</button>
       </div>
     </div>
+    <div class="trend-stats" id="trendStats" hidden></div>
     <canvas id="chart"></canvas>
   </div>
 
@@ -4077,30 +4085,58 @@
     return { labels, current, prior, currentYear, priorYear };
   }
 
-  // Find indices in timeline where total crossed a milestone (USD-equivalent thresholds)
+  // Points where the total first rose past a round number. The ladder is 1-2-5 steps in
+  // the display currency, starting near USD 5k so a yen ledger doesn't celebrate ¥10,000:
+  // a pill reading "¥355,537.65" (USD 50k converted) is a milestone nobody set. The first
+  // record is where you started, not something you crossed, so it never gets one.
+  function milestoneLadder(perUsd) {
+    const floor = 5000 * (perUsd > 0 ? perUsd : 1);
+    const out = [];
+    for (let e = Math.floor(Math.log10(floor)); out.length < 14; e++) {
+      for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= floor) out.push(v); }
+    }
+    return out;
+  }
   function findMilestoneCrossings(timeline) {
-    const thresholds = [10000, 50000, 100000, 250000, 500000, 1000000, 2000000, 5000000, 10000000, 50000000];
+    const cur = timeline.length ? timeline[timeline.length - 1] : null;
+    const rates = cur && state.rates[cur.snapshot.date];
+    const ladder = milestoneLadder(rates && rates[state.displayCurrency]);
     const crossings = [];
-    let prevUsd = 0;
+    let prev = null;
     for (let i = 0; i < timeline.length; i++) {
-      const tn = timeline[i];
-      const v = totalForBasis(tn);
+      const v = totalForBasis(timeline[i]);
       if (v == null) continue;
-      const rates = state.rates[tn.snapshot.date];
-      const ratio = rates && rates[state.displayCurrency] ? rates[state.displayCurrency] : 1;
-      const usd = v / ratio;
-      // A single jump can clear several thresholds at once (e.g. 0 → past 10k & 50k).
-      // Label only the highest one reached so the pills never stack and overlap.
-      let highest = null;
-      for (const m of thresholds) {
-        if (prevUsd < m && usd >= m) highest = m;
+      if (prev != null) {
+        // A jump can clear several rungs; label only the highest so pills never stack.
+        let highest = null;
+        for (const m of ladder) if (prev < m && v >= m) highest = m;
+        if (highest != null) crossings.push({ index: i, milestone: highest, label: fmtCompact(highest, state.displayCurrency) });
       }
-      if (highest != null) {
-        crossings.push({ index: i, milestone: highest, label: fmt(highest * ratio, state.displayCurrency) });
-      }
-      prevUsd = usd;
+      prev = prev == null ? v : Math.max(prev, v);
     }
     return crossings;
+  }
+
+  // Axis-sized money: ¥60万 / $600K / ¥600万. Locale-aware so each language groups in
+  // its own units (万 for zh and ja, K/M for en).
+  function fmtCompact(amount, currency) {
+    if (amount == null || isNaN(amount)) return '—';
+    const n = Number(amount);
+    const loc = (state && state.language === 'en') ? 'en-US' : (state && state.language === 'ja') ? 'ja-JP' : 'zh-CN';
+    const s = Math.abs(n).toLocaleString(loc, { notation: 'compact', maximumFractionDigits: Math.abs(n) >= 1 ? 1 : 0 });
+    return (n < 0 ? '\u2212' : '') + SYMBOLS[currency] + s;
+  }
+  // "2026-03-31" -> "26/03": the axis needs the month, the tooltip carries the day.
+  const fmtAxisDate = d => (typeof d === 'string' && /^\d{4}-\d{2}/.test(d)) ? d.slice(2, 4) + '/' + d.slice(5, 7) : d;
+
+  // Assets, debt and their ratio at each point, for the total view. Null where a rate is
+  // missing — a short total would draw as a real dip.
+  function trendSeries(timeline) {
+    return timeline.map(e => {
+      if (e.assetsTotal == null || e.total == null) return { assets: null, debt: null, ratio: null };
+      const debt = e.assetsTotal - e.total;
+      return { assets: e.assetsTotal, debt, ratio: e.assetsTotal > 0 ? debt / e.assetsTotal : null };
+    });
   }
 
   // #rrggbb / #rgb -> rgba() string at the given alpha (for translucent fills/glows).
@@ -4124,6 +4160,48 @@
       g.addColorStop(1, hexToRgba(hex, 0));
       return g;
     };
+  }
+
+  // A band's gradient runs away from zero: strongest at its outer edge, gone at the
+  // baseline, so the two bands meet at zero without a seam.
+  function bandFill(hex, sign) {
+    return ctx2 => {
+      const { ctx: c, chartArea, scales } = ctx2.chart;
+      if (!chartArea || !scales.y) return hexToRgba(hex, 0.12);
+      const y0 = Math.max(chartArea.top, Math.min(chartArea.bottom, scales.y.getPixelForValue(0)));
+      const edge = sign > 0 ? chartArea.top : chartArea.bottom;
+      if (Math.abs(edge - y0) < 1) return hexToRgba(hex, 0.12);
+      const g = c.createLinearGradient(0, edge, 0, y0);
+      g.addColorStop(0, hexToRgba(hex, 0.26));
+      g.addColorStop(1, hexToRgba(hex, 0.04));
+      return g;
+    };
+  }
+
+  // The figures over the total chart: how far the line moved across the range, and,
+  // with debt, where the debt ratio stands against where it started. Text, not a second
+  // plotted series: a ratio and an amount don't share an axis.
+  function renderTrendStats(timeline, series) {
+    const el = document.getElementById('trendStats');
+    const pts = (timeline || []).map((e, i) => ({ v: totalForBasis(e), p: series && series[i], d: e.snapshot.date })).filter(x => x.v != null);
+    if (pts.length < 2) { el.hidden = true; el.innerHTML = ''; return; }
+    const dc = state.displayCurrency, a = pts[0], b = pts[pts.length - 1];
+    const delta = b.v - a.v;
+    const pct = a.v > 0 ? delta / a.v : null;
+    const stat = (k, v, sub) => `<div class="trend-stat"><span class="trend-k">${escapeHtml(k)}</span>` +
+      `<span class="trend-v">${v}</span>${sub ? `<span class="trend-sub">${sub}</span>` : ''}</div>`;
+    const out = [stat(t('trendChange'), escapeHtml(fmtSigned(delta, dc)),
+      escapeHtml((pct != null ? fmtPct(pct) + ' · ' : '') + t('trendSince', a.d)))];
+    const ra = series && pts.find(x => x.p && x.p.ratio != null);
+    const rb = series && [...pts].reverse().find(x => x.p && x.p.ratio != null);
+    if (ra && rb && ra !== rb) {
+      const dr = rb.p.ratio - ra.p.ratio;
+      const pp = Math.abs(dr * 100).toFixed(1);
+      out.push(stat(t('debtRatio'), (rb.p.ratio * 100).toFixed(1) + '%',
+        escapeHtml(t(Math.abs(dr) < 0.0005 ? 'trendRatioFlat' : dr < 0 ? 'trendRatioDown' : 'trendRatioUp', (ra.p.ratio * 100).toFixed(1) + '%', pp))));
+    }
+    el.hidden = false;
+    el.innerHTML = out.join('');
   }
 
   function renderChart() {
@@ -4165,6 +4243,8 @@
       c.restore();
     };
 
+    let series = null;     // assets / debt / ratio per point (total mode)
+    let withDebt = false;  // total mode draws the assets and debt bands
     let forecast = null; // goal-projection annotation for the overlay plugin
     let goalReach = null; // first goal-reach marker for the overlay plugin (goal mode)
 
@@ -4208,6 +4288,8 @@
       const timeline = collapseTimelineByDate(computeTimeline());
       labels = timeline.map(t => t.snapshot.date);
       if (chartMode === 'total') {
+        series = trendSeries(timeline);
+        withDebt = state.basis !== 'assets' && series.some(p => p.debt != null && !isNegligible(p.debt));
         crossings = findMilestoneCrossings(timeline);
         const crossSet = new Set(crossings.map(c => c.index));
         // Hide the dot on ordinary points (keeps a long timeline clean); only
@@ -4216,11 +4298,12 @@
         const hoverRadii = timeline.map((_, i) => crossSet.has(i) ? 8 : 5);
         const pointColors = timeline.map((_, i) => crossSet.has(i) ? cssVar('--warning') : accent);
         datasets = [{
-          label: `${t('totalLegend')}（${state.displayCurrency}）`,
+          label: withDebt ? t('netWorth') : t('totalLegend'),
+          order: 0,
           data: timeline.map(t => totalForBasis(t)),
           borderColor: accent,
-          backgroundColor: areaFill(accent),
-          fill: true,
+          backgroundColor: withDebt ? 'transparent' : areaFill(accent),
+          fill: !withDebt,
           borderWidth: 2.5,
           borderCapStyle: 'round',
           borderJoinStyle: 'round',
@@ -4232,6 +4315,24 @@
           pointBorderWidth: 2,
           spanGaps: true,
         }];
+        // With debt, the net line sits between two bands on the same axis: what is owned
+        // rising from zero, what is owed hanging below it. The gap between the top band
+        // and the line is the debt, so the ratio is visible as shape, and the tooltip
+        // states it. No second axis — every series is money in the same currency.
+        if (withDebt) {
+          const band = (key, slot, sign) => {
+            const hex = seriesHex(slot);
+            return {
+              label: t(key), order: 1,
+              data: series.map(p => p[key === 'assets' ? 'assets' : 'debt'] == null ? null : sign * p[key === 'assets' ? 'assets' : 'debt']),
+              borderColor: hexToRgba(hex, 0.75), backgroundColor: bandFill(hex, sign),
+              fill: 'origin', borderWidth: 1.5, cubicInterpolationMode: 'monotone',
+              pointRadius: 0, pointHoverRadius: 4, pointBackgroundColor: hex,
+              pointBorderColor: cssVar('--panel'), pointBorderWidth: 2, spanGaps: true,
+            };
+          };
+          datasets.push(band('assets', 'blue', 1), band('liabilities', 'red', -1));
+        }
         // Goal projection: a dashed line extending from the last actual point toward the
         // goal at the recent monthly pace. Opt-in (off by default) since it stretches the
         // x-axis into the future; the toggle only shows when a projection is possible.
@@ -4243,10 +4344,10 @@
         }
         const proj = state.showForecast ? projAvail : null;
         if (proj) {
-          datasets[0].data = datasets[0].data.concat(new Array(proj.futureLabels.length).fill(null));
+          datasets.forEach(d => { d.data = d.data.concat(new Array(proj.futureLabels.length).fill(null)); });
           labels = labels.concat(proj.futureLabels);
           datasets.push({
-            label: t('forecast'),
+            label: t('forecast'), order: 0,
             data: proj.data,
             borderColor: cssVar('--warning'),
             backgroundColor: 'transparent',
@@ -4338,6 +4439,18 @@
     // Reads chartOverlay (module scope) so the chart can be updated in place.
     const overlayPlugin = {
       id: 'goalAndMilestones',
+      // A hairline at the hovered date, under the series, so the eye can drop from the
+      // tooltip to the point it describes.
+      beforeDatasetsDraw(chartInstance) {
+        const act = chartInstance.tooltip && chartInstance.tooltip.getActiveElements();
+        if (!act || !act.length) return;
+        const x = act[0].element.x, area = chartInstance.chartArea;
+        const c = chartInstance.ctx;
+        c.save();
+        c.strokeStyle = cssVar('--border-strong'); c.lineWidth = 1;
+        c.beginPath(); c.moveTo(x, area.top); c.lineTo(x, area.bottom); c.stroke();
+        c.restore();
+      },
       afterDatasetsDraw(chartInstance) {
         const c = chartInstance.ctx;
         const area = chartInstance.chartArea;
@@ -4409,10 +4522,12 @@
     };
 
     // What the overlay plugin draws this pass.
-    chartOverlay = { crossings, mode: chartMode, forecast, goalReach };
+    chartOverlay = { crossings, mode: chartMode, forecast, goalReach, series: withDebt ? series : null };
+    renderTrendStats(chartMode === 'total' ? collapseTimelineByDate(computeTimeline()) : null, withDebt ? series : null);
     const stacked = chartMode === 'accounts' && accountsSubMode === 'stacked';
     // Legend only helps the multi-series modes; total and goal are single-series.
-    const showLegend = chartMode !== 'total' && chartMode !== 'goal';
+    const showLegend = (chartMode !== 'total' || withDebt) && chartMode !== 'goal';
+    const yFloor = datasets.some(d => (d.data || []).some(v => typeof v === 'number' && v < 0)) ? undefined : 0;
 
     if (chart) {
       // Update in place — far cheaper than destroy()+new, and keeps the registered
@@ -4420,6 +4535,7 @@
       chart.data = { labels, datasets };
       chart.options.scales.x.stacked = stacked;
       chart.options.scales.y.stacked = stacked;
+      chart.options.scales.y.min = yFloor;
       chart.options.plugins.legend.display = showLegend;
       chart.options.plugins.legend.labels.color = cssVar('--text');
       chart.options.scales.x.ticks.color = cssVar('--muted');
@@ -4430,6 +4546,7 @@
       tt.titleColor = cssVar('--muted');
       tt.bodyColor = cssVar('--text');
       tt.borderColor = cssVar('--border-strong');
+      tt.footerColor = cssVar('--muted');
       chart.update();
       return;
     }
@@ -4446,7 +4563,8 @@
         plugins: {
           legend: {
             display: showLegend,
-            labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16 }
+            align: 'end',
+            labels: { color: cssVar('--text'), usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 16 }
           },
           tooltip: {
             backgroundColor: cssVar('--panel-elev'),
@@ -4458,15 +4576,26 @@
             cornerRadius: 8,
             usePointStyle: true,
             boxPadding: 6,
-            callbacks: { label: ctx => chartMode === 'goal'
-              ? `${ctx.dataset.label}：${ctx.parsed.y == null ? '—' : ctx.parsed.y.toFixed(1) + '%'}`
-              : `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}` }
+            callbacks: {
+              label: ctx => chartMode === 'goal'
+                ? `${ctx.dataset.label}：${ctx.parsed.y == null ? '—' : ctx.parsed.y.toFixed(1) + '%'}`
+                : `${ctx.dataset.label}：${fmt(ctx.parsed.y, state.displayCurrency)}`,
+              // Debt ratio under the three amounts: the comparison the bands draw, as a number.
+              footer: items => {
+                const sr = chartOverlay.series;
+                const p = sr && items.length ? sr[items[0].dataIndex] : null;
+                return p && p.ratio != null ? `${t('debtRatio')}：${(p.ratio * 100).toFixed(1)}%` : '';
+              },
+            },
+            footerColor: cssVar('--muted'),
+            footerFont: { weight: 'normal' },
           }
         },
         scales: {
           x: {
             stacked,
-            ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: 8, padding: 6,
+              callback(v) { return chartMode === 'yoy' ? this.getLabelForValue(v) : fmtAxisDate(this.getLabelForValue(v)); } },
             grid: { display: false },
             border: { display: false }
           },
@@ -4476,8 +4605,8 @@
             // balance that never goes negative means a wide empty band under the series.
             // Pin the floor at zero unless something genuinely dips below it.
             beginAtZero: true,
-            ...(datasets.some(d => (d.data || []).some(v => typeof v === 'number' && v < 0)) ? {} : { min: 0 }),
-            ticks: { color: cssVar('--muted'), maxTicksLimit: 6, callback: v => chartMode === 'goal' ? Math.round(v) + '%' : fmt(v, state.displayCurrency) },
+            min: yFloor,
+            ticks: { color: cssVar('--muted'), maxTicksLimit: 6, padding: 8, callback: v => chartMode === 'goal' ? Math.round(v) + '%' : fmtCompact(v, state.displayCurrency) },
             grid: { color: cssVar('--grid'), drawTicks: false },
             border: { display: false }
           }
