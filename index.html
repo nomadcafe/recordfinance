@@ -913,6 +913,7 @@
   }
   .stat-breakdown { font-size: 13px; color: var(--muted-strong); margin-top: 12px; font-variant-numeric: tabular-nums; }
   .stat-breakdown .liab { color: var(--danger); }
+  .stat-breakdown:not([hidden]) + .stat-breakdown { margin-top: 4px; }
 
   /* Period changes as a measured band across the hero's full width: three equal
      columns, label over value over detail. Filling this row is what stops the
@@ -1771,6 +1772,7 @@
           <div class="stat-label" id="totalLabel">总余额</div>
           <div class="stat-value" id="totalBalance">—</div>
           <div class="stat-breakdown" id="statBreakdown" hidden></div>
+          <div class="stat-breakdown" id="statLiquid" hidden></div>
           <div class="stat-note" id="totalNote"></div>
         </div>
         <div class="currency-control">
@@ -2814,6 +2816,32 @@
   const IDLE_CATEGORIES = new Set(['cash', 'savings']);
   function isIdleAccount(acc) {
     return !!acc && acc.type === 'asset' && IDLE_CATEGORIES.has(acc.category);
+  }
+
+  // ===== Money you can spend now =====
+  // Cash and savings, less what is owed on cards. Not "idle" (that question is about
+  // return): this one is about reach — what could pay a bill this week without selling
+  // anything. Investments, crypto and property are left out even though some sell in a
+  // day, because the price you'd get is not the balance you recorded. A card is
+  // subtracted because its bill falls due within the month; a mortgage or loan is not,
+  // since only the next instalment is due, not the balance. Fixed-term deposits count:
+  // breaking one costs some interest, not a fraction of the principal.
+  // Null when no cash-like account has a balance (an unclassified ledger would read
+  // as "nothing available") or when a balance can't be converted yet.
+  function computeLiquid(cur) {
+    if (!cur) return null;
+    let total = 0, any = false, card = 0;
+    for (const acc of state.accounts) {
+      const isCash = isIdleAccount(acc);
+      const isCard = acc.type === 'liability' && acc.category === 'creditCard';
+      if (!isCash && !isCard) continue;
+      const b = cur.balances[acc.id];
+      if (!b) continue;
+      if (b.converted == null) return null;
+      total += b.converted;            // liabilities are already signed negative
+      if (isCash) any = true; else card += b.converted;
+    }
+    return any ? { total, card } : null;
   }
 
   const DAY_MS = 86400000;
@@ -3870,6 +3898,7 @@
         sbEl.hidden = true;
       }
     }
+    renderLiquid(cur, totalVal);
 
     const chips = document.getElementById('accountChips');
     chips.innerHTML = '';
@@ -3898,6 +3927,25 @@
       `;
       chips.appendChild(chip);
     });
+  }
+
+  // One line under the headline. Hidden when it would only repeat the headline — an
+  // all-cash ledger — so it appears exactly when part of the money is out of reach.
+  function renderLiquid(cur, headline) {
+    const el = document.getElementById('statLiquid');
+    const liq = headline == null ? null : computeLiquid(cur);
+    if (!liq || Math.abs(liq.total - headline) <= Math.max(1, Math.abs(headline) * 1e-6)) {
+      el.hidden = true;
+      return;
+    }
+    const dc = state.displayCurrency;
+    const sp = averageSpend(monthlySpending(SPENDING_MONTHS, localDateStr(new Date())));
+    // Runway only when there is spending to divide by and money to divide.
+    const runway = sp && sp.avg > 0 && liq.total > 0 ? liq.total / sp.avg : null;
+    el.hidden = false;
+    el.title = t(liq.card ? 'liquidWhyCard' : 'liquidWhy');
+    el.innerHTML = `${escapeHtml(t('liquid'))} <span class="${liq.total < 0 ? 'liab' : ''}">${fmt(liq.total, dc)}</span>` +
+      (runway != null ? ` · ${escapeHtml(t('liquidRunway', runway < 10 ? runway.toFixed(1) : Math.round(runway)))}` : '');
   }
 
   // ===== History =====
@@ -5475,14 +5523,23 @@
   }
   const monthRate = r => (r.spend != null && r.income > 0) ? (r.income - r.spend) / r.income : null;
 
+  // Average spend per calendar month covered, not per bar: a bar spanning a gap holds
+  // several. Null below two bars — one is a number, not a habit.
+  function averageSpend(rows) {
+    const known = rows.filter(r => r.spend != null);
+    if (known.length < 2) return null;
+    const months = known.reduce((a, r) => a + r.span, 0);
+    return { avg: known.reduce((a, r) => a + r.spend, 0) / months, months };
+  }
+
   const SPENDING_MONTHS = 12;
   function renderSpending() {
     const panel = document.getElementById('spendingPanel');
     const rows = monthlySpending(SPENDING_MONTHS, localDateStr(new Date()));
-    const known = rows.filter(r => r.spend != null);
     // One bar is a number, not a trend; and the panel must not appear for a user who
     // has never recorded inflow, where every month would be blank.
-    if (known.length < 2) {
+    const avgSpend = averageSpend(rows);
+    if (!avgSpend) {
       panel.hidden = true;
       if (spendingChart) { spendingChart.destroy(); spendingChart = null; }
       return;
@@ -5491,9 +5548,7 @@
     const dc = state.displayCurrency;
     document.getElementById('spendingTitle').textContent = t('spendTitle');
     document.getElementById('spendingWindow').textContent = t('spendWindow', SPENDING_MONTHS);
-    // Per calendar month covered, not per bar: a bar spanning a gap holds several.
-    const monthsCovered = known.reduce((a, r) => a + r.span, 0);
-    const avg = known.reduce((a, r) => a + r.spend, 0) / monthsCovered;
+    const { avg, months: monthsCovered } = avgSpend;
     const sr = savingsRate(rows);
     const pct = v => Math.round(v * 100) + '%';
     document.getElementById('spendingAvg').innerHTML =

@@ -49,7 +49,7 @@ const FNS = [
   'decimalsFor', '_computeTimeline', 'totalForBasis', 'updateLegs',
   'snapshotInflowInDisplay', 'buildDemoData', 'migrate', 'sanitizePublicExport',
   'getAmountPlaceholder', 'bestRatesForDate', 'autofillRowBalance', 'autofillLegBalance',
-  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
+  'transferLegFor', 'setRowInflow', 'adaptColor', 'sanitizeExpenses', 'expensesInWindow', 'expenseSearchTotal', 'monthlySpending', 'savingsRate', 'averageSpend', 'computeLiquid', 'renderLiquid', 'monthHasIncome', 'formHasInflow', 'collectExpenses',
   'expenseItemsHtml', 'previousMonthInflows', 'applyInflowCopy', 'renderSpendingTable',
 ];
 
@@ -91,6 +91,7 @@ const PRELUDE = `
   ${grabConst(/  const INTEREST_CATEGORIES = [^\n]+/)}
   ${grabConst(/  const MIN_DEBT_WINDOW_DAYS = [^\n]+/)}
   ${grabConst(/  const STALE_MIN_DAYS = [^\n]+/)}
+  ${grabConst(/  const SPENDING_MONTHS = [^\n]+/)}
   const SYMBOLS = Object.fromEntries(CURRENCIES.map(c => [c.code, c.symbol]));
   const CUR_CODES = CURRENCIES.map(c => c.code);
   const ZERO_DECIMAL = new Set(['JPY', 'KRW']);
@@ -1082,6 +1083,42 @@ sec('Review fixes');
   app.expenseRows = [r('x', '0')];
   ck('zero is refused', app.collectExpenses().bad.length === 1);
   app.expenseRows = [];
+}
+
+sec('Spendable now');
+{
+  load([A('c', 'cash'), A('b', 'savings'), A('s', 'investment'), A('h', 'property'), A('o', 'other'),
+        LI('card', 'creditCard'), LI('m', 'mortgage')], [
+    snap('2026-10-31', {
+      c: { amount: 2000, currency: 'CNY' }, b: { amount: 1000, currency: 'USD' },
+      s: { amount: 50000, currency: 'CNY' }, h: { amount: 900000, currency: 'CNY' }, o: { amount: 3000, currency: 'CNY' },
+      card: { amount: 4000, currency: 'CNY' }, m: { amount: 500000, currency: 'CNY' },
+    }),
+  ]);
+  const cur = app.computeTimeline().slice(-1)[0];
+  const l = app.computeLiquid(cur);
+  ck('cash and savings, less the card, in display currency', near(l.total, 2000 + 7000 - 4000), l);
+  ck('the card part is reported', near(l.card, -4000), l);
+  app.renderLiquid(cur, 457000);
+  const el = global.document.getElementById('statLiquid');
+  ck('shown when it differs from the headline', el.hidden === false && strip(el.innerHTML).includes('5,000'), el.innerHTML);
+  ck('the hover names the card', el.title.includes('信用卡'), el.title);
+  app.renderLiquid(cur, 5000);
+  ck('hidden when it only repeats the headline', el.hidden === true);
+  app.renderLiquid(cur, null);
+  ck('hidden while the headline is unreadable', el.hidden === true);
+}
+{
+  load([A('s', 'investment'), A('o', 'other')], [snap('2026-10-31', { s: { amount: 1, currency: 'CNY' }, o: { amount: 1, currency: 'CNY' } })]);
+  ck('no cash-like account: nothing, not zero', app.computeLiquid(app.computeTimeline().slice(-1)[0]) === null);
+  load([A('b', 'savings'), A('s', 'investment')], [snap('2026-10-31', { b: { amount: 1, currency: 'USD' }, s: { amount: 1, currency: 'CNY' } })]);
+  app.state.rates = {};
+  ck('an unconvertible balance gives nothing, not a short sum', app.computeLiquid(app.computeTimeline().slice(-1)[0]) === null);
+}
+{
+  ck('average spend is per month covered, not per bar',
+     near(app.averageSpend([{ spend: 6000, span: 2 }, { spend: 3000, span: 1 }, { spend: null, span: 0 }]).avg, 3000));
+  ck('one month is not an average', app.averageSpend([{ spend: 3000, span: 1 }, { spend: null }]) === null);
 }
 
 sec('Tagged spending survives import');
