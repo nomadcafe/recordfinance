@@ -1328,6 +1328,11 @@
   .debt-acc .legend-row.clickable { cursor: pointer; }
   .debt-acc .legend-row.clickable:hover .eff-name { color: var(--accent); }
   .debt-sub { font-size: 12px; color: var(--muted); padding-left: 24px; }
+  .debt-progress { display: flex; align-items: center; gap: 10px; padding: 6px 0 4px 24px; }
+  .debt-bar { flex: 1; max-width: 320px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .debt-bar-fill { height: 100%; border-radius: 3px; }
+  .debt-paid { font-size: 12px; color: var(--muted-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .debt-note .hint { margin-top: 4px; }
 
   /* Mobile */
   @media (max-width: 640px) {
@@ -1946,7 +1951,10 @@
     </div>
     <div class="eff-headline" id="debtHeadline"></div>
     <div class="debt-accounts" id="debtAccounts"></div>
-    <div class="hint" id="debtNote"></div>
+    <details class="spend-table-wrap debt-note">
+      <summary id="debtNoteSummary">怎么算的</summary>
+      <div class="hint" id="debtNote"></div>
+    </details>
   </div>
 
   <div class="panel">
@@ -5518,14 +5526,51 @@
         r.payoff = `${Math.floor(ym / 12)}-${String(ym % 12 + 1).padStart(2, '0')}`;
       }
     }
+    // How much of each loan is gone since it was first recorded. Not since it was taken
+    // out — the app never asks for the original amount — so the label says "since the
+    // first record". In the loan's own unit, so a yen loan's progress doesn't move with
+    // the yen; skipped when the first record is in another currency.
+    for (const r of accounts) {
+      r.first = null; r.firstDate = null; r.paid = null;
+      if (r.acc.category === 'creditCard' || r.owedNative == null) continue;
+      const e0 = tl.find(e => e.snapshot.updates[r.acc.id] && e.balances[r.acc.id]);
+      if (!e0) continue;
+      const b0 = e0.balances[r.acc.id];
+      const first = r.unit === state.displayCurrency && !(b0.legs.length === 1 && b0.legs[0].currency === r.unit)
+        ? (b0.converted == null ? null : -b0.converted)
+        : (b0.legs.length === 1 && b0.legs[0].currency === r.unit ? b0.legs[0].amount : null);
+      if (!(first > 0) || e0.snapshot.date === cur.snapshot.date) continue;
+      r.first = first; r.firstDate = e0.snapshot.date;
+      r.paid = Math.max(0, Math.min(1, (first - r.owedNative) / first));
+    }
+
+    // Totals over the loans that have a pace, in display currency. The debt-free date is
+    // the last loan's, and only when every instalment loan has one: a mortgage with no
+    // estimate yet would make an earlier car loan's date read as "debt-free". Cards
+    // revolve and are left out of both.
+    const loans = accounts.filter(r => r.acc.category !== 'creditCard');
+    let principalTotal = null;
+    for (const r of loans) {
+      if (r.principal == null || r.owed == null || !(r.owedNative > 0)) continue;
+      principalTotal = (principalTotal || 0) + r.principal * (r.owed / r.owedNative);
+    }
+    let debtFree = null, debtFreeMonths = null;
+    if (loans.length && loans.every(r => r.status === 'payoff')) {
+      const last = loans.reduce((a, r) => (r.months > a.months ? r : a));
+      debtFree = last.payoff; debtFreeMonths = last.months;
+    }
+
     accounts.sort((a, b) => (b.owed || 0) - (a.owed || 0));
-    return { total, assets, ratio, change, days, interest: interestKnown ? interestTotal : null, accounts };
+    return { total, assets, ratio, change, days, interest: interestKnown ? interestTotal : null, accounts,
+      loans: loans.length, principalTotal, debtFree, debtFreeMonths };
   }
 
   function renderDebt() {
     const panel = document.getElementById('debtPanel');
     const d = computeDebt();
-    if (!d) { panel.hidden = true; return; }
+    // Cards alone leave nothing to estimate — no payoff date, no rate — and their
+    // balance already shows in the headline and in "spendable now".
+    if (!d || !d.loans) { panel.hidden = true; return; }
     panel.hidden = false;
     const dc = state.displayCurrency;
     document.getElementById('debtTitle').textContent = t('debtTitle');
@@ -5535,34 +5580,49 @@
       `<div class="eff-v ${cls || ''}">${v}</div>` +
       `<div class="eff-sub">${sub || ''}</div></div>`;
     const money = v => `<span class="eff-money">${fmt(v, dc)}</span>`;
-    const tiles = [tile(t('debtTotal'), d.total == null ? '—' : money(d.total), '')];
-    if (d.ratio != null) tiles.push(tile(t('debtRatio'), Math.round(d.ratio * 100) + '%', escapeHtml(t('debtRatioSub', fmt(d.assets, dc)))));
-    if (d.change != null && !isNegligible(d.change)) {
-      tiles.push(tile(t('debtChange'), `<span class="eff-money">${fmtSigned(d.change, dc)}</span>`,
-        t(d.change < 0 ? 'debtDown' : 'debtUp'), d.change < 0 ? 'eff-pos' : 'eff-neg'));
+    // The three things the headline and the chart can't say: when it ends, what it
+    // takes each month, and what it has cost. Total owed and the ratio are already
+    // on the hero and over the trend chart.
+    const tiles = [];
+    if (d.debtFree) {
+      const y = Math.floor(d.debtFreeMonths / 12), m = d.debtFreeMonths % 12;
+      tiles.push(tile(t('debtFreeLabel'), escapeHtml(d.debtFree), escapeHtml(t('debtFreeIn', y, m))));
+    }
+    if (d.principalTotal != null && !isNegligible(d.principalTotal)) {
+      tiles.push(tile(t('debtPrincipalLabel'), `<span class="eff-money">${SYMBOLS[dc]}${Math.round(d.principalTotal).toLocaleString('zh-CN')}</span>`, t('debtPrincipalSub')));
     }
     if (d.interest != null && d.interest > 0 && !isNegligible(d.interest)) {
-      tiles.push(tile(t('debtInterest'), money(d.interest), t('debtInterestSub')));
+      // Inferred from balances, so whole units like the principal beside it.
+      tiles.push(tile(t('debtInterest'), `<span class="eff-money">${SYMBOLS[dc]}${Math.round(d.interest).toLocaleString('zh-CN')}</span>`, t('debtInterestSub')));
     }
+    // Too little history for any estimate: the panel still says what is owed.
+    if (!tiles.length && d.total != null) tiles.push(tile(t('debtTotal'), money(d.total), escapeHtml(t('debtShort'))));
     document.getElementById('debtHeadline').innerHTML = tiles.join('');
 
     const pctStr = v => (v * 100).toFixed(1) + '%';
+    const whole = (v, unit) => SYMBOLS[unit] + Math.round(v).toLocaleString('zh-CN');
     document.getElementById('debtAccounts').innerHTML = d.accounts.map(r => {
       const bits = [];
       // An estimate in whole units: "≈ ¥2,536.17" claims a precision it doesn't have.
-      if (r.principal != null) bits.push(t('debtPrincipal', SYMBOLS[r.unit] + Math.round(r.principal).toLocaleString('zh-CN')));
+      if (r.principal != null) bits.push(t('debtPrincipal', whole(r.principal, r.unit)));
       if (r.rate != null) bits.push(t('debtRate', pctStr(r.rate)));
       if (r.status === 'payoff') bits.push(t('debtPayoff', r.payoff));
       else if (r.status === 'far') bits.push(t('debtPayoffFar'));
       else if (r.status === 'notFalling') bits.push(t('debtNotFalling'));
       else if (r.status === 'revolving') bits.push(t('debtRevolving'));
       else bits.push(t('debtShort'));
+      const bar = r.paid == null ? '' :
+        `<div class="debt-progress" title="${escapeHtml(t('debtPaidWhy', r.firstDate, whole(r.first, r.unit)))}">` +
+        `<div class="debt-bar"><div class="debt-bar-fill" style="width:${(r.paid * 100).toFixed(1)}%;background:${adaptColor(r.acc.color)}"></div></div>` +
+        `<span class="debt-paid">${escapeHtml(t('debtPaid', Math.round(r.paid * 100) + '%', r.firstDate))}</span></div>`;
       return `<div class="debt-acc"><div class="legend-row clickable" data-acc-id="${r.acc.id}" role="button" tabindex="0">` +
         `<span class="chip-dot" style="background:${adaptColor(r.acc.color)}"></span>` +
         `<span class="eff-name">${escapeHtml(r.acc.name)}</span>` +
         `<span class="lr-amt">${r.owed == null ? '—' : fmt(r.owed, dc)}</span></div>` +
+        bar +
         `<div class="debt-sub">${bits.map(escapeHtml).join(' · ')}</div></div>`;
     }).join('');
+    document.getElementById('debtNoteSummary').textContent = t('debtNoteSummary');
     document.getElementById('debtNote').textContent = t('debtNote');
   }
   (() => {

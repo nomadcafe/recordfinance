@@ -267,6 +267,9 @@ sec('Debt overview');
   ck('payoff matches a real amortization within a month', m.status === 'payoff' && Math.abs(m.months - n) <= 1, [m.months, n]);
   ck('and is named as a month', /^\d{4}-\d{2}$/.test(m.payoff), m.payoff);
   ck('interest paid is summed', d.interest > 15000 && d.interest < 17000, d.interest);
+  ck('progress counts from the first record', near(m.paid, (400000 - owed) / 400000, 1e-9) && m.firstDate === '2025-10-31', [m.paid, m.firstDate]);
+  ck('one loan: the debt-free date is its payoff', d.debtFree === m.payoff && d.debtFreeMonths === m.months, d.debtFree);
+  ck('principal a month is summed in display currency', near(d.principalTotal, m.principal, 1e-6), d.principalTotal);
 
   // The same mortgage beside an index fund: the efficiency panel holds the two up.
   const withFund = snaps.map((sn, k) => ({ ...sn, updates: { ...sn.updates, s: { amount: Math.round(100000 * Math.pow(1.005, k)), currency: 'CNY' } } }));
@@ -290,11 +293,14 @@ sec('Debt overview');
     snap('2026-06-30', { b: { amount: 10000, currency: 'CNY' }, c: { amount: 2000, currency: 'CNY' } }),
   ]);
   ck('a card gets no payoff date', app.computeDebt().accounts[0].status === 'revolving');
+  ck('a card has no progress bar and is not a loan', app.computeDebt().accounts[0].paid === null && app.computeDebt().loans === 0);
   load([LI('l', 'loan')], [
     snap('2026-01-31', { l: { amount: 3000, currency: 'CNY' } }),
     snap('2026-06-30', { l: { amount: 3500, currency: 'CNY' } }),
   ]);
   ck('a loan that grew is not falling', app.computeDebt().accounts[0].status === 'notFalling');
+  ck('a loan with no pace leaves no debt-free date', app.computeDebt().debtFree === null);
+  ck('and a grown balance is 0% paid, not negative', app.computeDebt().accounts[0].paid === 0);
   load([LI('l', 'loan')], [
     snap('2026-06-01', { l: { amount: 3000, currency: 'CNY' } }),
     snap('2026-06-30', { l: { amount: 2500, currency: 'CNY' } }),
