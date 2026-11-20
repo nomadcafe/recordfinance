@@ -3977,6 +3977,10 @@
   // fast and short as years of snapshots accumulate; "load more" raises the cap.
   const HISTORY_PAGE = 20;
   let historyLimit = HISTORY_PAGE;
+  function historyTotalLabel() {
+    if (state.basis === 'assets') return t('historyTotalAssets');
+    return state.accounts.some(a => a.type === 'liability') ? t('historyTotalNet') : t('historyTotal');
+  }
   function renderHistory() {
     const timeline = computeTimeline();
     const tbody = document.querySelector('#historyTable tbody');
@@ -3996,7 +4000,13 @@
     }
     const totalMatches = reversed.length;
     const visible = reversed.slice(0, historyLimit);
-    visible.forEach(({ snapshot, total, ratesMissing }) => {
+    // The column follows the same basis switch as the headline, and says which it is:
+    // net worth on one side and total assets on the other differ by every debt, and
+    // the latest row must match the number at the top of the page.
+    document.getElementById('thTotal').textContent = historyTotalLabel();
+    visible.forEach(entry => {
+      const { snapshot, ratesMissing } = entry;
+      const total = totalForBasis(entry);
       const updates = Object.entries(snapshot.updates).map(([id, v]) => {
         const acc = accountById(id);
         const name = acc ? acc.name : t('deletedAccount');
@@ -7554,7 +7564,7 @@
     setText('efficiencyTitle', t('effTitle'));
     setText('thDate', t('historyDate'));
     setText('thUpdates', t('historyUpdates'));
-    setText('thTotal', t('historyTotal'));
+    setText('thTotal', historyTotalLabel());
     setText('thNote', t('historyNote'));
     setText('emptyMsg', t('noRecords'));
     setText('historyMoreBtn', t('loadMore'));

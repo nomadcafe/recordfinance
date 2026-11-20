@@ -157,6 +157,24 @@ const ck = (name, cond, detail) => {
       await done(p);
     }
 
+    sec('History follows the basis switch');
+    {
+      const p = await page();
+      const read = () => p.evaluate(() => ({
+        head: document.getElementById('totalBalance').textContent.trim(),
+        row: document.querySelector('#historyTable tbody tr td.num').textContent.trim(),
+        th: document.getElementById('thTotal').textContent.trim(),
+      }));
+      const net = await read();
+      ck('net worth: the latest row is the headline', net.row === net.head, net);
+      ck('and the column says net worth', net.th === '当日净资产', net.th);
+      await p.evaluate(() => document.getElementById('basisAssetsBtn').click());
+      const assets = await read();
+      ck('total assets: the latest row is still the headline', assets.row === assets.head && assets.head !== net.head, assets);
+      ck('and the column says total assets', assets.th === '当日总资产', assets.th);
+      await done(p);
+    }
+
     sec('Privacy blur');
     {
       const p = await page();
