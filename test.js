@@ -1091,6 +1091,32 @@ sec('Review fixes');
   app.expenseRows = [];
 }
 
+sec('Runway withheld when the spending is unreadable');
+{
+  // Three month-ends before today's month: two clean months, then one where salary
+  // arrived without being entered (only a small inflow was) — negative "spending".
+  const now = new Date();
+  const me = k => { const d = new Date(now.getFullYear(), now.getMonth() - k, 0); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const base = [
+    snap(me(4), { b: { amount: 30000, currency: 'CNY' }, s: { amount: 50000, currency: 'CNY' } }),
+    snap(me(3), { b: { amount: 36000, currency: 'CNY', inflow: 10000 } }),
+    snap(me(2), { b: { amount: 42000, currency: 'CNY', inflow: 10000 } }),
+  ];
+  const el = global.document.getElementById('statLiquid');
+  load([A('b', 'savings'), A('s', 'investment')], base);
+  let cur = app.computeTimeline().slice(-1)[0];
+  app.renderLiquid(cur, app.totalForBasis(cur));
+  ck('clean months give a runway', /个月开销/.test(strip(el.innerHTML)) && !/不全/.test(strip(el.innerHTML)), el.innerHTML);
+  load([A('b', 'savings'), A('s', 'investment')], base.concat([
+    snap(me(1), { b: { amount: 57000, currency: 'CNY', inflow: 500 } }),
+  ]));
+  cur = app.computeTimeline().slice(-1)[0];
+  app.renderLiquid(cur, app.totalForBasis(cur));
+  ck('a negative month withholds it', !/个月开销/.test(strip(el.innerHTML)) && /不全/.test(strip(el.innerHTML)), el.innerHTML);
+  ck('and the hover says where to fix it', /按月明细/.test(el.title), el.title);
+  ck('the spendable amount itself still shows', strip(el.innerHTML).includes('57,000'), el.innerHTML);
+}
+
 sec('Spendable now');
 {
   load([A('c', 'cash'), A('b', 'savings'), A('s', 'investment'), A('h', 'property'), A('o', 'other'),

@@ -994,6 +994,7 @@
   }
   .chip-original { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .chip-stale { font-size: 11px; color: var(--warning); }
+  .liquid-unsure { color: var(--warning); }
   .chip.liability {
     background:
       linear-gradient(135deg, rgba(248, 113, 113, 0.06), transparent 60%),
@@ -3955,13 +3956,20 @@
       return;
     }
     const dc = state.displayCurrency;
-    const sp = averageSpend(monthlySpending(SPENDING_MONTHS, localDateStr(new Date())));
+    const rows = monthlySpending(SPENDING_MONTHS, localDateStr(new Date()));
+    const sp = averageSpend(rows);
+    // A month that "spent" a negative amount almost always had income arrive that was
+    // never entered as inflow — and that income then cancels real spending out of the
+    // average, so the runway comes out months too long. Rather than a reassuring number
+    // that is wrong, say the data isn't there yet and where to fix it.
+    const unsure = !!sp && rows.some(r => r.spend != null && r.spend < 0 && !isNegligible(r.spend));
     // Runway only when there is spending to divide by and money to divide.
-    const runway = sp && sp.avg > 0 && liq.total > 0 ? liq.total / sp.avg : null;
+    const runway = !unsure && sp && sp.avg > 0 && liq.total > 0 ? liq.total / sp.avg : null;
     el.hidden = false;
-    el.title = t(liq.card ? 'liquidWhyCard' : 'liquidWhy');
+    el.title = t(liq.card ? 'liquidWhyCard' : 'liquidWhy') + (unsure ? '\n\n' + t('liquidRunwayUnsureWhy') : '');
     el.innerHTML = `${escapeHtml(t('liquid'))} <span class="${liq.total < 0 ? 'liab' : ''}">${fmt(liq.total, dc)}</span>` +
-      (runway != null ? ` · ${escapeHtml(t('liquidRunway', runway < 10 ? runway.toFixed(1) : Math.round(runway)))}` : '');
+      (runway != null ? ` · ${escapeHtml(t('liquidRunway', runway < 10 ? runway.toFixed(1) : Math.round(runway)))}` : '') +
+      (unsure && liq.total > 0 ? ` · <span class="liquid-unsure">${escapeHtml(t('liquidRunwayUnsure'))}</span>` : '');
   }
 
   // ===== History =====
